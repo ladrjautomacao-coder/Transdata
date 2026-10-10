@@ -113,10 +113,15 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
       } as React.CSSProperties}
     >
       {/* Header */}
-      <div className="relative flex h-14 shrink-0 items-center overflow-hidden bg-[#4b1768] px-3 text-white">
-        <div className="relative z-10 flex items-center gap-2.5">
+      <div className={`relative flex h-14 shrink-0 items-center overflow-hidden bg-[#4b1768] text-white ${collapsed ? "justify-center px-0" : "px-3"}`}>
+        <div className={`relative z-10 flex min-w-0 items-center gap-2.5 ${collapsed ? "" : "flex-1"}`}>
+          {/* object-contain: logos não quadrados (ex.: marca com texto) aparecem inteiros, sem recorte */}
           {branding.logoUrl ? (
-            <img src={branding.logoUrl} alt={branding.portalName} className="h-9 w-9 shrink-0 rounded-full object-cover" />
+            <img
+              src={branding.logoUrl}
+              alt={branding.portalName}
+              className={`shrink-0 rounded-md object-contain ${collapsed ? "h-9 w-9" : "h-10 w-10"}`}
+            />
           ) : (
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white/15 text-white">
               <Building2 className="h-5 w-5" />

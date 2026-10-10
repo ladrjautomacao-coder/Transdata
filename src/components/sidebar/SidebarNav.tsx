@@ -7,7 +7,16 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import type { PermModule } from "@/lib/permissions";
@@ -63,8 +72,52 @@ export function SidebarNavGroup({
   forceExpanded?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const { state, isMobile } = useSidebar();
   if (items.length === 0) return null;
   const isExpanded = expanded || forceExpanded;
+
+  // Barra recolhida: não cabe a lista dentro dela — os itens abrem num menu
+  // flutuante ao lado do ícone do grupo.
+  if (state === "collapsed" && !isMobile) {
+    return (
+      <UISidebarGroup className="py-1.5">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={label}
+              title={label}
+              className="flex h-10 w-full items-center justify-center rounded-md border border-slate-200 bg-[#f8f4fb] text-[#4b1768] shadow-sm transition-colors hover:bg-[#f1e8f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4b1768] data-[state=open]:bg-[#f1e8f6]"
+            >
+              <Icon className="h-5 w-5 shrink-0" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="right" align="start" sideOffset={8} className="w-56">
+            <DropdownMenuLabel className="text-[#4b1768]">{label}</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {items.map((item) => (
+              <DropdownMenuItem key={item.url} asChild className="cursor-pointer">
+                <NavLink
+                  to={item.url}
+                  end={item.end}
+                  className="flex items-center gap-2 text-slate-700"
+                  activeClassName="!bg-[#f1e8f6] !text-[#4b1768] font-semibold"
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{item.title}</span>
+                  {typeof item.badge === "number" && item.badge > 0 && (
+                    <span className="ml-auto min-w-[20px] rounded-full bg-slate-200 px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-slate-700">
+                      {item.badge}
+                    </span>
+                  )}
+                </NavLink>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </UISidebarGroup>
+    );
+  }
 
   return (
     <UISidebarGroup className="py-1.5">
