@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 import { EmptyState } from "@/components/EmptyState";
 import KanbanFilters from "@/components/kanban/KanbanFilters";
@@ -25,7 +26,7 @@ import { statusLabels } from "@/pages/ProjectManagement";
 import { teamRoleLabels } from "@/lib/teamRoleLabels";
 import {
   Search, RefreshCw, AlertTriangle, Download, CalendarClock, LayoutGrid, List,
-  FileText, Building2, CalendarDays, Wrench, CheckCircle2, MoreHorizontal,
+  FileText, Building2, CalendarDays, Wrench, CheckCircle2, MoreHorizontal, Info,
   type LucideIcon,
 } from "lucide-react";
 import type { DbFollowUpNote, FollowUpProject, ProjectStatus } from "@/components/comercial/types";
@@ -41,14 +42,52 @@ const SELECT_COLS =
 type SortKey = "stale" | "recent" | "company" | "status";
 type ViewMode = "grid" | "list";
 
-const kpiStyle: Record<ProjectStatus | "total", { icon: LucideIcon; tile: string; card: string; caption: string }> = {
-  total: { icon: FileText, tile: "bg-blue-500/15 text-blue-600 dark:text-blue-400", card: "bg-blue-500/[0.03]", caption: "projetos" },
-  comercial: { icon: Building2, tile: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400", card: "bg-emerald-500/[0.03]", caption: "em negociação" },
-  planejamento: { icon: CalendarDays, tile: "bg-violet-500/15 text-violet-600 dark:text-violet-400", card: "bg-violet-500/[0.03]", caption: "em planejamento" },
-  implantacao: { icon: Wrench, tile: "bg-sky-500/15 text-sky-600 dark:text-sky-400", card: "bg-sky-500/[0.03]", caption: "em implantação" },
-  encerrado: { icon: CheckCircle2, tile: "bg-teal-500/15 text-teal-600 dark:text-teal-400", card: "bg-teal-500/[0.03]", caption: "em operação" },
-  suspenso: { icon: MoreHorizontal, tile: "bg-slate-500/15 text-slate-600 dark:text-slate-300", card: "bg-slate-500/[0.03]", caption: "em andamento" },
+const kpiStyle: Record<ProjectStatus | "total", { icon: LucideIcon; tile: string; card: string; caption: string; info: string }> = {
+  total: {
+    icon: FileText, tile: "bg-blue-500/15 text-blue-600 dark:text-blue-400", card: "bg-blue-500/[0.03]", caption: "projetos",
+    info: "Todos os projetos cadastrados, em qualquer etapa. Clique para listar inclusive os implementados.",
+  },
+  comercial: {
+    icon: Building2, tile: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400", card: "bg-emerald-500/[0.03]", caption: "em negociação",
+    info: "Projeto cadastrado, em análise dos pré-requisitos para se tornar um Projeto.",
+  },
+  planejamento: {
+    icon: CalendarDays, tile: "bg-violet-500/15 text-violet-600 dark:text-violet-400", card: "bg-violet-500/[0.03]", caption: "em planejamento",
+    info: "Projeto com handover ok, início das atividades do Gerente de Projetos.",
+  },
+  implantacao: {
+    icon: Wrench, tile: "bg-sky-500/15 text-sky-600 dark:text-sky-400", card: "bg-sky-500/[0.03]", caption: "em implantação",
+    info: "Projeto em execução: instalação dos equipamentos e implantação da frota em andamento.",
+  },
+  encerrado: {
+    icon: CheckCircle2, tile: "bg-teal-500/15 text-teal-600 dark:text-teal-400", card: "bg-teal-500/[0.03]", caption: "em operação",
+    info: "Implantação concluída: projeto entregue ao cliente e em operação.",
+  },
+  suspenso: {
+    icon: MoreHorizontal, tile: "bg-slate-500/15 text-slate-600 dark:text-slate-300", card: "bg-slate-500/[0.03]", caption: "em andamento",
+    info: "Projetos suspensos ou fora do fluxo padrão de implantação.",
+  },
 };
+
+function KpiInfo({ title, text }: { title: string; text: string }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={`O que significa ${title}`}
+          className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Info className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="bottom" align="end" className="w-64 text-sm">
+        <p className="mb-1 font-semibold">{title}</p>
+        <p className="text-muted-foreground">{text}</p>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const prefsKey = (userId: string) => `transdata:comercial-prefs:${userId}`;
 
@@ -387,16 +426,19 @@ export default function VisaoComercial() {
     const st = kpiStyle[key];
     const Icon = st.icon;
     return (
-      <button key={key} type="button" aria-pressed={active} onClick={onClick} className={kpiCardClass(active, st.card)}>
-        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${st.tile}`}>
-          <Icon className="h-5 w-5" />
-        </span>
-        <span className="min-w-0">
-          <span className="block truncate text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
-          <span className="block text-2xl font-bold leading-tight">{value}</span>
-          <span className="block truncate text-[11px] text-muted-foreground">{st.caption}</span>
-        </span>
-      </button>
+      <div key={key} className="relative">
+        <button type="button" aria-pressed={active} onClick={onClick} className={`h-full w-full pr-8 ${kpiCardClass(active, st.card)}`}>
+          <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${st.tile}`}>
+            <Icon className="h-5 w-5" />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+            <span className="block text-2xl font-bold leading-tight">{value}</span>
+            <span className="block truncate text-[11px] text-muted-foreground">{st.caption}</span>
+          </span>
+        </button>
+        <KpiInfo title={label} text={st.info} />
+      </div>
     );
   };
 
@@ -440,12 +482,12 @@ export default function VisaoComercial() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7">
         {renderKpi("total", "Total", grandTotal, showAll, selectTotal)}
         {kpis.map(k => renderKpi(k.key, k.label, k.value, filters.status === k.key, () => selectStatus(k.key)))}
+        <div className="relative">
         <button
           type="button"
           aria-pressed={staleOnly}
           onClick={toggleStale}
-          title={`Sem atualização há mais de ${staleDays} dias`}
-          className={`flex items-center gap-4 rounded-xl border bg-destructive/5 p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${staleOnly ? "border-destructive ring-2 ring-destructive/30" : "border-destructive/30"}`}
+          className={`flex h-full w-full items-center gap-4 rounded-xl border bg-destructive/5 p-4 pr-8 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${staleOnly ? "border-destructive ring-2 ring-destructive/30" : "border-destructive/30"}`}
         >
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-destructive/15 text-destructive">
             <AlertTriangle className="h-5 w-5" />
@@ -456,6 +498,11 @@ export default function VisaoComercial() {
             <span className="block truncate text-[11px] text-muted-foreground">+{staleDays} dias sem atualização</span>
           </span>
         </button>
+        <KpiInfo
+          title="Atrasados"
+          text={`Projetos sem nenhum acompanhamento registrado pelo gerente há mais de ${staleDays} dias. O prazo é definido em Configurações.`}
+        />
+        </div>
       </div>
 
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
