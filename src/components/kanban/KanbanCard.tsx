@@ -9,35 +9,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Building2, MapPin, Calendar, Users, Pencil, Clock, Lock } from "lucide-react";
-import { format, differenceInDays } from "date-fns";
+import { format } from "date-fns";
 import type { ProjectRow } from "@/pages/ProjectManagement";
 import { useSettings } from "@/contexts/SettingsContext";
-import { latestFollowUpNote } from "@/lib/followUpNotes";
+import { followUpSla, lastFollowUpAt, followUpLevelStyles, type FollowUpLevel } from "@/lib/followUpNotes";
 import { useNoteDraft } from "@/hooks/useNoteDraft";
 
 const fmtDate = (d: string | null) => d ? format(new Date(d + "T00:00:00"), "dd/MM/yyyy") : "—";
 
-type SLALevel = "green" | "yellow" | "orange" | "red";
-function makeGetSLA(green: number, yellow: number, orange: number) {
-  return (since: Date): { level: SLALevel; days: number } => {
-    const days = Math.max(0, differenceInDays(new Date(), since));
-    if (days <= green) return { level: "green", days };
-    if (days <= yellow) return { level: "yellow", days };
-    if (days <= orange) return { level: "orange", days };
-    return { level: "red", days };
-  };
-}
-const SLA_BAR: Record<SLALevel, string> = {
-  green: "bg-emerald-500",
-  yellow: "bg-yellow-500",
-  orange: "bg-orange-500",
-  red: "bg-red-500",
-};
-const SLA_LABEL: Record<SLALevel, string> = {
-  green: "Em dia",
-  yellow: "Atenção",
-  orange: "Atrasado",
-  red: "Crítico",
+const SLA_BAR: Record<FollowUpLevel, string> = {
+  ok: "bg-emerald-500",
+  warn: "bg-yellow-500",
+  late: "bg-orange-500",
+  critical: "bg-red-500",
 };
 
 interface Props {
@@ -50,7 +34,6 @@ interface Props {
 export default function KanbanCard({ project: p, index, onUpdateObservations, canEdit = true }: Props) {
   const navigate = useNavigate();
   const { settings } = useSettings();
-  const getSLA = makeGetSLA(settings.slaGreenMaxDays, settings.slaYellowMaxDays, settings.slaOrangeMaxDays);
   const [open, setOpen] = useState(false);
   const { value: note, update: setNote, clear: clearNoteDraft, draftSavedAt } = useNoteDraft(p.id);
   const [saving, setSaving] = useState(false);
@@ -69,21 +52,13 @@ export default function KanbanCard({ project: p, index, onUpdateObservations, ca
     ? format(new Date(p.reached_implemented_at), "dd/MM/yyyy")
     : null;
 
-  // SLA: baseado na data do último acompanhamento registrado.
-  // Não aplicar em "Implementado" (encerrado) nem em "Outros" (suspenso)
-  const slaEligible = p.status !== "encerrado" && p.status !== "suspenso";
-  const obsNoteDate = latestFollowUpNote(p.observations)?.date ?? null;
-  const noteTableDate = p.last_note_at ? new Date(p.last_note_at) : null;
-  const candidates = [obsNoteDate, noteTableDate].filter(
-    (d): d is Date => !!d && !isNaN(d.getTime())
-  );
-  const lastNoteDate = candidates.length
-    ? new Date(Math.max(...candidates.map(d => d.getTime())))
-    : null;
-  const sla = slaEligible
-    ? (lastNoteDate ? getSLA(lastNoteDate) : { level: "red" as SLALevel, days: null as number | null })
-    : null;
-  const slaLabel = sla ? (lastNoteDate ? SLA_LABEL[sla.level] : "Sem acompanhamento") : "";
+  // SLA: baseado na data do último acompanhamento registrado (mesma regra da Visão Comercial)
+  const sla = followUpSla(p.status, lastFollowUpAt(p.observations, p.last_note_at), {
+    green: settings.slaGreenMaxDays,
+    yellow: settings.slaYellowMaxDays,
+    orange: settings.slaOrangeMaxDays,
+  });
+  const slaLabel = sla ? (sla.days !== null ? followUpLevelStyles[sla.level].label : "Sem acompanhamento") : "";
   const slaText = sla
     ? (sla.days !== null
         ? `${slaLabel} — sem acompanhamento há ${sla.days} dia${sla.days !== 1 ? "s" : ""}`
@@ -118,7 +93,7 @@ export default function KanbanCard({ project: p, index, onUpdateObservations, ca
                       className="absolute top-0 left-0 right-0 h-3 z-10 cursor-help"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <div className={`h-1.5 ${SLA_BAR[sla.level]} ${sla.level === "red" ? "animate-pulse" : ""}`} />
+                      <div className={`h-1.5 ${SLA_BAR[sla.level]} ${sla.level === "critical" ? "animate-pulse" : ""}`} />
                     </div>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="text-xs">
@@ -129,7 +104,7 @@ export default function KanbanCard({ project: p, index, onUpdateObservations, ca
             )}
             {sla && (
               <span
-                className={`absolute top-2 left-2 z-10 flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm ${SLA_BAR[sla.level]} ${sla.level === "red" ? "animate-pulse" : ""}`}
+                className={`absolute top-2 left-2 z-10 flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm ${SLA_BAR[sla.level]} ${sla.level === "critical" ? "animate-pulse" : ""}`}
                 onClick={(e) => e.stopPropagation()}
                 title={slaText}
               >

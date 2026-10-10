@@ -2,19 +2,13 @@ import { formatLocation } from "@/lib/location";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Bus, MapPin, UserRound, UsersRound, MessageSquareText, Clock } from "lucide-react";
 import { statusLabels, subPhasesByStatus } from "@/pages/ProjectManagement";
-import {
-  daysSince,
-  tracksFollowUp,
-  effectiveFollowUps,
-  followUpReferenceDate,
-  followUpLevel,
-  followUpLevelStyles,
-} from "@/lib/followUpNotes";
+import { effectiveFollowUps, followUpLevelStyles, isLateSla, type FollowUpSla } from "@/lib/followUpNotes";
 import type { FollowUpProject, ProjectStatus } from "./types";
 
 interface Props {
   project: FollowUpProject;
-  staleDays: number;
+  /** SLA de acompanhamento (mesma regra do Kanban); null = status sem SLA */
+  sla: FollowUpSla | null;
   onOpen: (project: FollowUpProject) => void;
   justUpdated?: boolean;
   isNew?: boolean;
@@ -41,13 +35,11 @@ function progressColor(pct: number) {
   return "bg-red-500";
 }
 
-export function ProjectFollowUpCard({ project, staleDays, onOpen, justUpdated, isNew }: Props) {
+export function ProjectFollowUpCard({ project, sla, onOpen, justUpdated, isNew }: Props) {
   const notes = effectiveFollowUps(project).slice(0, 2);
-  const days = daysSince(followUpReferenceDate(project)) ?? 0;
-  const tracked = tracksFollowUp(project.status);
-  const level = tracked ? followUpLevel(days, staleDays) : "ok";
-  const levelStyle = followUpLevelStyles[level];
-  const isStale = tracked && days > staleDays;
+  const level = sla?.level ?? null;
+  const levelStyle = level ? followUpLevelStyles[level] : { label: "Sem SLA", text: "text-muted-foreground" };
+  const isStale = isLateSla(sla);
   const subPhaseLabel = project.sub_phase
     ? subPhasesByStatus[project.status]?.find(sp => sp.id === project.sub_phase)?.label ?? null
     : null;
@@ -62,7 +54,7 @@ export function ProjectFollowUpCard({ project, staleDays, onOpen, justUpdated, i
       tabIndex={0}
       onClick={() => onOpen(project)}
       onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(project); } }}
-      className={`relative flex cursor-pointer flex-col gap-3 rounded-xl border border-l-4 border-border/60 bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${levelBorder[level]} ${justUpdated ? "ring-2 ring-primary/40" : ""}`}
+      className={`relative flex cursor-pointer flex-col gap-3 rounded-xl border border-l-4 border-border/60 bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${level ? levelBorder[level] : "border-l-muted-foreground/30"} ${justUpdated ? "ring-2 ring-primary/40" : ""}`}
     >
       {justUpdated && (
         <Badge className="absolute -top-2 right-4 bg-primary text-[10px] text-primary-foreground">Atualizado agora</Badge>
@@ -97,7 +89,7 @@ export function ProjectFollowUpCard({ project, staleDays, onOpen, justUpdated, i
             <span className="flex items-center gap-1"><UserRound className="h-3 w-3" />{project.manager?.full_name ?? "Sem gerente"}</span>
             <span className="flex items-center gap-1"><UsersRound className="h-3 w-3" />{project.executive?.full_name ?? "Sem executivo"}</span>
             <span className={`ml-auto flex items-center gap-1 font-medium ${levelStyle.text}`} title={`Frota implantada · ${levelStyle.label}`}>
-              {level !== "ok" && <AlertTriangle className="h-3 w-3" />}
+              {isStale && <AlertTriangle className="h-3 w-3" />}
               {done} / {total || "—"}{total > 0 ? ` (${pct}%)` : ""}
             </span>
           </div>
@@ -136,7 +128,7 @@ export function ProjectFollowUpCard({ project, staleDays, onOpen, justUpdated, i
       {isStale && (
         <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-[11px] font-medium text-destructive">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          Sem atualização há {days} dias
+          {sla?.days != null ? `Sem acompanhamento há ${sla.days} dias` : "Nenhum acompanhamento registrado"}
         </div>
       )}
     </div>

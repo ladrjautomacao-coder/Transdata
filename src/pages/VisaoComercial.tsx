@@ -16,12 +16,14 @@ import { ProjectFollowUpCard } from "@/components/comercial/ProjectFollowUpCard"
 import { ProjectFollowUpDrawer } from "@/components/comercial/ProjectFollowUpDrawer";
 import { ProjectFollowUpSkeleton } from "@/components/comercial/ProjectFollowUpSkeleton";
 import {
-  daysSince,
-  tracksFollowUp,
   effectiveLatestFollowUp,
-  followUpReferenceDate,
   followUpLevelStyles,
+  followUpSla,
+  isLateSla,
+  lastFollowUpAt,
+  type SlaThresholds,
 } from "@/lib/followUpNotes";
+import { differenceInDays } from "date-fns";
 import { Constants } from "@/integrations/supabase/types";
 import { statusLabels } from "@/pages/ProjectManagement";
 import { teamRoleLabels } from "@/lib/teamRoleLabels";
@@ -121,7 +123,12 @@ export default function VisaoComercial() {
   const [staleOnly, setStaleOnly] = useState(false);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
 
-  const staleDays = settings.stuckDays ?? 30;
+  // Mesmos SLAs do Kanban (Configurações > SLA): "Atrasados" = laranja + vermelho.
+  const slaT = useMemo<SlaThresholds>(() => ({
+    green: settings.slaGreenMaxDays,
+    yellow: settings.slaYellowMaxDays,
+    orange: settings.slaOrangeMaxDays,
+  }), [settings.slaGreenMaxDays, settings.slaYellowMaxDays, settings.slaOrangeMaxDays]);
   const allowed = permsLoading || can("visao_comercial", "view");
   const mounted = useRef(true);
 
@@ -250,14 +257,13 @@ export default function VisaoComercial() {
     let stale = 0;
     rows.forEach(r => {
       counts[r.status] = (counts[r.status] || 0) + 1;
-      const ref = latestNote[r.id] ?? followUpReferenceDate({ observations: r.observations, updated_at: r.updated_at });
-      if (tracksFollowUp(r.status) && (daysSince(ref) ?? 0) > staleDays) stale += 1;
+      if (isLateSla(followUpSla(r.status, lastFollowUpAt(r.observations, latestNote[r.id]), slaT))) stale += 1;
     });
     if (!mounted.current) return;
     setStatusCounts(counts);
     setStaleCount(stale);
     setGrandTotal(rows.length);
-  }, [staleDays]);
+  }, [slaT]);
 
   useEffect(() => {
     mounted.current = true;
@@ -348,13 +354,20 @@ export default function VisaoComercial() {
     value: statusCounts[s] || 0,
   })), [statusCounts]);
 
-  const daysFor = useCallback((p: FollowUpProject) => daysSince(followUpReferenceDate(p)) ?? 0, []);
-  const isStale = useCallback((p: FollowUpProject) => tracksFollowUp(p.status) && daysFor(p) > staleDays, [daysFor, staleDays]);
+  const lastAtFor = useCallback((p: FollowUpProject) => lastFollowUpAt(p.observations, p.notes?.[0]?.created_at), []);
+  // null = nenhum acompanhamento registrado (ordena como o mais antigo)
+  const daysFor = useCallback((p: FollowUpProject) => {
+    const at = lastAtFor(p);
+    return at ? Math.max(0, differenceInDays(new Date(), at)) : null;
+  }, [lastAtFor]);
+  const slaFor = useCallback((p: FollowUpProject) => followUpSla(p.status, lastAtFor(p), slaT), [lastAtFor, slaT]);
+  const isStale = useCallback((p: FollowUpProject) => isLateSla(slaFor(p)), [slaFor]);
 
   const visibleProjects = useMemo(() => {
     const list = staleOnly ? projects.filter(isStale) : projects;
-    if (sort === "stale") return [...list].sort((a, b) => daysFor(b) - daysFor(a));
-    if (sort === "recent") return [...list].sort((a, b) => daysFor(a) - daysFor(b));
+    const d = (p: FollowUpProject) => daysFor(p) ?? Number.MAX_SAFE_INTEGER;
+    if (sort === "stale") return [...list].sort((a, b) => d(b) - d(a));
+    if (sort === "recent") return [...list].sort((a, b) => d(a) - d(b));
     return list;
   }, [projects, staleOnly, isStale, sort, daysFor]);
 
@@ -389,7 +402,7 @@ export default function VisaoComercial() {
         statusLabels[p.status],
         String(p.fleet_size ?? 0),
         String(p.implemented_fleet ?? 0),
-        String(daysFor(p)),
+        String(daysFor(p) ?? ""),
         (note?.text ?? "").replace(/\s+/g, " ").slice(0, 300),
         note?.author ?? "",
       ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(";");
@@ -496,12 +509,12 @@ export default function VisaoComercial() {
           <span className="min-w-0">
             <span className="block text-[11px] font-semibold uppercase tracking-wide text-destructive">Atrasados</span>
             <span className="block text-2xl font-bold leading-tight text-destructive">{staleCount}</span>
-            <span className="block truncate text-[11px] text-muted-foreground">+{staleDays} dias sem atualização</span>
+            <span className="block truncate text-[11px] text-muted-foreground">+{slaT.yellow} dias sem acompanhamento</span>
           </span>
         </button>
         <KpiInfo
           title="Atrasados"
-          text={`Projetos em Comercial, Planejamento, Implantação ou Outros sem nenhum acompanhamento registrado pelo gerente há mais de ${staleDays} dias. Implementados não entram nesta contagem. O prazo é definido em Configurações.`}
+          text={`Mesma regra do Kanban: projetos em Comercial, Planejamento ou Implantação sem acompanhamento registrado pelo gerente há mais de ${slaT.yellow} dias (faixas laranja e vermelha), ou que ainda não têm nenhum acompanhamento. Os prazos são os SLAs definidos em Configurações.`}
         />
         </div>
       </div>
@@ -620,7 +633,7 @@ export default function VisaoComercial() {
                       <ProjectFollowUpCard
                         key={p.id}
                         project={p}
-                        staleDays={staleDays}
+                        sla={slaFor(p)}
                         onOpen={openProject}
                         justUpdated={recentIds.includes(p.id)}
                         isNew
@@ -635,7 +648,7 @@ export default function VisaoComercial() {
                   <ProjectFollowUpCard
                     key={p.id}
                     project={p}
-                    staleDays={staleDays}
+                    sla={slaFor(p)}
                     onOpen={openProject}
                     justUpdated={recentIds.includes(p.id)}
                   />

@@ -1,3 +1,5 @@
+import { differenceInDays } from "date-fns";
+
 export interface FollowUpNote {
   raw: string;
   author: string | null;
@@ -107,21 +109,53 @@ export function followUpReferenceDate(project: FollowUpSource): string | null {
   return latest?.dateISO ?? project.updated_at ?? null;
 }
 
-/** Status em que o tempo sem acompanhamento conta como atraso. Implementado
- *  ("encerrado") fica de fora: projeto entregue não exige acompanhamento. */
-const FOLLOW_UP_TRACKED_STATUSES = new Set(["comercial", "planejamento", "implantacao", "suspenso"]);
-
-export function tracksFollowUp(status: string): boolean {
-  return FOLLOW_UP_TRACKED_STATUSES.has(status);
-}
-
 export type FollowUpLevel = "ok" | "warn" | "late" | "critical";
 
-export function followUpLevel(days: number, staleDays: number): FollowUpLevel {
-  if (days > staleDays * 2) return "critical";
-  if (days > staleDays) return "late";
-  if (days > Math.round(staleDays / 2)) return "warn";
-  return "ok";
+/* ─── SLA de acompanhamento ──────────────────────────────────────────────
+ * Regra única usada pelo Kanban (cor/selo do card) e pela Visão Comercial
+ * (card "Atrasados", lista, resumo por gerente). O que o GP vê no Kanban é
+ * exatamente o que a Visão Comercial mostra. */
+
+/** Status em que o SLA de acompanhamento se aplica. */
+const SLA_STATUSES = new Set(["comercial", "planejamento", "implantacao"]);
+
+export function tracksFollowUp(status: string): boolean {
+  return SLA_STATUSES.has(status);
+}
+
+export interface SlaThresholds {
+  green: number;
+  yellow: number;
+  orange: number;
+}
+
+export interface FollowUpSla {
+  level: FollowUpLevel;
+  /** null = nenhum acompanhamento registrado ainda */
+  days: number | null;
+}
+
+/** Último acompanhamento: o mais recente entre project_notes e as notas
+ *  legadas de "observations". Não usa updated_at — mover o card ou editar o
+ *  projeto não conta como acompanhamento. */
+export function lastFollowUpAt(observations: string | null | undefined, lastNoteAt: string | null | undefined): Date | null {
+  const candidates = [latestFollowUpNote(observations)?.date ?? null, lastNoteAt ? new Date(lastNoteAt) : null]
+    .filter((d): d is Date => !!d && !isNaN(d.getTime()));
+  return candidates.length ? new Date(Math.max(...candidates.map(d => d.getTime()))) : null;
+}
+
+/** null quando o status não tem SLA (Implementado / Outros). */
+export function followUpSla(status: string, lastAt: Date | null, t: SlaThresholds): FollowUpSla | null {
+  if (!tracksFollowUp(status)) return null;
+  if (!lastAt) return { level: "critical", days: null };
+  const days = Math.max(0, differenceInDays(new Date(), lastAt));
+  const level: FollowUpLevel = days <= t.green ? "ok" : days <= t.yellow ? "warn" : days <= t.orange ? "late" : "critical";
+  return { level, days };
+}
+
+/** "Atrasados" = faixas laranja (Atrasado) e vermelha (Crítico) do Kanban. */
+export function isLateSla(sla: FollowUpSla | null): boolean {
+  return !!sla && (sla.level === "late" || sla.level === "critical");
 }
 
 export const followUpLevelStyles: Record<FollowUpLevel, { dot: string; label: string; text: string }> = {
