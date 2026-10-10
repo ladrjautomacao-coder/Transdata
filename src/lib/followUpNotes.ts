@@ -107,6 +107,14 @@ export function followUpReferenceDate(project: FollowUpSource): string | null {
   return latest?.dateISO ?? project.updated_at ?? null;
 }
 
+/** Status em que o tempo sem acompanhamento conta como atraso. Implementado
+ *  ("encerrado") fica de fora: projeto entregue não exige acompanhamento. */
+const FOLLOW_UP_TRACKED_STATUSES = new Set(["comercial", "planejamento", "implantacao", "suspenso"]);
+
+export function tracksFollowUp(status: string): boolean {
+  return FOLLOW_UP_TRACKED_STATUSES.has(status);
+}
+
 export type FollowUpLevel = "ok" | "warn" | "late" | "critical";
 
 export function followUpLevel(days: number, staleDays: number): FollowUpLevel {

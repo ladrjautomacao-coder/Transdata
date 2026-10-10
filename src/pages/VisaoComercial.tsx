@@ -17,6 +17,7 @@ import { ProjectFollowUpDrawer } from "@/components/comercial/ProjectFollowUpDra
 import { ProjectFollowUpSkeleton } from "@/components/comercial/ProjectFollowUpSkeleton";
 import {
   daysSince,
+  tracksFollowUp,
   effectiveLatestFollowUp,
   followUpReferenceDate,
   followUpLevelStyles,
@@ -250,7 +251,7 @@ export default function VisaoComercial() {
     rows.forEach(r => {
       counts[r.status] = (counts[r.status] || 0) + 1;
       const ref = latestNote[r.id] ?? followUpReferenceDate({ observations: r.observations, updated_at: r.updated_at });
-      if ((daysSince(ref) ?? 0) > staleDays) stale += 1;
+      if (tracksFollowUp(r.status) && (daysSince(ref) ?? 0) > staleDays) stale += 1;
     });
     if (!mounted.current) return;
     setStatusCounts(counts);
@@ -348,7 +349,7 @@ export default function VisaoComercial() {
   })), [statusCounts]);
 
   const daysFor = useCallback((p: FollowUpProject) => daysSince(followUpReferenceDate(p)) ?? 0, []);
-  const isStale = useCallback((p: FollowUpProject) => daysFor(p) > staleDays, [daysFor, staleDays]);
+  const isStale = useCallback((p: FollowUpProject) => tracksFollowUp(p.status) && daysFor(p) > staleDays, [daysFor, staleDays]);
 
   const visibleProjects = useMemo(() => {
     const list = staleOnly ? projects.filter(isStale) : projects;
@@ -500,7 +501,7 @@ export default function VisaoComercial() {
         </button>
         <KpiInfo
           title="Atrasados"
-          text={`Projetos sem nenhum acompanhamento registrado pelo gerente há mais de ${staleDays} dias. O prazo é definido em Configurações.`}
+          text={`Projetos em Comercial, Planejamento, Implantação ou Outros sem nenhum acompanhamento registrado pelo gerente há mais de ${staleDays} dias. Implementados não entram nesta contagem. O prazo é definido em Configurações.`}
         />
         </div>
       </div>

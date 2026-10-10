@@ -4,6 +4,7 @@ import { AlertTriangle, Bus, MapPin, UserRound, UsersRound, MessageSquareText, C
 import { statusLabels, subPhasesByStatus } from "@/pages/ProjectManagement";
 import {
   daysSince,
+  tracksFollowUp,
   effectiveFollowUps,
   followUpReferenceDate,
   followUpLevel,
@@ -43,9 +44,10 @@ function progressColor(pct: number) {
 export function ProjectFollowUpCard({ project, staleDays, onOpen, justUpdated, isNew }: Props) {
   const notes = effectiveFollowUps(project).slice(0, 2);
   const days = daysSince(followUpReferenceDate(project)) ?? 0;
-  const level = followUpLevel(days, staleDays);
+  const tracked = tracksFollowUp(project.status);
+  const level = tracked ? followUpLevel(days, staleDays) : "ok";
   const levelStyle = followUpLevelStyles[level];
-  const isStale = days > staleDays;
+  const isStale = tracked && days > staleDays;
   const subPhaseLabel = project.sub_phase
     ? subPhasesByStatus[project.status]?.find(sp => sp.id === project.sub_phase)?.label ?? null
     : null;
