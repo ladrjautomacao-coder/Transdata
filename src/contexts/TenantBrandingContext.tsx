@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { applyStatusLabelOverrides } from "@/lib/statusLabels";
+import logoTransdata from "@/assets/logo-transdata.png";
 
 interface TenantBranding {
   slug: string | null;
@@ -25,9 +26,20 @@ const DEFAULT_BRANDING = {
   status: null,
 } as const;
 
-// URLs antigas (*.vercel.app) continuam mostrando a Transdata, enquanto o
-// domínio próprio não estiver 100% migrado.
+// Endereços deste projeto continuam sendo a Transdata; o domínio HopeXT e
+// seus subdomínios são destinados à apresentação e aos novos clientes.
 const FALLBACK_TENANT_SLUG = "transdata";
+const TRANSDATA_BRANDING: TenantBranding = {
+  slug: FALLBACK_TENANT_SLUG,
+  portalName: "GP Transdata",
+  logoUrl: logoTransdata,
+  primaryColor: "273 70% 32%",
+  sidebarColor: "273 70% 18%",
+  accentColor: "17 89% 54%",
+  status: null,
+  loading: false,
+  isKnownTenant: true,
+};
 
 const TenantBrandingContext = createContext<TenantBranding>({
   ...DEFAULT_BRANDING,
@@ -38,8 +50,9 @@ const TenantBrandingContext = createContext<TenantBranding>({
 export const useTenantBranding = () => useContext(TenantBrandingContext);
 
 function extractSlug(hostname: string): string | null {
-  if (hostname === "localhost" || /^\d+\.\d+\.\d+\.\d+$/.test(hostname)) return null;
+  if (hostname === "localhost" || /^\d+\.\d+\.\d+\.\d+$/.test(hostname)) return FALLBACK_TENANT_SLUG;
   if (hostname.endsWith(".vercel.app")) return FALLBACK_TENANT_SLUG;
+  if (hostname === "projetostransdata.lovable.app" || hostname.endsWith(".lovableproject.com") || hostname.includes("--dc435e83-1e07-424d-952c-a66e45a342c7.lovable.app")) return FALLBACK_TENANT_SLUG;
   const parts = hostname.split(".");
   // "hopextnocode.com" (raiz, 2 partes) e "www.hopextnocode.com" (redireciona
   // pra raiz) -> sem tenant, cadastro público. "empresax.hopextnocode.com"
@@ -64,15 +77,21 @@ export function TenantBrandingProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const slug = extractSlug(window.location.hostname);
+    document.documentElement.dataset.tenant = slug || "default";
     if (!slug) {
       setState({ ...DEFAULT_BRANDING, loading: false, isKnownTenant: false });
       return;
     }
 
+    if (slug === FALLBACK_TENANT_SLUG) {
+      setState(TRANSDATA_BRANDING);
+      document.title = "GP Transdata - Gestão de Projetos";
+    }
+
     (supabase.rpc as any)("get_public_tenant_branding", { _slug: slug }).then(({ data }: { data: unknown }) => {
       const row = Array.isArray(data) ? data[0] : (data as any);
       if (!row) {
-        setState({ ...DEFAULT_BRANDING, loading: false, isKnownTenant: false });
+        setState(slug === FALLBACK_TENANT_SLUG ? TRANSDATA_BRANDING : { ...DEFAULT_BRANDING, loading: false, isKnownTenant: false });
         applyStatusLabelOverrides(null);
         return;
       }
@@ -80,8 +99,8 @@ export function TenantBrandingProvider({ children }: { children: ReactNode }) {
 
       const branding: TenantBranding = {
         slug: row.slug,
-        portalName: row.portal_name || DEFAULT_BRANDING.portalName,
-        logoUrl: row.logo_url || DEFAULT_BRANDING.logoUrl,
+        portalName: slug === FALLBACK_TENANT_SLUG ? TRANSDATA_BRANDING.portalName : row.portal_name || DEFAULT_BRANDING.portalName,
+        logoUrl: slug === FALLBACK_TENANT_SLUG ? TRANSDATA_BRANDING.logoUrl : row.logo_url || DEFAULT_BRANDING.logoUrl,
         primaryColor: row.primary_color || null,
         sidebarColor: row.sidebar_color || null,
         accentColor: row.accent_color || null,
@@ -90,6 +109,7 @@ export function TenantBrandingProvider({ children }: { children: ReactNode }) {
         isKnownTenant: true,
       };
       setState(branding);
+      document.title = `${branding.portalName} - Gestão de Projetos`;
 
       const root = document.documentElement;
       if (branding.primaryColor) {
@@ -111,6 +131,8 @@ export function TenantBrandingProvider({ children }: { children: ReactNode }) {
         document.querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="apple-touch-icon"]')
           .forEach((link) => { link.href = branding.logoUrl!; });
       }
+    }).catch(() => {
+      setState(slug === FALLBACK_TENANT_SLUG ? TRANSDATA_BRANDING : { ...DEFAULT_BRANDING, loading: false, isKnownTenant: false });
     });
   }, []);
 

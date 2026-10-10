@@ -105,7 +105,7 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
           {!collapsed && (
             <>
               <div className="flex min-w-0 flex-col">
-                <span className="truncate text-sm font-bold tracking-wide text-sidebar-foreground">{branding.portalName}</span>
+                <span className="truncate text-sm font-bold tracking-wide text-sidebar-foreground">{branding.slug === "transdata" ? "PAINEL 360" : branding.portalName}</span>
                 <span className="truncate text-[10px] uppercase tracking-[0.18em] text-sidebar-foreground/45">Sistema de gestão</span>
               </div>
               <Button

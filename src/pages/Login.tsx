@@ -148,13 +148,7 @@ function TransdataLogin({ branding, email, setEmail, password, setPassword, subm
           <Card className="w-full max-w-md shadow-lg border-primary/20 glow-orange">
             <CardHeader className="text-center space-y-3">
               <div className="lg:hidden flex justify-center mb-2">
-                {branding.logoUrl ? (
-                  <img src={branding.logoUrl} alt={branding.portalName} className="h-20 w-20 rounded-full object-cover" />
-                ) : (
-                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <Building2 className="h-10 w-10" />
-                  </div>
-                )}
+                <LogoAnimation />
               </div>
               <p className="text-sm font-semibold uppercase tracking-wide text-primary">{branding.portalName}</p>
               <CardTitle className="text-2xl font-bold">Acessar Sistema</CardTitle>

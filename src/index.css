@@ -94,6 +94,66 @@
     --sidebar-border: 222 28% 17%;
     --sidebar-ring: 30 82% 60%;
   }
+
+  :root[data-tenant="transdata"] {
+    --background: 270 20% 97%;
+    --foreground: 273 40% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 273 40% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 273 40% 12%;
+    --primary: 273 70% 32%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 270 20% 92%;
+    --secondary-foreground: 273 40% 22%;
+    --muted: 270 15% 94%;
+    --muted-foreground: 273 10% 42%;
+    --accent: 17 90% 95%;
+    --accent-foreground: 17 85% 38%;
+    --border: 270 15% 88%;
+    --input: 270 15% 88%;
+    --ring: 273 70% 32%;
+    --sidebar-background: 273 70% 18%;
+    --sidebar-foreground: 270 25% 90%;
+    --sidebar-primary: 17 89% 54%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 273 60% 24%;
+    --sidebar-accent-foreground: 270 25% 95%;
+    --sidebar-border: 273 50% 28%;
+    --sidebar-ring: 17 89% 54%;
+    --success: 142 72% 42%;
+    --warning: 38 92% 50%;
+    --glow-primary: 273 70% 32%;
+    --glow-secondary: 17 89% 54%;
+  }
+
+  :root.dark[data-tenant="transdata"] {
+    --background: 273 45% 8%;
+    --foreground: 270 20% 95%;
+    --card: 273 40% 12%;
+    --card-foreground: 270 20% 95%;
+    --popover: 273 40% 12%;
+    --popover-foreground: 270 20% 95%;
+    --primary: 273 65% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 273 30% 18%;
+    --secondary-foreground: 270 20% 90%;
+    --muted: 273 30% 15%;
+    --muted-foreground: 270 10% 60%;
+    --accent: 17 60% 22%;
+    --accent-foreground: 17 90% 75%;
+    --border: 273 30% 20%;
+    --input: 273 30% 20%;
+    --ring: 273 65% 55%;
+    --sidebar-background: 273 55% 10%;
+    --sidebar-foreground: 270 20% 88%;
+    --sidebar-primary: 17 89% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 273 45% 16%;
+    --sidebar-accent-foreground: 270 20% 92%;
+    --sidebar-border: 273 40% 18%;
+    --sidebar-ring: 17 89% 58%;
+  }
 }
 
 @layer base {
@@ -107,6 +167,17 @@
     font-family: 'Plus Jakarta Sans', sans-serif;
     font-weight: 700;
     letter-spacing: -0.01em;
+  }
+  :root[data-tenant="transdata"] body {
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  :root[data-tenant="transdata"] h1,
+  :root[data-tenant="transdata"] h2,
+  :root[data-tenant="transdata"] h3,
+  :root[data-tenant="transdata"] h4,
+  :root[data-tenant="transdata"] h5,
+  :root[data-tenant="transdata"] h6 {
+    font-family: 'Rajdhani', sans-serif;
   }
 }
 

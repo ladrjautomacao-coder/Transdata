@@ -1,0 +1,1 @@
+Preserve the original Transdata presentation on localhost, this project's Lovable preview and published domains, and legacy Vercel domains; reserve HopeXT's default presentation for new-client domains, because existing users must not see a rebrand.

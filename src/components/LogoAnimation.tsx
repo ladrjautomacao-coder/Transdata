@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Building2 } from "lucide-react";
 import { useTenantBranding } from "@/contexts/TenantBrandingContext";
+import logoTransdata from "@/assets/logo-transdata.png";
 
 const LETTERS_TRANS = "TRANS".split("");
 const LETTERS_MOBILE = "DATA".split("");
@@ -85,6 +86,12 @@ export default function LogoAnimation() {
   // pra esse tenant; os demais vão direto pro logo/nome final.
   const isTransdata = branding.slug === "transdata";
   const [phase, setPhase] = useState<"fallen" | "lifting" | "glow" | "done">(isTransdata ? "fallen" : "done");
+
+  useEffect(() => {
+    if (!isTransdata) return;
+    const timer = window.setTimeout(() => setPhase("done"), 5500);
+    return () => window.clearTimeout(timer);
+  }, [isTransdata]);
 
   const startLift = () => {
     setTimeout(() => setPhase("lifting"), 600);
@@ -193,7 +200,7 @@ export default function LogoAnimation() {
             transition={{ duration: 0.6, type: "spring" }}
           >
             {branding.logoUrl ? (
-              <img src={branding.logoUrl} alt={branding.portalName} className="h-32 w-32 rounded-full object-cover" />
+              <img src={isTransdata ? logoTransdata : branding.logoUrl} alt={branding.portalName} className={isTransdata ? "h-32 rounded-xl" : "h-32 w-32 rounded-full object-cover"} />
             ) : (
               <>
                 <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-primary-foreground/10 text-primary-foreground">
