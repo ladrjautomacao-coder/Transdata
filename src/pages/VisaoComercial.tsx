@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/EmptyState";
 import KanbanFilters from "@/components/kanban/KanbanFilters";
 import { ProjectFollowUpCard } from "@/components/comercial/ProjectFollowUpCard";
@@ -23,15 +22,33 @@ import {
 } from "@/lib/followUpNotes";
 import { Constants } from "@/integrations/supabase/types";
 import { statusLabels } from "@/pages/ProjectManagement";
-import { Search, RefreshCw, Signal, AlertTriangle, Radio, Download } from "lucide-react";
+import { teamRoleLabels } from "@/lib/teamRoleLabels";
+import {
+  Search, RefreshCw, AlertTriangle, Download, CalendarClock, LayoutGrid, List,
+  FileText, Building2, CalendarDays, Wrench, CheckCircle2, MoreHorizontal,
+  type LucideIcon,
+} from "lucide-react";
 import type { DbFollowUpNote, FollowUpProject, ProjectStatus } from "@/components/comercial/types";
 
-const PAGE_SIZE = 24;
+// Alto o bastante pra trazer todos os projetos ativos de uma vez: com 24 por
+// página e ordenação "mais parado primeiro", projeto recém-cadastrado caía
+// nas últimas páginas e parecia não existir.
+const PAGE_SIZE = 200;
 
 const SELECT_COLS =
   "id, company_name, project_code, city, state, country_code, status, sub_phase, contract_date, d_zero_date, handover_date, fleet_size, implemented_fleet, observations, is_pilot, created_at, updated_at, manager_id, executive:team_members!projects_executive_id_fkey(full_name), manager:team_members!projects_manager_id_fkey(full_name), project_solutions(solution:solutions(name)), project_integrations(integration:integrations(name))";
 
 type SortKey = "stale" | "recent" | "company" | "status";
+type ViewMode = "grid" | "list";
+
+const kpiStyle: Record<ProjectStatus | "total", { icon: LucideIcon; tile: string; card: string; caption: string }> = {
+  total: { icon: FileText, tile: "bg-blue-500/15 text-blue-600 dark:text-blue-400", card: "bg-blue-500/[0.03]", caption: "projetos" },
+  comercial: { icon: Building2, tile: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400", card: "bg-emerald-500/[0.03]", caption: "em negociação" },
+  planejamento: { icon: CalendarDays, tile: "bg-violet-500/15 text-violet-600 dark:text-violet-400", card: "bg-violet-500/[0.03]", caption: "em planejamento" },
+  implantacao: { icon: Wrench, tile: "bg-sky-500/15 text-sky-600 dark:text-sky-400", card: "bg-sky-500/[0.03]", caption: "em implantação" },
+  encerrado: { icon: CheckCircle2, tile: "bg-teal-500/15 text-teal-600 dark:text-teal-400", card: "bg-teal-500/[0.03]", caption: "em operação" },
+  suspenso: { icon: MoreHorizontal, tile: "bg-slate-500/15 text-slate-600 dark:text-slate-300", card: "bg-slate-500/[0.03]", caption: "em andamento" },
+};
 
 const prefsKey = (userId: string) => `transdata:comercial-prefs:${userId}`;
 
@@ -50,6 +67,7 @@ export default function VisaoComercial() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("stale");
+  const [view, setView] = useState<ViewMode>("grid");
   const [managers, setManagers] = useState<{ id: string; full_name: string }[]>([]);
   const [cities, setCities] = useState<string[]>([]);
   const [selected, setSelected] = useState<FollowUpProject | null>(null);
@@ -77,9 +95,10 @@ export default function VisaoComercial() {
     try {
       const raw = localStorage.getItem(prefsKey(user.id));
       if (raw) {
-        const p = JSON.parse(raw) as { search?: string; sort?: SortKey };
+        const p = JSON.parse(raw) as { search?: string; sort?: SortKey; view?: ViewMode };
         if (p.search) { setSearch(p.search); setDebouncedSearch(p.search); }
         if (p.sort) setSort(p.sort);
+        if (p.view) setView(p.view);
       }
     } catch { /* ignora */ }
     setPrefsLoaded(true);
@@ -88,9 +107,9 @@ export default function VisaoComercial() {
   useEffect(() => {
     if (!user || !prefsLoaded) return;
     try {
-      localStorage.setItem(prefsKey(user.id), JSON.stringify({ search, sort }));
+      localStorage.setItem(prefsKey(user.id), JSON.stringify({ search, sort, view }));
     } catch { /* ignora */ }
-  }, [user, prefsLoaded, search, sort]);
+  }, [user, prefsLoaded, search, sort, view]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 350);
@@ -172,6 +191,7 @@ export default function VisaoComercial() {
     setProjects(prev => (append ? [...prev, ...withNotes] : withNotes));
     setTotal(count ?? rows.length);
     setPage(targetPage);
+    setLiveAt(new Date());
     setLoading(false);
     setLoadingMore(false);
   }, [applyFilters, applySort, loadNotes]);
@@ -298,6 +318,11 @@ export default function VisaoComercial() {
     return list;
   }, [projects, staleOnly, isStale, sort, daysFor]);
 
+  // Recém-cadastrados: ainda sem nenhum acompanhamento. Ficam num bloco no
+  // topo até o GP registrar o primeiro acompanhamento.
+  const newProjects = useMemo(() => visibleProjects.filter(p => !effectiveLatestFollowUp(p)), [visibleProjects]);
+  const otherProjects = useMemo(() => visibleProjects.filter(p => !!effectiveLatestFollowUp(p)), [visibleProjects]);
+
   const managerSummary = useMemo(() => {
     const map = new Map<string, { name: string; total: number; stale: number }>();
     projects.forEach(p => {
@@ -311,7 +336,7 @@ export default function VisaoComercial() {
   }, [projects, isStale]);
 
   const exportCsv = () => {
-    const head = ["Código", "Empresa", "Cidade", "UF/País", "Gerente", "Executivo", "Status", "Frota", "Implantada", "Dias sem atualização", "Última atualização", "Autor"];
+    const head = ["Código", "Empresa", "Cidade", "UF/País", teamRoleLabels.manager ?? "Gerente", teamRoleLabels.executive ?? "Executivo", "Status", "Frota", "Implantada", "Dias sem atualização", "Última atualização", "Autor"];
     const lines = visibleProjects.map(p => {
       const note = effectiveLatestFollowUp(p);
       return [
@@ -355,74 +380,86 @@ export default function VisaoComercial() {
     setStaleOnly(v => !v);
   };
 
-  const kpiCardClass = (active: boolean) =>
-    `rounded-lg border bg-card p-3 text-left transition-all hover:border-primary/50 hover:shadow-sm ${active ? "border-primary ring-1 ring-primary/40 bg-primary/5" : "border-border/60"}`;
+  const kpiCardClass = (active: boolean, tint: string) =>
+    `flex items-center gap-4 rounded-xl border p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${tint} ${active ? "border-primary ring-2 ring-primary/30" : "border-border/60"}`;
+
+  const renderKpi = (key: ProjectStatus | "total", label: string, value: number, active: boolean, onClick: () => void) => {
+    const st = kpiStyle[key];
+    const Icon = st.icon;
+    return (
+      <button key={key} type="button" aria-pressed={active} onClick={onClick} className={kpiCardClass(active, st.card)}>
+        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${st.tile}`}>
+          <Icon className="h-5 w-5" />
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+          <span className="block text-2xl font-bold leading-tight">{value}</span>
+          <span className="block truncate text-[11px] text-muted-foreground">{st.caption}</span>
+        </span>
+      </button>
+    );
+  };
+
+  const gridClass = view === "grid" ? "grid gap-4 xl:grid-cols-2" : "grid gap-3";
 
   if (!allowed) return null;
 
-
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-start gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <Signal className="h-3.5 w-3.5 text-primary" />
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Visão Comercial</span>
-          </div>
-          <h1 className="text-2xl font-bold">Acompanhamento de Projetos</h1>
-          <p className="text-xs text-muted-foreground">Somente leitura — atualizações registradas pelos gerentes de projetos.</p>
+          <span className="text-xs font-semibold uppercase tracking-[0.15em] text-primary">Visão Comercial</span>
+          <h1 className="text-2xl font-bold tracking-tight">Acompanhamento de Projetos</h1>
+          <p className="text-sm text-muted-foreground">
+            Acompanhe em tempo real o status dos projetos, desde a implantação até a entrega final.
+          </p>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-3">
           {liveAt && (
-            <span className="flex items-center gap-1 text-[11px] text-emerald-600">
-              <Radio className="h-3 w-3" /> atualizado às {liveAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-            </span>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <CalendarClock className="h-5 w-5" />
+              <div className="leading-tight">
+                <p className="text-[10px]">Última atualização</p>
+                <p className="text-xs font-semibold text-foreground">
+                  {liveAt.toLocaleDateString("pt-BR")} {liveAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                </p>
+              </div>
+            </div>
           )}
-          <Button variant="outline" size="sm" onClick={exportCsv}>
-            <Download className="mr-1.5 h-3.5 w-3.5" /> Exportar CSV
+          <Button variant="outline" className="h-10 bg-card shadow-sm" onClick={exportCsv}>
+            <Download className="mr-2 h-4 w-4 text-primary" /> Exportar CSV
           </Button>
-          <Button variant="outline" size="sm" onClick={() => { fetchPage(0, false); loadSummary(); }}>
-            <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Atualizar
+          <Button variant="outline" className="h-10 bg-card shadow-sm" onClick={() => { fetchPage(0, false); loadSummary(); }}>
+            <RefreshCw className="mr-2 h-4 w-4 text-primary" /> Atualizar
           </Button>
         </div>
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
-        <button type="button" aria-pressed={showAll} onClick={selectTotal} className={kpiCardClass(showAll)}>
-          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Total</p>
-          <p className="text-xl font-bold">{grandTotal}</p>
-        </button>
-        {kpis.map(k => (
-          <button
-            key={k.key}
-            type="button"
-            aria-pressed={filters.status === k.key}
-            onClick={() => selectStatus(k.key)}
-            className={kpiCardClass(filters.status === k.key)}
-          >
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{k.label}</p>
-            <p className="text-xl font-bold">{k.value}</p>
-          </button>
-        ))}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7">
+        {renderKpi("total", "Total", grandTotal, showAll, selectTotal)}
+        {kpis.map(k => renderKpi(k.key, k.label, k.value, filters.status === k.key, () => selectStatus(k.key)))}
         <button
           type="button"
           aria-pressed={staleOnly}
           onClick={toggleStale}
-          className={`rounded-lg border bg-destructive/5 p-3 text-left transition-all hover:shadow-sm ${staleOnly ? "border-destructive ring-1 ring-destructive/40" : "border-destructive/40"}`}
+          title={`Sem atualização há mais de ${staleDays} dias`}
+          className={`flex items-center gap-4 rounded-xl border bg-destructive/5 p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${staleOnly ? "border-destructive ring-2 ring-destructive/30" : "border-destructive/30"}`}
         >
-          <p className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-destructive">
-            <AlertTriangle className="h-3 w-3" /> +{staleDays} dias
-          </p>
-          <p className="text-xl font-bold text-destructive">{staleCount}</p>
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-destructive/15 text-destructive">
+            <AlertTriangle className="h-5 w-5" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[11px] font-semibold uppercase tracking-wide text-destructive">Atrasados</span>
+            <span className="block text-2xl font-bold leading-tight text-destructive">{staleCount}</span>
+            <span className="block truncate text-[11px] text-muted-foreground">+{staleDays} dias sem atualização</span>
+          </span>
         </button>
       </div>
 
-
-
-      <div className="flex flex-col gap-4 lg:flex-row">
-        <div className="hidden lg:block">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+        <div className="hidden space-y-4 lg:block">
           <KanbanFilters
             filters={filters}
             setFilter={setFilter}
@@ -434,17 +471,21 @@ export default function VisaoComercial() {
           />
 
           {managerSummary.length > 0 && (
-            <div className="mt-4 w-full rounded-lg border border-border/60 bg-card p-3">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="w-[260px] rounded-xl border border-border/60 bg-card p-4 shadow-sm">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Por gerente (nesta lista)
               </p>
-              <ul className="space-y-1.5">
+              <ul className="space-y-2">
                 {managerSummary.map(m => (
                   <li key={m.name} className="flex items-center justify-between gap-2 text-xs">
                     <span className="truncate">{m.name}</span>
-                    <span className="shrink-0 text-muted-foreground">
-                      {m.total}
-                      {m.stale > 0 && <span className="ml-1 font-semibold text-destructive">({m.stale} parados)</span>}
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      <span className="font-medium">{m.total}</span>
+                      {m.stale > 0 && (
+                        <span className="rounded-md bg-destructive/10 px-1.5 py-0.5 text-[10px] font-semibold text-destructive">
+                          {m.stale} atrasado{m.stale !== 1 ? "s" : ""}
+                        </span>
+                      )}
                     </span>
                   </li>
                 ))}
@@ -454,47 +495,63 @@ export default function VisaoComercial() {
         </div>
 
         <div className="min-w-0 flex-1 space-y-4">
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-3 shadow-sm xl:flex-row xl:items-center">
             <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Buscar por empresa ou código do projeto..."
-                className="pl-9"
+                className="h-10 pl-9"
               />
             </div>
-            <Select value={sort} onValueChange={v => setSort(v as SortKey)}>
-              <SelectTrigger className="w-full sm:w-[230px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="stale">Mais tempo sem atualização</SelectItem>
-                <SelectItem value="recent">Última atualização</SelectItem>
-                <SelectItem value="company">Nome da empresa</SelectItem>
-                <SelectItem value="status">Status</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex rounded-lg border border-border/60 p-0.5" role="group" aria-label="Modo de visualização">
+                {([["grid", LayoutGrid, "Grade"], ["list", List, "Lista"]] as const).map(([mode, Icon, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    aria-pressed={view === mode}
+                    title={label}
+                    onClick={() => setView(mode)}
+                    className={`flex h-8 w-9 items-center justify-center rounded-md transition-colors ${view === mode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </button>
+                ))}
+              </div>
+              <Select value={sort} onValueChange={v => setSort(v as SortKey)}>
+                <SelectTrigger className="h-10 w-[220px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="stale">Mais tempo sem atualização</SelectItem>
+                  <SelectItem value="recent">Última atualização</SelectItem>
+                  <SelectItem value="company">Nome da empresa</SelectItem>
+                  <SelectItem value="status">Status</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                {(["ok", "warn", "late", "critical"] as const).map(l => (
+                  <span key={l} className="flex items-center gap-1.5">
+                    <span className={`h-2 w-2 rounded-full ${followUpLevelStyles[l].dot}`} />
+                    {followUpLevelStyles[l].label}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            <Badge variant="secondary">
+          <p className="text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">
               {staleOnly ? visibleProjects.length : total} projeto{(staleOnly ? visibleProjects.length : total) !== 1 ? "s" : ""}
-            </Badge>
-            {hasActiveFilters && <span>filtros ativos</span>}
-            {!filters.status && !showAll && <span>· Implementados ocultos</span>}
-            <span className="ml-auto flex items-center gap-3">
-              {(["ok", "warn", "late", "critical"] as const).map(l => (
-                <span key={l} className="flex items-center gap-1">
-                  <span className={`h-2 w-2 rounded-full ${followUpLevelStyles[l].dot}`} />
-                  {followUpLevelStyles[l].label}
-                </span>
-              ))}
             </span>
-          </div>
+            {hasActiveFilters && <span> · filtros ativos</span>}
+            {!filters.status && !showAll && <span> · Implementados ocultos</span>}
+          </p>
 
           {loading ? (
-            <div className="grid gap-3 xl:grid-cols-2">
+            <div className={gridClass}>
               {Array.from({ length: 4 }).map((_, i) => <ProjectFollowUpSkeleton key={i} />)}
             </div>
           ) : visibleProjects.length === 0 ? (
@@ -505,8 +562,28 @@ export default function VisaoComercial() {
             />
           ) : (
             <>
-              <div className="grid gap-3 xl:grid-cols-2">
-                {visibleProjects.map(p => (
+              {newProjects.length > 0 && (
+                <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+                    Recém-cadastrados · sem acompanhamento ({newProjects.length})
+                  </p>
+                  <div className={gridClass}>
+                    {newProjects.map(p => (
+                      <ProjectFollowUpCard
+                        key={p.id}
+                        project={p}
+                        staleDays={staleDays}
+                        onOpen={openProject}
+                        justUpdated={recentIds.includes(p.id)}
+                        isNew
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className={gridClass}>
+                {otherProjects.map(p => (
                   <ProjectFollowUpCard
                     key={p.id}
                     project={p}

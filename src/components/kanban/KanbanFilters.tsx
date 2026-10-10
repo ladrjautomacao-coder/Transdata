@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Filter, X } from "lucide-react";
 import { Constants } from "@/integrations/supabase/types";
 import { statusLabels } from "@/pages/ProjectManagement";
+import { teamRoleLabels } from "@/lib/teamRoleLabels";
 
 import type { ProjectFilters } from "@/contexts/ProjectFiltersContext";
 
@@ -20,7 +21,7 @@ interface Props {
 
 export default function KanbanFilters({ filters, setFilter, clearFilters, hasActiveFilters, managers, countries, cities, columns }: Props) {
   return (
-    <div className="w-[260px] shrink-0 rounded-lg border border-border/50 bg-card p-4 flex flex-col gap-4">
+    <div className="w-[260px] shrink-0 rounded-xl border border-border/60 bg-card p-4 shadow-sm flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-semibold">
           <Filter className="h-4 w-4 text-primary" />
@@ -35,11 +36,11 @@ export default function KanbanFilters({ filters, setFilter, clearFilters, hasAct
 
       <div className="space-y-3">
         <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 block">Gerente de Projetos</label>
+          <label className="text-xs font-medium text-muted-foreground mb-1 block">{teamRoleLabels.manager ?? "Gerente de Projetos"}</label>
           <Select value={filters.managerId || "all"} onValueChange={v => setFilter("managerId", v === "all" ? "" : v)}>
-            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Gerentes" /></SelectTrigger>
+            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Todos" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Gerentes</SelectItem>
+              <SelectItem value="all">Todos</SelectItem>
               {managers.map(m => <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -58,9 +59,9 @@ export default function KanbanFilters({ filters, setFilter, clearFilters, hasAct
         <div>
           <label className="text-xs font-medium text-muted-foreground mb-1 block">Estado</label>
           <Select value={filters.state || "all"} onValueChange={v => setFilter("state", v === "all" ? "" : v)}>
-            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Estados" /></SelectTrigger>
+            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Todos" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Estados</SelectItem>
+              <SelectItem value="all">Todos</SelectItem>
               {Constants.public.Enums.brazilian_state.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               {(countries || []).map(c => <SelectItem key={c} value={`c:${c}`}>{c}</SelectItem>)}
             </SelectContent>
@@ -70,9 +71,9 @@ export default function KanbanFilters({ filters, setFilter, clearFilters, hasAct
         <div>
           <label className="text-xs font-medium text-muted-foreground mb-1 block">Cidade</label>
           <Select value={filters.city || "all"} onValueChange={v => setFilter("city", v === "all" ? "" : v)}>
-            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Cidades" /></SelectTrigger>
+            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Todas" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Cidades</SelectItem>
+              <SelectItem value="all">Todas</SelectItem>
               {cities.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -81,9 +82,9 @@ export default function KanbanFilters({ filters, setFilter, clearFilters, hasAct
         <div>
           <label className="text-xs font-medium text-muted-foreground mb-1 block">Status</label>
           <Select value={filters.status || "all"} onValueChange={v => setFilter("status", v === "all" ? "" : v)}>
-            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Todos" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Status</SelectItem>
+              <SelectItem value="all">Todos</SelectItem>
               {columns.map(s => <SelectItem key={s} value={s}>{statusLabels[s as keyof typeof statusLabels]}</SelectItem>)}
             </SelectContent>
           </Select>
