@@ -1,0 +1,114 @@
+INTEGRACAO API - GP TRANSDATA
+
+A API permite consultar projetos do tenant Transdata. O acesso e somente leitura.
+
+DADOS DE ACESSO
+
+URL base:
+https://emzqlctomlsjwmgthbkv.supabase.co
+
+Chave publica Supabase (anon ou publishable):
+<INSERIR A CHAVE PUBLICA AQUI>
+
+Usuario tecnico:
+elesianophp@gmail.com
+
+Senha:
+A senha sera enviada separadamente por um canal seguro.
+
+IMPORTANTE: armazenar a senha e os tokens somente no backend do sistema integrador. Nao incluir essas credenciais em codigo executado no navegador. Nunca utilizar ou compartilhar a chave service_role.
+
+1. AUTENTICACAO
+
+Solicitar um token de acesso com:
+
+POST https://emzqlctomlsjwmgthbkv.supabase.co/auth/v1/token?grant_type=password
+
+Headers:
+apikey: <CHAVE_PUBLICA_SUPABASE>
+Content-Type: application/json
+
+Body:
+{
+  "email": "elesianophp@gmail.com",
+  "password": "<SENHA_ENVIADA_SEPARADAMENTE>"
+}
+
+A resposta contem access_token e refresh_token. Usar access_token nas chamadas da API. Quando expirar, renovar usando:
+
+POST https://emzqlctomlsjwmgthbkv.supabase.co/auth/v1/token?grant_type=refresh_token
+
+Headers:
+apikey: <CHAVE_PUBLICA_SUPABASE>
+Content-Type: application/json
+
+Body:
+{
+  "refresh_token": "<REFRESH_TOKEN_ATUAL>"
+}
+
+2. LISTAR PROJETOS
+
+GET https://emzqlctomlsjwmgthbkv.supabase.co/functions/v1/integration-api/projects?limit=50&offset=0
+
+Headers obrigatorios:
+apikey: <CHAVE_PUBLICA_SUPABASE>
+Authorization: Bearer <ACCESS_TOKEN>
+
+Parametros opcionais:
+limit: quantidade por pagina, de 1 a 100 (padrao: 50)
+offset: posicao inicial da pagina (padrao: 0)
+status: planejamento, execucao, homologacao, encerrado ou suspenso
+
+Exemplo com filtro:
+GET https://emzqlctomlsjwmgthbkv.supabase.co/functions/v1/integration-api/projects?limit=25&offset=0&status=execucao
+
+Formato da resposta:
+{
+  "data": [
+    {
+      "id": "UUID_DO_PROJETO",
+      "project_code": "CODIGO_DO_PROJETO",
+      "company_name": "NOME_DA_EMPRESA",
+      "city": "CIDADE",
+      "state": "UF",
+      "status": "execucao",
+      "sub_phase": null,
+      "system": {
+        "urbano": 12,
+        "seccionado": 3
+      },
+      "project_manager_name": "NOME_DO_GERENTE",
+      "updated_at": "DATA_E_HORA_ISO"
+    }
+  ],
+  "pagination": {
+    "limit": 50,
+    "offset": 0,
+    "total": 73
+  }
+}
+
+Para buscar paginas seguintes, aumentar offset pelo valor de limit. Exemplo: limit=50&offset=50.
+
+3. CONSULTAR UM PROJETO
+
+GET https://emzqlctomlsjwmgthbkv.supabase.co/functions/v1/integration-api/projects/<UUID_DO_PROJETO>
+
+Headers obrigatorios:
+apikey: <CHAVE_PUBLICA_SUPABASE>
+Authorization: Bearer <ACCESS_TOKEN>
+
+A resposta tem o formato { "data": { ... } } e inclui os campos system.urbano, system.seccionado e project_manager_name. Se nao houver gerente associado, project_manager_name sera null.
+
+4. RESPOSTAS DE ERRO
+
+400: parametro invalido.
+401: token ausente, invalido ou expirado.
+403: usuario sem papel integration.
+404: rota ou projeto nao encontrado ou indisponivel para este tenant.
+405: metodo HTTP nao permitido.
+
+As respostas de erro usam o formato { "error": "mensagem" }.
+
+A API respeita o isolamento do tenant Transdata e nao permite escrita de dados.

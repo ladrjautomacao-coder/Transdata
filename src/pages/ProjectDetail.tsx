@@ -39,6 +39,7 @@ import { formatLocation } from "@/lib/location";
 import type { Database } from "@/integrations/supabase/types";
 import { useSettings } from "@/contexts/SettingsContext";
 import { subPhasesByStatus } from "@/pages/ProjectManagement";
+import { teamRoleLabels } from "@/lib/teamRoleLabels";
 import { useNoteDraft } from "@/hooks/useNoteDraft";
 
 type ProjectStatus = Database["public"]["Enums"]["project_status"];
@@ -331,11 +332,11 @@ export default function ProjectDetail() {
 
     const oldExec = project.executive?.full_name || "—";
     const newExec = executives.find(e => e.id === executiveId)?.full_name || "—";
-    add("Executivo de Vendas", oldExec, newExec);
+    add(teamRoleLabels.executive ?? "Executivo de Vendas", oldExec, newExec);
 
     const oldMgr = project.manager?.full_name || "—";
     const newMgr = managers.find(m => m.id === managerId)?.full_name || "—";
-    add("Gestor de Projetos", oldMgr, newMgr);
+    add(teamRoleLabels.manager ?? "Gestor de Projetos", oldMgr, newMgr);
 
     add("Data do Contrato", fmtDate(project.contract_date), contractDate ? format(contractDate, "dd/MM/yyyy") : "—");
     add("Data D-Zero", fmtDate(project.d_zero_date), dZeroDate ? format(dZeroDate, "dd/MM/yyyy") : "—");
@@ -968,14 +969,14 @@ export default function ProjectDetail() {
             {editing ? (
               <>
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Executivo de Vendas</Label>
+                  <Label className="text-xs text-muted-foreground">{teamRoleLabels.executive ?? "Executivo de Vendas"}</Label>
                   <Select value={executiveId} onValueChange={setExecutiveId}>
                     <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                     <SelectContent>{executives.map(e => <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Gerente de Projetos</Label>
+                  <Label className="text-xs text-muted-foreground">{teamRoleLabels.manager ?? "Gerente de Projetos"}</Label>
                   <Select value={managerId} onValueChange={setManagerId}>
                     <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                     <SelectContent>{managers.map(m => <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>)}</SelectContent>
@@ -1058,8 +1059,8 @@ export default function ProjectDetail() {
               </>
             ) : (
               <>
-                <div><span className="text-xs text-muted-foreground">Executivo de Vendas</span><p>{project.executive?.full_name || "—"}</p></div>
-                <div><span className="text-xs text-muted-foreground">Gerente de Projetos</span><p>{project.manager?.full_name || "—"}</p></div>
+                <div><span className="text-xs text-muted-foreground">{teamRoleLabels.executive ?? "Executivo de Vendas"}</span><p>{project.executive?.full_name || "—"}</p></div>
+                <div><span className="text-xs text-muted-foreground">{teamRoleLabels.manager ?? "Gerente de Projetos"}</span><p>{project.manager?.full_name || "—"}</p></div>
                 <Separator />
                 <div>
                   <span className="text-xs text-muted-foreground">Soluções</span>
@@ -1383,7 +1384,7 @@ export default function ProjectDetail() {
                   status: "Status", sub_phase: "Sub-fase",
                   contract_date: "Data do contrato", d_zero_date: "Data D-zero",
                   handover_date: "Data de handover", executive_project_date: "Data do projeto executivo",
-                  executive_id: "Executivo", manager_id: "Gerente de Projetos",
+                  executive_id: teamRoleLabels.executive ?? "Executivo", manager_id: teamRoleLabels.manager ?? "Gerente de Projetos",
                   project_type_id: "Tipo de Projeto", project_code: "Código do Projeto",
                   project_segment: "Seguimento do Projeto",
                   fleet_size: "Frota Total", fleet_urbano: "Frota Urbano",

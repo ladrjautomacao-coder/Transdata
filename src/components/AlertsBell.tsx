@@ -136,7 +136,7 @@ export function AlertsBell() {
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative h-8 w-8" aria-label="Alertas">
+        <Button variant="ghost" size="icon" className="relative h-8 w-8 text-white hover:bg-white/15 hover:text-white" aria-label="Alertas">
           <Bell className="h-4 w-4" />
           {unseenTotal > 0 && (
             <Badge className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px] bg-red-500 hover:bg-red-500 text-white border-0">

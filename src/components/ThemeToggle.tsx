@@ -26,7 +26,7 @@ export function ThemeToggle() {
       variant="ghost"
       size="icon"
       onClick={() => setDark(!dark)}
-      className="h-8 w-8 text-muted-foreground hover:text-primary transition-colors"
+      className="h-8 w-8 text-white hover:bg-white/15 hover:text-white transition-colors"
       title={dark ? "Modo claro" : "Modo escuro"}
     >
       {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}

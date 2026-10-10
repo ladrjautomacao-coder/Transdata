@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,8 +7,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenantBranding } from "@/contexts/TenantBrandingContext";
-import { Mail, Lock, Signal, Building2 } from "lucide-react";
-import { motion } from "framer-motion";
+import { Mail, Lock, Building2 } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { Pause, Play } from "lucide-react";
 import LogoAnimation from "@/components/LogoAnimation";
 
 type Branding = ReturnType<typeof useTenantBranding>;
@@ -23,139 +24,104 @@ interface LoginFormProps {
   onSubmit: (e: React.FormEvent) => void;
 }
 
-function AnimatedGrid() {
+const CORPORATE_STATEMENTS = [
+  { title: "Missão", text: "Fornecer soluções inovadoras de mobilidade urbana." },
+  { title: "Visão", text: "Ser referência em sistemas de inteligência para transporte." },
+  { title: "Valores", text: "Confiança, respeito, humildade nas relações e integridade nos negócios." },
+];
+
+function CorporateStatementCarousel({ tone, compact = false }: { tone: "dark" | "light"; compact?: boolean }) {
+  const reduceMotion = useReducedMotion();
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [paused, setPaused] = useState(!!reduceMotion);
+  const isDark = tone === "dark";
+  const statement = CORPORATE_STATEMENTS[activeIndex];
+
+  useEffect(() => {
+    if (paused || reduceMotion) return;
+    const interval = window.setInterval(() => {
+      setActiveIndex((index) => (index + 1) % CORPORATE_STATEMENTS.length);
+    }, 5200);
+    return () => window.clearInterval(interval);
+  }, [paused, reduceMotion]);
+
   return (
-    <div className="absolute inset-0 overflow-hidden">
-      {/* Animated grid lines */}
-      <div className="absolute inset-0 opacity-[0.07]" style={{
-        backgroundImage: 'linear-gradient(hsl(28 90% 52%) 1px, transparent 1px), linear-gradient(90deg, hsl(28 90% 52%) 1px, transparent 1px)',
-        backgroundSize: '40px 40px'
-      }} />
-
-      {/* Horizontal scan line */}
-      <motion.div
-        className="absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent"
-        animate={{ top: ["-5%", "105%"] }}
-        transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-      />
-
-      {/* Vertical scan line */}
-      <motion.div
-        className="absolute top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-primary/30 to-transparent"
-        animate={{ left: ["-5%", "105%"] }}
-        transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-      />
-
-      {/* Floating particles */}
-      {[...Array(6)].map((_, i) => (
-        <motion.div
-          key={i}
-          className="absolute h-1 w-1 rounded-full bg-primary/30"
-          style={{
-            left: `${15 + i * 15}%`,
-            top: `${20 + (i % 3) * 25}%`,
-          }}
-          animate={{
-            y: [0, -20, 0],
-            opacity: [0.2, 0.6, 0.2],
-            scale: [1, 1.5, 1],
-          }}
-          transition={{
-            duration: 3 + i * 0.5,
-            repeat: Infinity,
-            delay: i * 0.4,
-            ease: "easeInOut",
-          }}
-        />
-      ))}
-
-      {/* Glowing orbs */}
-      <motion.div
-        className="absolute w-64 h-64 rounded-full blur-3xl bottom-[10%] right-[5%]"
-        style={{ background: "hsl(28 90% 52% / 0.08)" }}
-        animate={{ x: [0, 40, 0], y: [0, -30, 0] }}
-        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-      />
-      <motion.div
-        className="absolute w-48 h-48 rounded-full blur-3xl top-[15%] left-[10%]"
-        style={{ background: "hsl(28 90% 52% / 0.05)" }}
-        animate={{ x: [0, -30, 0], y: [0, 20, 0] }}
-        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-      />
-
-      {/* Connection lines */}
-      <svg className="absolute inset-0 w-full h-full opacity-[0.04]" xmlns="http://www.w3.org/2000/svg">
-        <motion.line
-          x1="10%" y1="20%" x2="40%" y2="60%"
-          stroke="hsl(28 90% 52%)" strokeWidth="1"
-          animate={{ opacity: [0.3, 0.8, 0.3] }}
-          transition={{ duration: 4, repeat: Infinity }}
-        />
-        <motion.line
-          x1="60%" y1="10%" x2="85%" y2="70%"
-          stroke="hsl(28 90% 52%)" strokeWidth="1"
-          animate={{ opacity: [0.5, 0.2, 0.5] }}
-          transition={{ duration: 5, repeat: Infinity }}
-        />
-        <motion.line
-          x1="30%" y1="80%" x2="70%" y2="30%"
-          stroke="hsl(28 90% 52%)" strokeWidth="1"
-          animate={{ opacity: [0.2, 0.6, 0.2] }}
-          transition={{ duration: 6, repeat: Infinity }}
-        />
-      </svg>
-    </div>
+    <section
+      aria-label="Missão, visão e valores da Transdata"
+      className={`relative z-10 w-full max-w-lg border-l-2 py-3 pl-4 ${
+        isDark ? "border-orange-400/70" : "border-[#4b1768]/50"
+      } ${compact ? "max-w-md" : ""}`}
+    >
+      <div className="mb-2 flex justify-end">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5" role="group" aria-label="Selecionar declaração institucional">
+            {CORPORATE_STATEMENTS.map((item, index) => (
+              <button
+                key={item.title}
+                type="button"
+                aria-label={`Mostrar ${item.title}`}
+                aria-pressed={activeIndex === index}
+                onClick={() => setActiveIndex(index)}
+                className={`h-1.5 rounded-full transition-all ${activeIndex === index ? "w-5" : "w-1.5"} ${
+                  isDark ? "bg-orange-300/80" : "bg-[#4b1768]/50"
+                }`}
+              />
+            ))}
+          </div>
+          {!reduceMotion && (
+            <button
+              type="button"
+              aria-label={paused ? "Retomar animação" : "Pausar animação"}
+              aria-pressed={paused}
+              title={paused ? "Retomar animação" : "Pausar animação"}
+              onClick={() => setPaused((value) => !value)}
+              className={`rounded-sm p-1 transition-colors ${isDark ? "text-white/70 hover:bg-white/10 hover:text-white" : "text-[#4b1768]/70 hover:bg-[#4b1768]/10 hover:text-[#4b1768]"}`}
+            >
+              {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+            </button>
+          )}
+        </div>
+      </div>
+      <div className={`relative flex h-20 items-center overflow-hidden ${compact ? "h-16" : ""}`} aria-live="polite">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={statement.title}
+            initial={reduceMotion ? false : { opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduceMotion ? undefined : { opacity: 0, y: -18 }}
+            transition={{ duration: reduceMotion ? 0 : 0.55, ease: "easeOut" }}
+            className="w-full"
+          >
+            <p className={`mb-1 text-xs font-bold uppercase tracking-[0.2em] ${isDark ? "text-orange-300" : "text-[#4b1768]"}`}>
+              {statement.title}
+            </p>
+            <p className={`text-base font-medium leading-relaxed sm:text-lg ${isDark ? "text-white/90" : "text-slate-700"}`}>
+              {statement.text}
+            </p>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </section>
   );
 }
 
 // Tela de acesso da Transdata (cliente fundador) — layout e texto originais, intocados.
 function TransdataLogin({ branding, email, setEmail, password, setPassword, submitting, onSubmit }: LoginFormProps) {
   return (
-    <div className="flex min-h-screen relative overflow-hidden">
-      {/* Left panel - branding with animated background */}
-      <div className="hidden lg:flex lg:w-1/2 bg-foreground relative items-center justify-center">
-        <AnimatedGrid />
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
-          className="relative z-10 text-center space-y-8 px-12"
-        >
-          <LogoAnimation />
-          <div>
-            <h2 className="text-3xl font-bold text-background mb-3">Sistema de Gestão</h2>
-            <p className="text-background/50 text-lg">Plataforma de gerenciamento de projetos de bilhetagem</p>
-          </div>
-          <motion.div
-            className="flex items-center justify-center gap-2 text-primary max-w-xs mx-auto"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-          >
-            <Signal className="h-4 w-4 animate-pulse shrink-0" />
-            <span className="text-sm font-medium tracking-wide">Conectado à performance que impulsiona o sucesso e acelera o crescimento</span>
-          </motion.div>
-        </motion.div>
+    <div className="flex min-h-screen flex-col items-center justify-center overflow-auto bg-background px-4 py-8">
+      <div className="mb-3 w-full max-w-md">
+        <CorporateStatementCarousel tone="light" compact />
       </div>
-
-      {/* Right panel - form */}
-      <div className="flex-1 flex items-center justify-center bg-background p-4">
+      <div className="w-full max-w-md">
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6, delay: 0.3 }}
+          className="relative z-10 w-full max-w-md"
         >
-          <Card className="w-full max-w-md shadow-lg border-primary/20 glow-orange">
+          <Card className="w-full max-w-md shadow-lg border-primary/20">
             <CardHeader className="text-center space-y-3">
-              <div className="lg:hidden flex justify-center mb-2">
-                {branding.logoUrl ? (
-                  <img src={branding.logoUrl} alt={branding.portalName} className="h-20 w-20 rounded-full object-cover" />
-                ) : (
-                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <Building2 className="h-10 w-10" />
-                  </div>
-                )}
-              </div>
+              <LogoAnimation tone="light" />
               <p className="text-sm font-semibold uppercase tracking-wide text-primary">{branding.portalName}</p>
               <CardTitle className="text-2xl font-bold">Acessar Sistema</CardTitle>
               <CardDescription>Entre com suas credenciais</CardDescription>

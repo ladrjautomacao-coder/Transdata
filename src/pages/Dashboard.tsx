@@ -26,6 +26,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ProjectTimeline } from "@/components/ProjectTimeline";
 import { EmptyState } from "@/components/EmptyState";
 import { useAuth } from "@/contexts/AuthContext";
+import { teamRoleLabels } from "@/lib/teamRoleLabels";
 
 type ProjectStatus = Database["public"]["Enums"]["project_status"];
 
@@ -522,7 +523,7 @@ export default function Dashboard() {
                           <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">Empresa</th>
                           <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">Localização</th>
                           <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">Status</th>
-                          <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">Gerente</th>
+                          <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">{teamRoleLabels.manager ?? "Gerente"}</th>
                           <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">Frota</th>
                           <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">Soluções</th>
                           <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">Cronograma</th>
@@ -733,7 +734,7 @@ export default function Dashboard() {
               </Select>
 
               <Select value={filterManager} onValueChange={setFilterManager}>
-                <SelectTrigger className="bg-background border-border/50 h-9 text-xs"><SelectValue placeholder="Gerente" /></SelectTrigger>
+                <SelectTrigger className="bg-background border-border/50 h-9 text-xs"><SelectValue placeholder={teamRoleLabels.manager ?? "Gerente"} /></SelectTrigger>
                 <SelectContent className="bg-popover z-50">
                   <SelectItem value="all">Gerentes</SelectItem>
                   {managerOptions.map(m => (
@@ -858,7 +859,7 @@ export default function Dashboard() {
                                   <tr className="border-b border-border/50">
                                     <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">Empresa</th>
                                     <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">Localização</th>
-                                    <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">Gerente</th>
+                                    <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">{teamRoleLabels.manager ?? "Gerente"}</th>
                                     <th className="text-right text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">Frota</th>
                                   </tr>
                                 </thead>
@@ -955,7 +956,7 @@ export default function Dashboard() {
                           <tr className="border-b border-border/50">
                             <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">Empresa</th>
                             <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">Localização</th>
-                            <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">Gerente de Projetos</th>
+                            <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">{teamRoleLabels.manager ?? "Gerente de Projetos"}</th>
                             <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">Frota</th>
                             <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">Contrato</th>
                             <th className="text-left text-[10px] text-muted-foreground uppercase tracking-wider font-semibold py-2 px-3">Soluções</th>
@@ -1317,8 +1318,8 @@ export default function Dashboard() {
                     { l: "Contrato", v: fmtDate(p.contract_date) },
                     { l: "D-Zero", v: fmtDate(p.d_zero_date) },
                     { l: "Handover", v: fmtDate(p.handover_date) },
-                    { l: "Gerente", v: p.manager?.full_name || "—" },
-                    { l: "Executivo", v: p.executive?.full_name || "—" },
+                    { l: teamRoleLabels.manager ?? "Gerente", v: p.manager?.full_name || "—" },
+                    { l: teamRoleLabels.executive ?? "Executivo", v: p.executive?.full_name || "—" },
                     { l: "Frota", v: String(getProjectFleet(p) || "—") },
                     { l: "Piloto", v: p.is_pilot ? "Sim" : "Não" },
                   ].map((item, i) => (

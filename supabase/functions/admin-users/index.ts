@@ -208,13 +208,23 @@ Deno.serve(async (req) => {
       }
 
       if (action === "reset_password") {
-        // Generate a password reset link
-        const { data, error } = await adminClient.auth.admin.generateLink({
-          type: "recovery",
-          email: body.email,
+        const { data: targetUser, error: targetUserError } = await adminClient.auth.admin.getUserById(targetUserId);
+        if (targetUserError) throw targetUserError;
+        if (!targetUser.user.email) {
+          return new Response(JSON.stringify({ error: "Usuário não possui email" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const recoveryClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
+          auth: { persistSession: false, autoRefreshToken: false },
         });
+        const origin = req.headers.get("origin") ?? "https://projetostransdata.vercel.app";
+        const redirectTo = new URL("/reset-password", origin).toString();
+        const { error } = await recoveryClient.auth.resetPasswordForEmail(targetUser.user.email, { redirectTo });
         if (error) throw error;
-        return new Response(JSON.stringify({ success: true, message: "Link de recuperação gerado" }), {
+        return new Response(JSON.stringify({ success: true, message: "Email de recuperação enviado" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }

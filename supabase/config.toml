@@ -1,5 +1,7 @@
 project_id = "emzqlctomlsjwmgthbkv"
+[functions.integration-api]
+verify_jwt = true
 [functions.provision-integration-user]
-verify_jwt = false
+verify_jwt = true
 [functions.public-signup]
 verify_jwt = false

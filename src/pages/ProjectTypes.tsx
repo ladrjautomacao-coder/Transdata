@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useTenantBranding } from "@/contexts/TenantBrandingContext";
 import { DEFAULT_STATUS_LABELS, applyStatusLabelOverrides } from "@/lib/statusLabels";
+import { applyTeamRoleLabelOverrides } from "@/lib/teamRoleLabels";
 import type { CustomFieldDef } from "@/pages/NewProject";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +58,9 @@ export default function ProjectTypes() {
   const [customFields, setCustomFields] = useState<CustomFieldDef[]>([]);
   const [savingCustomFields, setSavingCustomFields] = useState(false);
 
+  const [teamLabels, setTeamLabels] = useState<{ executive: string; manager: string }>({ executive: "", manager: "" });
+  const [savingTeamLabels, setSavingTeamLabels] = useState(false);
+
   const load = async () => {
     setLoading(true);
     const { data } = await supabase.from("project_types").select("id, name, short_code, active").order("name");
@@ -65,9 +69,11 @@ export default function ProjectTypes() {
   };
 
   const loadStageLabels = async () => {
-    const { data } = await (supabase as any).from("tenant_branding").select("status_labels, custom_fields").maybeSingle();
+    const { data } = await (supabase as any).from("tenant_branding").select("status_labels, custom_fields, team_role_labels").maybeSingle();
     setStageLabels({ ...DEFAULT_STATUS_LABELS, ...((data as any)?.status_labels || {}) });
     setCustomFields(((data as any)?.custom_fields as CustomFieldDef[]) || []);
+    const savedTeam = (data as any)?.team_role_labels as { executive?: string; manager?: string } | null;
+    setTeamLabels({ executive: savedTeam?.executive || "", manager: savedTeam?.manager || "" });
   };
 
   useEffect(() => {
@@ -103,6 +109,19 @@ export default function ProjectTypes() {
       [next[index], next[target]] = [next[target], next[index]];
       return next;
     });
+  };
+
+  const saveTeamLabels = async () => {
+    setSavingTeamLabels(true);
+    const payload = { executive: teamLabels.executive.trim() || undefined, manager: teamLabels.manager.trim() || undefined };
+    const { error } = await (supabase as any).from("tenant_branding").update({ team_role_labels: payload });
+    if (error) {
+      toast({ title: "Erro ao salvar nomes da equipe", description: error.message, variant: "destructive" });
+    } else {
+      applyTeamRoleLabelOverrides(payload);
+      toast({ title: "Nomes da equipe atualizados!" });
+    }
+    setSavingTeamLabels(false);
   };
 
   const saveStageLabels = async () => {
@@ -247,6 +266,43 @@ export default function ProjectTypes() {
             </div>
             <Button onClick={saveStageLabels} disabled={savingStages}>
               {savingStages ? "Salvando..." : "Salvar etapas"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {!isTransdata && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="text-lg">Nomes da Equipe</CardTitle>
+            <CardDescription>
+              Renomeie os dois papéis responsáveis pelo projeto. Aparece no cadastro, detalhe,
+              dashboard, listas, filtros e nos relatórios exportados.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Papel 1 (comercial/vendas)</Label>
+                <Input
+                  value={teamLabels.executive}
+                  onChange={e => setTeamLabels(t => ({ ...t, executive: e.target.value }))}
+                  maxLength={40}
+                  placeholder="Ex: Executivo de Vendas"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Papel 2 (responsável pelo projeto)</Label>
+                <Input
+                  value={teamLabels.manager}
+                  onChange={e => setTeamLabels(t => ({ ...t, manager: e.target.value }))}
+                  maxLength={40}
+                  placeholder="Ex: Gerente de Projetos"
+                />
+              </div>
+            </div>
+            <Button onClick={saveTeamLabels} disabled={savingTeamLabels}>
+              {savingTeamLabels ? "Salvando..." : "Salvar nomes"}
             </Button>
           </CardContent>
         </Card>

@@ -21,6 +21,7 @@ import { Constants } from "@/integrations/supabase/types";
 import { formatLocation } from "@/lib/location";
 import type { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
+import { teamRoleLabels } from "@/lib/teamRoleLabels";
 
 type ProjectStatus = Database["public"]["Enums"]["project_status"];
 type BrazilianState = Database["public"]["Enums"]["brazilian_state"];
@@ -193,14 +194,14 @@ export default function ProjectList() {
           </SelectContent>
         </Select>
         <Select value={filterManager} onValueChange={v => setFilterManager(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Gerente" /></SelectTrigger>
+          <SelectTrigger className="w-[180px]"><SelectValue placeholder={teamRoleLabels.manager ?? "Gerente"} /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos Gerentes</SelectItem>
             {managers.map(m => <SelectItem key={m.id} value={m.full_name}>{m.full_name}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterExecutive} onValueChange={v => setFilterExecutive(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Executivo" /></SelectTrigger>
+          <SelectTrigger className="w-[180px]"><SelectValue placeholder={teamRoleLabels.executive ?? "Executivo"} /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos Executivos</SelectItem>
             {executives.map(e => <SelectItem key={e.id} value={e.full_name}>{e.full_name}</SelectItem>)}
@@ -219,8 +220,8 @@ export default function ProjectList() {
               <TableRow>
                 <SortHeader label="Empresa" field="company_name" />
                 <TableHead className="whitespace-nowrap">Cidade/Estado</TableHead>
-                <TableHead className="whitespace-nowrap">Gerente</TableHead>
-                <TableHead className="whitespace-nowrap">Executivo</TableHead>
+                <TableHead className="whitespace-nowrap">{teamRoleLabels.manager ?? "Gerente"}</TableHead>
+                <TableHead className="whitespace-nowrap">{teamRoleLabels.executive ?? "Executivo"}</TableHead>
                 <SortHeader label="D-zero" field="d_zero_date" />
                 <SortHeader label="Handover" field="handover_date" />
                 <SortHeader label="Status" field="status" />

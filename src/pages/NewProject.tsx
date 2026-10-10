@@ -23,6 +23,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { useSettings } from "@/contexts/SettingsContext";
 import { LocationFields } from "@/components/LocationFields";
 import { useTenantBranding } from "@/contexts/TenantBrandingContext";
+import { teamRoleLabels } from "@/lib/teamRoleLabels";
 
 type BrazilianState = Database["public"]["Enums"]["brazilian_state"];
 type ProjectStatus = Database["public"]["Enums"]["project_status"];
@@ -274,7 +275,7 @@ export default function NewProject() {
       toast({ title: "Preencha os campos obrigatórios de Dados Gerais", variant: "destructive" });
       return;
     }
-    if (!projectTypeId) {
+    if (isTransdata && !projectTypeId) {
       toast({ title: "Selecione o Tipo do Projeto", variant: "destructive" });
       return;
     }
@@ -493,7 +494,7 @@ export default function NewProject() {
               cityMax={settings.cityMax}
             />
             <div className="space-y-2">
-              <Label>Tipo do Projeto <span className="text-destructive">*</span></Label>
+              <Label>Tipo do Projeto {isTransdata && <span className="text-destructive">*</span>}</Label>
               <Select value={projectTypeId || undefined} onValueChange={setProjectTypeId}>
                 <SelectTrigger><SelectValue placeholder="Selecione o tipo..." /></SelectTrigger>
                 <SelectContent>
@@ -547,7 +548,9 @@ export default function NewProject() {
             <DatePicker label="Data de Contratação" date={contractDate} onSelect={setContractDate} required />
             <DatePicker label="Data D-zero" date={dZeroDate} onSelect={setDZeroDate} />
             <DatePicker label="Data Handover" date={handoverDate} onSelect={setHandoverDate} />
-            <DatePicker label="Projeto Executivo" date={executiveProjectDate} onSelect={setExecutiveProjectDate} />
+            {isTransdata && (
+              <DatePicker label="Projeto Executivo" date={executiveProjectDate} onSelect={setExecutiveProjectDate} />
+            )}
           </CardContent>
         </Card>
 
@@ -749,7 +752,7 @@ export default function NewProject() {
           <CardHeader><CardTitle className="text-lg">Equipe</CardTitle></CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Gerente Comercial</Label>
+              <Label>{teamRoleLabels.executive ?? "Gerente Comercial"}</Label>
               <Select value={executiveId || undefined} onValueChange={setExecutiveId}>
                 <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                 <SelectContent>
@@ -758,7 +761,7 @@ export default function NewProject() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Gerente de Projetos</Label>
+              <Label>{teamRoleLabels.manager ?? "Gerente de Projetos"}</Label>
               <Select value={managerId || undefined} onValueChange={setManagerId}>
                 <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                 <SelectContent>

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { applyStatusLabelOverrides } from "@/lib/statusLabels";
+import { applyTeamRoleLabelOverrides } from "@/lib/teamRoleLabels";
 
 interface TenantBranding {
   slug: string | null;
@@ -38,7 +39,9 @@ const TenantBrandingContext = createContext<TenantBranding>({
 export const useTenantBranding = () => useContext(TenantBrandingContext);
 
 function extractSlug(hostname: string): string | null {
-  if (hostname === "localhost" || /^\d+\.\d+\.\d+\.\d+$/.test(hostname)) return null;
+  if (hostname === "localhost" || /^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+    return import.meta.env.DEV ? FALLBACK_TENANT_SLUG : null;
+  }
   if (hostname.endsWith(".vercel.app")) return FALLBACK_TENANT_SLUG;
   const parts = hostname.split(".");
   // "hopextnocode.com" (raiz, 2 partes) e "www.hopextnocode.com" (redireciona
@@ -74,9 +77,11 @@ export function TenantBrandingProvider({ children }: { children: ReactNode }) {
       if (!row) {
         setState({ ...DEFAULT_BRANDING, loading: false, isKnownTenant: false });
         applyStatusLabelOverrides(null);
+        applyTeamRoleLabelOverrides(null);
         return;
       }
       applyStatusLabelOverrides(row.status_labels);
+      applyTeamRoleLabelOverrides(row.team_role_labels);
 
       const branding: TenantBranding = {
         slug: row.slug,
@@ -90,6 +95,9 @@ export function TenantBrandingProvider({ children }: { children: ReactNode }) {
         isKnownTenant: true,
       };
       setState(branding);
+      document.title = branding.slug === "transdata"
+        ? "Transdata - Gestão de Projetos"
+        : `${branding.portalName} - Gestão de Projetos`;
 
       const root = document.documentElement;
       if (branding.primaryColor) {
