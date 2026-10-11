@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Protótipo Agenda Implantação</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com/3.4.16"></script>
+<script>
+tailwind.config = {
+  darkMode: "class",
+  theme: { extend: {
+    fontFamily: { sans: ["Inter", "system-ui", "sans-serif"] },
+    colors: {
+      bg: "rgb(var(--bg) / <alpha-value>)", card: "rgb(var(--card) / <alpha-value>)",
+      fg: "rgb(var(--fg) / <alpha-value>)", muted: "rgb(var(--muted) / <alpha-value>)",
+      line: "rgb(var(--line) / <alpha-value>)", soft: "rgb(var(--soft) / <alpha-value>)",
+      brand: "rgb(var(--brand) / <alpha-value>)", brandtx: "rgb(var(--brandtx) / <alpha-value>)",
+      brandsoft: "rgb(var(--brandsoft) / <alpha-value>)",
+    },
+  } },
+};
+</script>
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root { --bg:246 247 251; --card:255 255 255; --fg:15 23 42; --muted:100 116 139; --line:226 232 240; --soft:241 245 249; --brand:75 23 104; --brandtx:75 23 104; --brandsoft:241 232 246; }
+  .dark { --bg:11 10 18; --card:22 20 32; --fg:236 236 245; --muted:148 146 170; --line:44 41 60; --soft:31 29 44; --brand:122 52 168; --brandtx:196 150 235; --brandsoft:45 30 62; }
+  body { background: rgb(var(--bg)); color: rgb(var(--fg)); }
+  .fade-in { animation: fade .25s ease-out both; }
+  .pop { animation: pop .22s cubic-bezier(.2,.9,.3,1.2) both; }
+  .slide { animation: slide .28s cubic-bezier(.2,.8,.2,1) both; }
+  .toast-in { animation: toast .3s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes fade { from { opacity:0; transform: translateY(4px) } to { opacity:1; transform:none } }
+  @keyframes pop { from { opacity:0; transform: scale(.96) } to { opacity:1; transform:none } }
+  @keyframes slide { from { transform: translateX(100%) } to { transform:none } }
+  @keyframes toast { from { opacity:0; transform: translateY(12px) scale(.97) } to { opacity:1; transform:none } }
+  .shimmer { background: linear-gradient(90deg, rgb(var(--soft)) 0%, rgb(var(--line)) 50%, rgb(var(--soft)) 100%); background-size: 200% 100%; animation: sh 1.2s infinite linear; }
+  @keyframes sh { from { background-position: 200% 0 } to { background-position: -200% 0 } }
+  .glass { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  ::-webkit-scrollbar { height: 8px; width: 8px } ::-webkit-scrollbar-thumb { background: rgb(var(--line)); border-radius: 8px }
+  input, select, textarea { background: rgb(var(--card)); color: rgb(var(--fg)); }
+  .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert(.8); }
+</style>
+</head>
+<body class="font-sans antialiased">
+<div id="app"></div>
+<div id="modal"></div>
+<div id="toasts" class="pointer-events-none fixed bottom-5 right-5 z-[60] flex flex-col gap-2"></div>
+
+<script>
+/* ============================================================
+ * Protótipo navegável — Implantação: Solicitação de agenda + Calendário
+ * Dados fictícios, tudo em memória. Data de referência fixa: ter 13/10/2026.
+ * ============================================================ */
+const TODAY = new Date(2026, 9, 13, 9, 0);
+const ME = "Luiz Alves";
+const PRESETS = ["Projeto Executivo", "1ª Visita - Bilhetagem", "2ª Visita - Bilhetagem", "3ª Visita - Bilhetagem",
+  "1ª Visita - ITS / Gestão de Frotas", "2ª Visita - ITS / Gestão de Frotas", "3ª Visita - ITS / Gestão de Frotas"];
+const TECHS = [
+  { id: 1, name: "Carlos Mendes", area: "Bilhetagem" },
+  { id: 2, name: "Marina Rocha", area: "ITS / Frotas" },
+  { id: 3, name: "Rafael Souza", area: "Bilhetagem" },
+  { id: 4, name: "Juliana Lima", area: "ITS / Frotas" },
+  { id: 5, name: "Pedro Alves", area: "Instalação" },
+];
+const PALETTE = ["#7c3aed", "#0284c7", "#059669", "#d97706", "#e11d48", "#4f46e5", "#0d9488", "#c026d3"];
+const STATUS = {
+  pendente:  { label: "Pendente",  pill: "bg-amber-500/15 text-amber-700 dark:text-amber-300", dot: "bg-amber-500", bar: "border-amber-400" },
+  aprovada:  { label: "Aprovada",  pill: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-500", bar: "border-emerald-500" },
+  reprovada: { label: "Reprovada", pill: "bg-red-500/15 text-red-700 dark:text-red-300", dot: "bg-red-500", bar: "border-red-500" },
+  cancelada: { label: "Cancelada", pill: "bg-slate-500/15 text-muted line-through", dot: "bg-slate-400", bar: "border-slate-400" },
+};
+
+/* ---------- helpers de data ---------- */
+const d = (day, h = 8, m = 0) => new Date(2026, 9, day, h, m);
+const addDays = (dt, n) => { const x = new Date(dt); x.setDate(x.getDate() + n); return x; };
+const startOfDay = dt => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+const mondayOf = dt => { const x = startOfDay(dt); const wd = (x.getDay() + 6) % 7; return addDays(x, -wd); };
+const p2 = n => String(n).padStart(2, "0");
+const fD = dt => `${p2(dt.getDate())}/${p2(dt.getMonth() + 1)}`;
+const fDT = dt => `${fD(dt)} ${p2(dt.getHours())}:${p2(dt.getMinutes())}`;
+const fRange = (a, b) => startOfDay(a).getTime() === startOfDay(b).getTime() ? `${fD(a)} · ${p2(a.getHours())}:${p2(a.getMinutes())}–${p2(b.getHours())}:${p2(b.getMinutes())}` : `${fDT(a)} → ${fDT(b)}`;
+const WD = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const MONTHS = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+const toLocal = dt => `${dt.getFullYear()}-${p2(dt.getMonth() + 1)}-${p2(dt.getDate())}T${p2(dt.getHours())}:${p2(dt.getMinutes())}`;
+const overlaps = (a1, a2, b1, b2) => a1 < b2 && b1 < a2;
+const initials = n => n.split(" ").map(x => x[0]).slice(0, 2).join("");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const color = id => PALETTE[id % PALETTE.length];
+const techName = id => TECHS.find(t => t.id === id).name;
+
+/* ---------- cenários ---------- */
+const BASE_PROJECTS = [
+  { id: 1, client: "Viação Exemplo Ltda",     code: "CLI001/0042", city: "Curitiba/PR",      phase: "Cronograma de Visita Técnica", hot: true,  gp: ME },
+  { id: 2, client: "Expresso Demonstração",   code: "CLI003/0007", city: "Londrina/PR",      phase: "Implantação",                  hot: false, gp: ME },
+  { id: 3, client: "Ônibus Ilustrativo Ltda", code: "CLI006/0001", city: "Joinville/SC",     phase: "Cronograma de Visita Técnica", hot: true,  gp: ME },
+  { id: 4, client: "Linha Teste Transportes", code: "CLI008/0002", city: "Maringá/PR",       phase: "Levantamento de Materiais",    hot: false, gp: ME },
+  { id: 5, client: "Transporte Modelo SA",    code: "CLI002/0019", city: "São Paulo/SP",     phase: "Implantação",                  hot: false, gp: "Graciele Borim" },
+  { id: 6, client: "Coletivos Amostra Ltda",  code: "CLI005/0003", city: "Campinas/SP",      phase: "Cronograma de Visita Técnica", hot: true,  gp: "Aldon Ferreira" },
+  { id: 7, client: "Rodoviária Fictícia SA",  code: "CLI004/0011", city: "Ponta Grossa/PR",  phase: "Implantação",                  hot: false, gp: "Aldon Ferreira" },
+  { id: 8, client: "Viação Protótipo SA",     code: "CLI007/0004", city: "Florianópolis/SC", phase: "Projeto Executivo",            hot: false, gp: "Janaina Barbosa" },
+];
+let seq = 100;
+function req(o) {
+  const r = { id: ++seq, notes: "", techIds: [], reason: "", ...o };
+  r.custom = !PRESETS.includes(r.purpose);
+  r.location = r.location || BASE_PROJECTS.find(p => p.id === r.projectId).city;
+  r.history = [{ at: r.createdAt, text: `Solicitada por ${r.gp}` }].concat(
+    r.status === "aprovada"  ? [{ at: r.reviewedAt, text: `Aprovada por Aprovador · técnicos: ${r.techIds.map(techName).join(", ")}` }] :
+    r.status === "reprovada" ? [{ at: r.reviewedAt, text: "Reprovada por Aprovador" }] :
+    r.status === "cancelada" ? [{ at: r.reviewedAt, text: `Cancelada por ${r.gp}` }] : []);
+  return r;
+}
+const SCENARIOS = {
+  tipico: { label: "Dia típico", desc: "pendentes, aprovadas e reprovadas", build: () => [
+    req({ projectId: 1, gp: ME, purpose: "Projeto Executivo", start: d(20, 8), end: d(22, 18), status: "pendente", createdAt: d(12, 14, 20), notes: "Cliente pediu início pela manhã." }),
+    req({ projectId: 6, gp: "Aldon Ferreira", purpose: "1ª Visita - ITS / Gestão de Frotas", start: d(23, 8), end: d(23, 17), status: "pendente", createdAt: d(12, 9, 5) }),
+    req({ projectId: 8, gp: "Janaina Barbosa", purpose: "Vistoria pós-instalação", start: d(27, 8), end: d(28, 12), status: "pendente", createdAt: d(13, 8, 40) }),
+    req({ projectId: 2, gp: ME, purpose: "2ª Visita - Bilhetagem", start: d(13, 8), end: d(15, 18), status: "aprovada", createdAt: d(6, 11), reviewedAt: d(7, 16, 40), techIds: [1, 3] }),
+    req({ projectId: 5, gp: "Graciele Borim", purpose: "1ª Visita - Bilhetagem", start: d(19, 8), end: d(21, 18), status: "aprovada", createdAt: d(8, 10), reviewedAt: d(9, 9, 15), techIds: [2] }),
+    req({ projectId: 7, gp: "Aldon Ferreira", purpose: "3ª Visita - ITS / Gestão de Frotas", start: d(16, 8), end: d(16, 17), status: "aprovada", createdAt: d(9, 15), reviewedAt: d(10, 8), techIds: [3] }),
+    req({ projectId: 3, gp: ME, purpose: "1ª Visita - ITS / Gestão de Frotas", start: d(26, 8), end: d(27, 18), status: "aprovada", createdAt: d(10, 9), reviewedAt: d(12, 17), techIds: [4, 5] }),
+    req({ projectId: 4, gp: ME, purpose: "Alinhamento com manutenção", start: d(14, 8), end: d(14, 12), status: "reprovada", createdAt: d(5, 10, 12), reviewedAt: d(6, 8, 30), reason: "Cliente ainda não liberou a garagem. Reenviar após confirmação do encarregado." }),
+  ]},
+  fila: { label: "Fila cheia", desc: "muitas solicitações para o Aprovador", role: "ap", build: () => {
+    const list = SCENARIOS.tipico.build();
+    [[5, "Graciele Borim", "2ª Visita - Bilhetagem", 21, 22], [7, "Aldon Ferreira", "Projeto Executivo", 28, 28], [8, "Janaina Barbosa", "1ª Visita - Bilhetagem", 29, 30], [6, "Aldon Ferreira", "2ª Visita - ITS / Gestão de Frotas", 30, 30], [4, ME, "1ª Visita - Bilhetagem", 21, 21]]
+      .forEach(([pid, gp, pu, a, b], i) => list.push(req({ projectId: pid, gp, purpose: pu, start: d(a, 8), end: d(b, 17), status: "pendente", createdAt: d(13, 7 + i, 10) })));
+    return list; } },
+  conflito: { label: "Conflito de técnico", desc: "aprovação com técnico já ocupado", build: () => SCENARIOS.tipico.build(), after: () => {
+    const r = state.requests.find(x => x.projectId === 1 && x.status === "pendente");
+    state.role = "ap"; state.page = "sol"; render(); openApprove(r.id, [2]); } },
+  vazio: { label: "Sem dados", desc: "estados vazios", build: () => [], empty: true },
+  carregando: { label: "Carregando", desc: "skeletons", build: () => [], loading: true },
+  erro: { label: "Erro de conexão", desc: "falha com 'tentar novamente'", build: () => [], error: true },
+};
+
+/* ---------- estado ---------- */
+const state = {
+  scenario: "tipico", page: "sol", role: "gp", dark: false, collapsed: false,
+  projects: [], requests: [], loading: false, error: false,
+  gpTab: "todas", gpSearch: "", apSearch: "", apGp: "", apCollapsed: {},
+  calView: "tecnico", calStart: mondayOf(TODAY), calTech: "", calSearch: "",
+};
+function loadScenario(key) {
+  const s = SCENARIOS[key]; seq = 100;
+  state.scenario = key; state.requests = s.build(); state.projects = s.empty ? [] : BASE_PROJECTS.slice();
+  state.loading = !!s.loading; state.error = !!s.error;
+  if (s.role) { state.role = s.role; state.page = "sol"; }
+  state.calStart = mondayOf(TODAY); closeModal(); render();
+  if (s.after) setTimeout(s.after, 50);
+}
+
+/* ---------- toasts ---------- */
+function toast(msg, type = "ok") {
+  const ic = { ok: ["check-circle-2", "text-emerald-500"], warn: ["alert-triangle", "text-amber-500"], err: ["x-circle", "text-red-500"], info: ["info", "text-sky-500"] }[type];
+  const el = document.createElement("div");
+  el.className = "toast-in pointer-events-auto flex min-w-[280px] max-w-sm items-start gap-3 rounded-xl border border-line bg-card px-4 py-3 text-sm shadow-xl";
+  el.innerHTML = `<i data-lucide="${ic[0]}" class="mt-0.5 h-4 w-4 shrink-0 ${ic[1]}"></i><span>${msg}</span>`;
+  document.getElementById("toasts").appendChild(el); lucide.createIcons();
+  setTimeout(() => { el.style.transition = "opacity .3s, transform .3s"; el.style.opacity = "0"; el.style.transform = "translateY(8px)"; setTimeout(() => el.remove(), 300); }, 3600);
+}
+
+/* ---------- componentes ---------- */
+const btn = (label, onclick, kind = "primary", icon = "", extra = "", attrs = "") => {
+  const k = {
+    primary: "bg-brand text-white hover:brightness-110 shadow-sm shadow-brand/20",
+    ghost: "border border-line bg-card hover:bg-soft",
+    ok: "bg-emerald-600 text-white hover:bg-emerald-500 shadow-sm shadow-emerald-600/20",
+    danger: "border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10",
+    dangerSolid: "bg-red-600 text-white hover:bg-red-500",
+  }[kind];
+  return `<button ${attrs} onclick="${onclick}" class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3.5 text-sm font-medium transition active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50 ${k} ${extra}">${icon ? `<i data-lucide="${icon}" class="h-4 w-4"></i>` : ""}${label}</button>`;
+};
+const pill = st => `<span class="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${STATUS[st].pill}"><span class="h-1.5 w-1.5 rounded-full ${STATUS[st].dot}"></span>${STATUS[st].label}</span>`;
+const kpi = (icon, label, value, caption, tone, info, onclick = "") => `
+  <div ${onclick ? `onclick="${onclick}" role="button"` : ""} class="relative flex items-center gap-4 rounded-2xl border border-line bg-card p-4 pr-9 shadow-sm transition ${onclick ? "cursor-pointer hover:-translate-y-0.5 hover:shadow-md" : ""}">
+    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tone}"><i data-lucide="${icon}" class="h-5 w-5"></i></span>
+    <span class="min-w-0"><span class="block truncate text-[11px] font-semibold uppercase tracking-wide text-muted">${label}</span>
+    <span class="block text-2xl font-bold leading-tight">${value}</span><span class="block truncate text-[11px] text-muted">${caption}</span></span>
+    <span onclick="event.stopPropagation();infoPop(this, '${esc(label)}', '${esc(info)}')" class="absolute right-2 top-2 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-soft hover:text-fg"><i data-lucide="info" class="h-3.5 w-3.5"></i></span>
+  </div>`;
+const empty = (icon, title, text, action = "") => `
+  <div class="fade-in flex flex-col items-center justify-center px-6 py-12 text-center">
+    <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brandsoft text-brandtx"><i data-lucide="${icon}" class="h-7 w-7"></i></div>
+    <p class="font-semibold">${title}</p><p class="mt-1 max-w-sm text-sm text-muted">${text}</p>${action ? `<div class="mt-4">${action}</div>` : ""}
+  </div>`;
+const skel = (h = "h-16") => `<div class="shimmer ${h} rounded-xl"></div>`;
+const avatar = (t, size = "h-7 w-7 text-[10px]") => `<span title="${esc(t.name)}" class="inline-flex ${size} shrink-0 items-center justify-center rounded-full font-bold text-white ring-2 ring-card" style="background:${color(t.id + 3)}">${initials(t.name)}</span>`;
+const projectOf = r => BASE_PROJECTS.find(p => p.id === r.projectId);
+
+/* Popover do "i" */
+function infoPop(el, title, text) {
+  document.getElementById("pop")?.remove();
+  const r = el.getBoundingClientRect();
+  const p = document.createElement("div");
+  p.id = "pop";
+  p.className = "pop fixed z-[70] w-64 rounded-xl border border-line bg-card p-3 text-sm shadow-xl";
+  p.style.top = `${r.bottom + 6}px`; p.style.left = `${Math.max(8, r.right - 256)}px`;
+  p.innerHTML = `<p class="mb-1 font-semibold">${title}</p><p class="text-muted">${text}</p>`;
+  document.body.appendChild(p);
+  setTimeout(() => document.addEventListener("click", () => p.remove(), { once: true }), 0);
+}
+
+/* ---------- shell ---------- */
+function render() {
+  const c = state.collapsed;
+  const navItem = (key, icon, label) => {
+    const on = state.page === key;
+    return `<button onclick="go('${key}')" title="${label}" class="flex w-full items-center gap-2.5 rounded-lg border-l-[3px] py-2 text-left text-[13px] transition ${on ? "border-brand bg-brandsoft font-semibold text-brandtx" : "border-transparent text-fg/80 hover:bg-soft"} ${c ? "justify-center px-0" : "px-2.5"}">
+      <i data-lucide="${icon}" class="h-4 w-4 shrink-0"></i>${c ? "" : `<span class="flex-1 truncate">${label}</span><i data-lucide="lock" class="h-3 w-3 opacity-50"></i>`}</button>`;
+  };
+  const staticItem = (icon, label) => `<div title="${label} (já existe)" class="flex items-center gap-2.5 rounded-lg py-2 text-[13px] text-muted ${c ? "justify-center px-0" : "px-2.5"}"><i data-lucide="${icon}" class="h-4 w-4 shrink-0"></i>${c ? "" : label}</div>`;
+  const grp = t => c ? `<div class="mx-auto my-1 h-px w-6 bg-line"></div>` : `<p class="px-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted">${t}</p>`;
+  document.getElementById("app").innerHTML = `
+  <div class="flex min-h-screen">
+    <aside class="sticky top-0 hidden h-screen shrink-0 flex-col border-r border-line bg-card transition-all duration-300 lg:flex ${c ? "w-[68px]" : "w-64"}">
+      <div class="flex h-16 items-center gap-2.5 bg-gradient-to-r from-[#4b1768] to-[#6b2a93] px-3 text-white ${c ? "justify-center" : ""}">
+        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15 font-bold">T</div>
+        ${c ? "" : `<div class="min-w-0 flex-1 leading-tight"><p class="truncate text-sm font-bold">Transdata HUB</p><p class="text-[10px] uppercase tracking-[0.14em] text-white/65">Sistema de gestão</p></div>
+        <button onclick="toggleSidebar()" class="rounded-md p-1 text-white/75 hover:bg-white/15" title="Recolher menu"><i data-lucide="chevrons-left" class="h-4 w-4"></i></button>`}
+      </div>
+      <nav class="flex-1 space-y-4 overflow-y-auto p-3">
+        ${c ? `<button onclick="toggleSidebar()" class="flex w-full justify-center rounded-lg p-2 text-muted hover:bg-soft" title="Expandir menu"><i data-lucide="chevrons-right" class="h-4 w-4"></i></button>` : ""}
+        <div>${grp("Projetos")}${staticItem("layout-dashboard", "Dashboard")}${staticItem("folder-kanban", "Gestão de Projetos")}${staticItem("eye", "Visão Comercial")}</div>
+        <div>${grp("Implantação")}${staticItem("hard-hat", "Implantação")}${staticItem("file-up", "Report IMP")}
+          ${navItem("sol", "calendar-plus", "Solicitação de agenda")}${navItem("cal", "calendar-range", "Calendário")}</div>
+        ${c ? "" : `<div class="rounded-xl border border-dashed border-line p-3 text-[11px] leading-relaxed text-muted"><i data-lucide="lock" class="mr-1 inline h-3 w-3"></i>Itens com cadeado são novos e ficam visíveis só para <b class="text-fg">Super Admin</b> durante o desenvolvimento. Os demais já existem e não mudam.</div>`}
+      </nav>
+      <div class="flex items-center gap-2 border-t border-line p-3 ${c ? "justify-center" : ""}">
+        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-[11px] font-bold text-white">LA</span>
+        ${c ? "" : `<div class="min-w-0 leading-tight"><p class="truncate text-xs font-medium">${ME}</p><p class="text-[10px] text-muted">Super Admin</p></div>`}
+      </div>
+    </aside>
+
+    <div class="min-w-0 flex-1">
+      <div class="glass sticky top-0 z-30 flex flex-wrap items-center gap-3 border-b border-line bg-card/80 px-5 py-2.5">
+        <span class="inline-flex items-center gap-1.5 rounded-full bg-brandsoft px-2.5 py-1 text-[11px] font-semibold text-brandtx"><i data-lucide="sparkles" class="h-3.5 w-3.5"></i>Protótipo</span>
+        <label class="flex items-center gap-2 text-xs text-muted">Cenário
+          <select onchange="loadScenario(this.value)" class="h-8 rounded-lg border border-line px-2 text-xs font-medium">
+            ${Object.entries(SCENARIOS).map(([k, s]) => `<option value="${k}" ${k === state.scenario ? "selected" : ""}>${s.label} — ${s.desc}</option>`).join("")}
+          </select></label>
+        ${state.page === "sol" ? `<div class="flex items-center gap-2 text-xs text-muted">Ver como
+          <div class="flex rounded-lg border border-line bg-soft p-0.5">
+            ${[["gp", "Gerente de Projeto", "user-round"], ["ap", "Aprovador", "shield-check"]].map(([k, l, i]) => `<button onclick="setRole('${k}')" class="flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition ${state.role === k ? "bg-card text-brandtx shadow-sm" : "text-muted hover:text-fg"}"><i data-lucide="${i}" class="h-3.5 w-3.5"></i>${l}</button>`).join("")}
+          </div></div>` : ""}
+        <div class="ml-auto flex items-center gap-1.5">
+          <button onclick="loadScenario(state.scenario);toast('Dados do cenário reiniciados.','info')" class="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs text-muted hover:bg-soft"><i data-lucide="rotate-ccw" class="h-3.5 w-3.5"></i>Reiniciar</button>
+          <button onclick="toggleDark()" class="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-soft" title="Tema claro/escuro"><i data-lucide="${state.dark ? "sun" : "moon"}" class="h-4 w-4"></i></button>
+        </div>
+      </div>
+      <main class="mx-auto max-w-[1500px] p-5 lg:p-7">${state.page === "sol" ? pageSol() : pageCal()}</main>
+    </div>
+  </div>`;
+  lucide.createIcons();
+}
+function go(p) { state.page = p; closeModal(); render(); }
+function setRole(r) { state.role = r; render(); }
+function toggleDark() { state.dark = !state.dark; document.documentElement.classList.toggle("dark", state.dark); render(); }
+function toggleSidebar() { state.collapsed = !state.collapsed; render(); }
+
+const header = (title, sub, right = "") => `
+  <div class="mb-6 flex flex-wrap items-end gap-4">
+    <div><span class="text-xs font-semibold uppercase tracking-[0.18em] text-brandtx">Implantação</span>
+      <h1 class="text-[26px] font-bold tracking-tight">${title}</h1><p class="text-sm text-muted">${sub}</p></div>
+    <div class="ml-auto flex flex-wrap items-center gap-2">${right}</div>
+  </div>`;
+const stateGuard = () => {
+  if (state.loading) return `<div class="space-y-5"><div class="grid grid-cols-2 gap-3 lg:grid-cols-4">${skel("h-[88px]").repeat(4)}</div><div class="grid gap-5 xl:grid-cols-2"><div class="space-y-3">${skel().repeat(4)}</div><div class="space-y-3">${skel().repeat(4)}</div></div>
+    <p class="flex items-center justify-center gap-2 text-sm text-muted"><i data-lucide="loader-2" class="h-4 w-4 animate-spin"></i>Carregando dados… <button onclick="loadScenario('tipico')" class="font-medium text-brandtx hover:underline">simular fim do carregamento</button></p></div>`;
+  if (state.error) return `<div class="rounded-2xl border border-red-500/30 bg-red-500/5">${empty("wifi-off", "Não foi possível carregar os dados", "Verifique sua conexão. Se o problema continuar, avise o suporte. Nenhuma informação foi perdida.", btn("Tentar novamente", "retry()", "primary", "rotate-ccw"))}</div>`;
+  return "";
+};
+function retry() { toast("Reconectando…", "info"); state.error = false; state.loading = true; render(); setTimeout(() => { loadScenario("tipico"); toast("Dados carregados."); }, 1100); }
+
+/* ============ SOLICITAÇÃO DE AGENDA ============ */
+function pageSol() {
+  const isGp = state.role === "gp";
+  const head = header("Solicitação de agenda",
+    isGp ? "Solicite visitas técnicas para os seus projetos e acompanhe a avaliação do Aprovador." : "Avalie as solicitações dos Gerentes de Projeto e aloque os técnicos.");
+  const g = stateGuard();
+  return head + (g || (isGp ? viewGp() : viewAp()));
+}
+
+function viewGp() {
+  const mine = state.requests.filter(r => r.gp === ME);
+  const projs = state.projects.filter(p => p.gp === ME);
+  const q = state.gpSearch.toLowerCase();
+  const pList = projs.filter(p => !q || (p.client + p.code).toLowerCase().includes(q));
+  const tabMap = { todas: null, pendentes: "pendente", aprovadas: "aprovada", reprovadas: "reprovada" };
+  const rList = mine.filter(r => !tabMap[state.gpTab] || r.status === tabMap[state.gpTab]).sort((a, b) => b.createdAt - a.createdAt);
+  const count = st => mine.filter(r => r.status === st).length;
+  const tabs = [["todas", "Todas", mine.length], ["pendentes", "Pendentes", count("pendente")], ["aprovadas", "Aprovadas", count("aprovada")], ["reprovadas", "Reprovadas", count("reprovada")]];
+  return `<div class="fade-in space-y-5">
+    <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      ${kpi("folder-kanban", "Projetos elegíveis", projs.length, "planejamento / implantação", "bg-violet-500/15 text-violet-600 dark:text-violet-300", "Seus projetos em Planejamento ou Implantação que podem receber visita técnica.")}
+      ${kpi("hourglass", "Pendentes", count("pendente"), "aguardando aprovador", "bg-amber-500/15 text-amber-600 dark:text-amber-300", "Solicitações enviadas que ainda não foram avaliadas. Clique para filtrar.", "gpTabSet('pendentes')")}
+      ${kpi("check-circle-2", "Aprovadas", count("aprovada"), "no calendário", "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300", "Aprovadas pelo Aprovador: já aparecem no Calendário com os técnicos. Clique para filtrar.", "gpTabSet('aprovadas')")}
+      ${kpi("x-circle", "Reprovadas", count("reprovada"), "veja a justificativa", "bg-red-500/15 text-red-600 dark:text-red-300", "Reprovadas pelo Aprovador, sempre com justificativa. Clique para filtrar.", "gpTabSet('reprovadas')")}
+    </div>
+    <div class="grid gap-5 xl:grid-cols-[1fr_1.25fr]">
+      <section class="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
+        <div class="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
+          <p class="flex items-center gap-2 text-sm font-semibold"><i data-lucide="folder-kanban" class="h-4 w-4 text-brandtx"></i>Meus projetos elegíveis</p>
+          <div class="relative ml-auto"><i data-lucide="search" class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted"></i>
+            <input id="gpSearch" value="${esc(state.gpSearch)}" oninput="state.gpSearch=this.value;rerenderKeep('gpSearch')" class="h-8 w-48 rounded-lg border border-line pl-8 text-xs outline-none focus:border-brand" placeholder="Buscar projeto..."></div>
+        </div>
+        ${projs.length === 0 ? empty("folder-search", "Nenhum projeto elegível", "Você não tem projetos em Planejamento ou Implantação no momento.")
+          : pList.length === 0 ? empty("search-x", "Nada encontrado", `Nenhum projeto corresponde a “${esc(state.gpSearch)}”.`, btn("Limpar busca", "state.gpSearch='';render()", "ghost"))
+          : `<ul class="divide-y divide-line">${pList.map(p => {
+            const open = state.requests.find(r => r.projectId === p.id && r.status === "pendente");
+            return `<li class="flex items-center gap-3 px-4 py-3 transition hover:bg-soft/60">
+              <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brandsoft text-brandtx"><i data-lucide="bus" class="h-4 w-4"></i></span>
+              <div class="min-w-0 flex-1"><p class="truncate text-sm font-semibold">${p.client}</p>
+                <p class="truncate text-[11px] text-muted"><span class="font-mono">${p.code}</span> · ${p.city} · <span class="${p.hot ? "font-semibold text-brandtx" : ""}">${p.phase}</span></p>
+                ${open ? `<p class="mt-0.5 text-[11px] text-amber-600 dark:text-amber-300"><i data-lucide="hourglass" class="mr-0.5 inline h-3 w-3"></i>Já existe solicitação pendente</p>` : ""}</div>
+              ${btn("Solicitar agenda", `openRequest(${p.id})`, p.hot ? "primary" : "ghost", "calendar-plus", "h-8 text-xs")}
+            </li>`; }).join("")}</ul>`}
+      </section>
+      <section class="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
+        <div class="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
+          <p class="flex items-center gap-2 text-sm font-semibold"><i data-lucide="inbox" class="h-4 w-4 text-brandtx"></i>Minhas solicitações</p>
+          <div class="ml-auto flex rounded-lg bg-soft p-0.5">${tabs.map(([k, l, n]) => `<button onclick="gpTabSet('${k}')" class="rounded-md px-2.5 py-1 text-[11px] font-medium transition ${state.gpTab === k ? "bg-card text-brandtx shadow-sm" : "text-muted hover:text-fg"}">${l} <span class="opacity-60">${n}</span></button>`).join("")}</div>
+        </div>
+        ${rList.length === 0 ? empty("inbox", mine.length ? "Nada nesta aba" : "Você ainda não fez solicitações", mine.length ? "Troque de aba para ver outras solicitações." : "Escolha um projeto ao lado e clique em “Solicitar agenda”.")
+          : `<ul class="divide-y divide-line">${rList.map(r => reqRow(r, false)).join("")}</ul>`}
+      </section>
+    </div></div>`;
+}
+function gpTabSet(t) { state.gpTab = t; render(); }
+
+function reqRow(r, ap) {
+  const p = projectOf(r);
+  const techs = r.techIds.map(id => TECHS.find(t => t.id === id));
+  return `<li onclick="openDetail(${r.id})" class="group flex cursor-pointer items-center gap-3 border-l-[3px] ${STATUS[r.status].bar} px-4 py-3 transition hover:bg-soft/60">
+    <div class="min-w-0 flex-1">
+      <p class="flex items-center gap-2 truncate text-sm font-semibold">${p.client} <span class="font-mono text-[10px] font-normal text-muted">${p.code}</span>${r.custom ? `<span class="rounded bg-soft px-1.5 py-0.5 text-[9px] font-medium uppercase text-muted">personalizada</span>` : ""}</p>
+      <p class="truncate text-[11px] text-muted"><i data-lucide="calendar-clock" class="mr-0.5 inline h-3 w-3"></i>${fRange(r.start, r.end)} · <b class="font-medium text-fg/80">${esc(r.purpose)}</b>${ap ? ` · GP: ${r.gp}` : ""}</p>
+      ${r.status === "reprovada" && !ap ? `<p class="mt-1 truncate text-[11px] text-red-600 dark:text-red-400"><i data-lucide="message-square-warning" class="mr-0.5 inline h-3 w-3"></i>${esc(r.reason)}</p>` : ""}
+    </div>
+    ${techs.length ? `<div class="hidden -space-x-1.5 sm:flex">${techs.map(t => avatar(t)).join("")}</div>` : ""}
+    ${pill(r.status)}
+    ${ap && r.status === "pendente" ? `<div class="flex shrink-0 gap-1.5" onclick="event.stopPropagation()">${btn("Aprovar", `openApprove(${r.id})`, "ok", "check", "h-8 px-2.5 text-xs")}${btn("Reprovar", `openReject(${r.id})`, "danger", "x", "h-8 px-2.5 text-xs")}</div>` : ""}
+    ${!ap && r.status === "pendente" ? `<div onclick="event.stopPropagation()">${btn("Cancelar", `openCancel(${r.id})`, "ghost", "ban", "h-8 px-2.5 text-xs")}</div>` : ""}
+    <i data-lucide="chevron-right" class="h-4 w-4 shrink-0 text-muted opacity-0 transition group-hover:opacity-100"></i>
+  </li>`;
+}
+
+function viewAp() {
+  const all = state.requests;
+  const q = state.apSearch.toLowerCase();
+  const list = all.filter(r => { const p = projectOf(r); return (!q || (p.client + p.code + r.gp + r.purpose).toLowerCase().includes(q)) && (!state.apGp || r.gp === state.apGp); });
+  const gps = [...new Set(all.map(r => r.gp))].sort();
+  const n = st => all.filter(r => r.status === st).length;
+  const busyToday = new Set(all.filter(r => r.status === "aprovada" && overlaps(r.start, r.end, startOfDay(TODAY), addDays(startOfDay(TODAY), 1))).flatMap(r => r.techIds)).size;
+  const groups = [["pendente", "Pendentes de avaliação", "avalie e aloque os técnicos"], ["aprovada", "Aprovadas", "publicadas no calendário"], ["reprovada", "Reprovadas", "justificativa enviada ao GP"], ["cancelada", "Canceladas pelo GP", ""]];
+  return `<div class="fade-in space-y-5">
+    <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      ${kpi("inbox", "Pendentes", n("pendente"), "para avaliar", "bg-amber-500/15 text-amber-600 dark:text-amber-300", "Solicitações aguardando sua aprovação ou reprovação.")}
+      ${kpi("check-circle-2", "Aprovadas", n("aprovada"), "no calendário", "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300", "Agendamentos aprovados e publicados no Calendário. Clique para abrir o Calendário.", "go('cal')")}
+      ${kpi("x-circle", "Reprovadas", n("reprovada"), "com justificativa", "bg-red-500/15 text-red-600 dark:text-red-300", "Solicitações reprovadas. A justificativa é obrigatória.")}
+      ${kpi("users-round", "Técnicos em campo", busyToday, `hoje · de ${TECHS.length}`, "bg-sky-500/15 text-sky-600 dark:text-sky-300", "Técnicos com visita aprovada que inclui o dia de hoje. Clique para abrir o Calendário.", "go('cal')")}
+    </div>
+    <div class="flex flex-col gap-3 rounded-2xl border border-line bg-card p-3 shadow-sm md:flex-row md:items-center">
+      <div class="relative flex-1"><i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"></i>
+        <input id="apSearch" value="${esc(state.apSearch)}" oninput="state.apSearch=this.value;rerenderKeep('apSearch')" class="h-10 w-full rounded-lg border border-line pl-9 text-sm outline-none focus:border-brand" placeholder="Buscar por cliente, código, GP ou objetivo..."></div>
+      <select onchange="state.apGp=this.value;render()" class="h-10 rounded-lg border border-line px-3 text-sm"><option value="">Todos os GPs</option>${gps.map(g => `<option ${g === state.apGp ? "selected" : ""}>${g}</option>`).join("")}</select>
+      ${q || state.apGp ? btn("Limpar", "state.apSearch='';state.apGp='';render()", "ghost", "x", "h-10") : ""}
+    </div>
+    ${all.length === 0 ? `<div class="rounded-2xl border border-line bg-card">${empty("inbox", "Nenhuma solicitação recebida", "Quando um Gerente de Projeto solicitar uma visita técnica, ela aparece aqui para avaliação.")}</div>` :
+      groups.map(([st, title, sub]) => {
+        const rs = list.filter(r => r.status === st).sort((a, b) => a.start - b.start);
+        if (st === "cancelada" && rs.length === 0) return "";
+        const col = state.apCollapsed[st];
+        return `<section class="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
+          <button onclick="state.apCollapsed['${st}']=!state.apCollapsed['${st}'];render()" class="flex w-full items-center gap-2.5 border-b border-line px-4 py-3 text-left hover:bg-soft/50">
+            <i data-lucide="chevron-down" class="h-4 w-4 text-muted transition ${col ? "-rotate-90" : ""}"></i>
+            <span class="h-2.5 w-2.5 rounded-full ${STATUS[st].dot}"></span><span class="text-sm font-semibold">${title}</span>
+            <span class="rounded-full bg-soft px-2 text-[11px] font-semibold text-muted">${rs.length}</span>
+            <span class="ml-2 hidden text-[11px] text-muted sm:inline">${sub}</span>
+          </button>
+          ${col ? "" : rs.length ? `<ul class="divide-y divide-line">${rs.map(r => reqRow(r, true)).join("")}</ul>` : `<p class="px-4 py-6 text-center text-xs text-muted">Nenhuma solicitação ${q || state.apGp ? "com esses filtros" : "neste status"}.</p>`}
+        </section>`; }).join("")}
+  </div>`;
+}
+
+/* ============ CALENDÁRIO ============ */
+function pageCal() {
+  const views = [["tecnico", "Por técnico", "users-round"], ["mes", "Mês", "calendar-days"], ["lista", "Lista", "list"]];
+  const span = state.calView === "mes" ? `${MONTHS[state.calStart.getMonth()]} de ${state.calStart.getFullYear()}` : `${fD(state.calStart)} – ${fD(addDays(state.calStart, 13))}`;
+  const head = header("Calendário", "Agendamentos aprovados — onde cada técnico estará, e de quando até quando.", `
+    <div class="flex items-center gap-1 rounded-xl border border-line bg-card p-1 shadow-sm">
+      <button onclick="calNav(-1)" title="Anterior" class="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-soft"><i data-lucide="chevron-left" class="h-4 w-4"></i></button>
+      <button onclick="calToday()" class="h-8 rounded-lg px-3 text-sm font-medium hover:bg-soft">Hoje</button>
+      <button onclick="calNav(1)" title="Próximo" class="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-soft"><i data-lucide="chevron-right" class="h-4 w-4"></i></button>
+      <span class="px-2 text-sm font-semibold">${span}</span>
+    </div>
+    <div class="flex rounded-xl border border-line bg-card p-1 shadow-sm">${views.map(([k, l, i]) => `<button onclick="setCalView('${k}')" class="flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition ${state.calView === k ? "bg-brand text-white shadow-sm" : "text-muted hover:text-fg"}"><i data-lucide="${i}" class="h-3.5 w-3.5"></i>${l}</button>`).join("")}</div>`);
+  const g = stateGuard();
+  if (g) return head + g;
+  const approved = state.requests.filter(r => r.status === "aprovada");
+  const q = state.calSearch.toLowerCase();
+  const list = approved.filter(r => { const p = projectOf(r); return (!q || (p.client + p.code + r.gp).toLowerCase().includes(q)) && (!state.calTech || r.techIds.includes(+state.calTech)); });
+  const pendingN = state.requests.filter(r => r.status === "pendente").length;
+  const bar = `<div class="mb-4 flex flex-wrap items-center gap-2">
+      <select onchange="state.calTech=this.value;render()" class="h-9 rounded-lg border border-line px-3 text-xs"><option value="">Todos os técnicos</option>${TECHS.map(t => `<option value="${t.id}" ${String(t.id) === state.calTech ? "selected" : ""}>${t.name}</option>`).join("")}</select>
+      <div class="relative"><i data-lucide="search" class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted"></i>
+        <input id="calSearch" value="${esc(state.calSearch)}" oninput="state.calSearch=this.value;rerenderKeep('calSearch')" class="h-9 w-56 rounded-lg border border-line pl-8 text-xs outline-none focus:border-brand" placeholder="Cliente, código ou GP..."></div>
+      ${state.calTech || q ? btn("Limpar", "state.calTech='';state.calSearch='';render()", "ghost", "x", "h-9 text-xs") : ""}
+      <span class="ml-auto flex items-center gap-1.5 rounded-lg bg-soft px-3 py-1.5 text-[11px] text-muted"><i data-lucide="shield-check" class="h-3.5 w-3.5 text-emerald-500"></i><span>Somente <b class="text-fg">aprovados</b>.${pendingN ? ` ${pendingN} pendente(s) não aparecem — <button onclick="state.role='ap';go('sol')" class="font-semibold text-brandtx hover:underline">avaliar</button>` : ""}</span></span>
+    </div>`;
+  if (approved.length === 0) return head + bar + `<div class="rounded-2xl border border-line bg-card">${empty("calendar-x", "Nenhum agendamento aprovado", "Quando o Aprovador aprovar uma solicitação, ela aparece aqui na linha do tempo do técnico.", pendingN ? btn("Ver solicitações pendentes", "state.role='ap';go('sol')", "primary", "inbox") : "")}</div>`;
+  return head + bar + `<div class="fade-in">${state.calView === "tecnico" ? calTimeline(list) : state.calView === "mes" ? calMonth(list) : calList(list)}</div>`;
+}
+function setCalView(v) { state.calView = v; state.calStart = v === "mes" ? new Date(TODAY.getFullYear(), TODAY.getMonth(), 1) : mondayOf(TODAY); render(); }
+function calNav(n) { state.calStart = state.calView === "mes" ? new Date(state.calStart.getFullYear(), state.calStart.getMonth() + n, 1) : addDays(state.calStart, 14 * n); render(); }
+function calToday() { state.calStart = state.calView === "mes" ? new Date(TODAY.getFullYear(), TODAY.getMonth(), 1) : mondayOf(TODAY); render(); }
+
+function calTimeline(list) {
+  const N = 14, COL = 74, NAME = 220, s0 = mondayOf(state.calStart);
+  const days = Array.from({ length: N }, (_, i) => addDays(s0, i));
+  const techs = TECHS.filter(t => !state.calTech || String(t.id) === state.calTech);
+  const todayIdx = days.findIndex(x => x.getTime() === startOfDay(TODAY).getTime());
+  let h = `<div class="overflow-x-auto rounded-2xl border border-line bg-card shadow-sm"><div style="min-width:${NAME + N * COL}px">
+    <div class="flex border-b border-line bg-soft/70 text-[11px] font-semibold text-muted">
+      <div class="shrink-0 px-4 py-2.5" style="width:${NAME}px">Técnico</div>
+      ${days.map((x, i) => { const we = x.getDay() === 0 || x.getDay() === 6; return `<div class="shrink-0 border-l border-line py-1.5 text-center ${we ? "opacity-60" : ""} ${i === todayIdx ? "text-brandtx" : ""}" style="width:${COL}px">${WD[x.getDay()]}<div class="text-base font-bold ${i === todayIdx ? "mx-auto flex h-7 w-7 items-center justify-center rounded-full bg-brand text-white" : "text-fg"}">${x.getDate()}</div></div>`; }).join("")}
+    </div>`;
+  techs.forEach(t => {
+    const mine = list.filter(r => r.techIds.includes(t.id) && overlaps(r.start, r.end, s0, addDays(s0, N)));
+    const busy = mine.reduce((a, r) => a + Math.round((Math.min(+startOfDay(r.end), +addDays(s0, N - 1)) - Math.max(+startOfDay(r.start), +s0)) / 864e5) + 1, 0);
+    h += `<div class="relative flex border-b border-line last:border-0" style="height:78px">
+      <div class="flex shrink-0 items-center gap-3 px-4" style="width:${NAME}px">${avatar(t, "h-9 w-9 text-[11px]")}
+        <div class="min-w-0"><p class="truncate text-sm font-semibold">${t.name}</p><p class="text-[11px] text-muted">${t.area} · ${busy} dia${busy !== 1 ? "s" : ""} alocado${busy !== 1 ? "s" : ""}</p>
+        <div class="mt-1 h-1 w-28 overflow-hidden rounded-full bg-soft"><div class="h-full rounded-full ${busy > 7 ? "bg-orange-500" : "bg-emerald-500"}" style="width:${Math.min(100, busy / 10 * 100)}%"></div></div></div></div>
+      ${days.map((x, i) => `<div class="shrink-0 border-l border-line ${x.getDay() === 0 || x.getDay() === 6 ? "bg-soft/60" : ""} ${i === todayIdx ? "bg-brand/[0.06]" : ""}" style="width:${COL}px"></div>`).join("")}
+      ${mine.map(r => { const p = projectOf(r);
+        const a = Math.max(0, Math.round((+startOfDay(r.start) - +s0) / 864e5)), b = Math.min(N - 1, Math.round((+startOfDay(r.end) - +s0) / 864e5));
+        return `<button onclick="openDetail(${r.id})" class="pop absolute top-2.5 flex h-[58px] flex-col justify-center overflow-hidden rounded-xl px-3 text-left text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg" style="left:${NAME + a * COL + 4}px;width:${(b - a + 1) * COL - 8}px;background:linear-gradient(135deg, ${color(r.projectId)}, ${color(r.projectId)}cc)" title="${esc(p.client)} · ${fRange(r.start, r.end)}">
+          <p class="truncate text-xs font-semibold">${p.client}</p><p class="truncate text-[10px] opacity-90">${fDT(r.start)} → ${fDT(r.end)}</p><p class="truncate text-[10px] opacity-75">${esc(r.purpose)}</p></button>`; }).join("")}
+      ${mine.length === 0 ? `<p class="pointer-events-none absolute inset-y-0 flex items-center text-[11px] italic text-muted" style="left:${NAME + 14}px">Disponível no período</p>` : ""}
+    </div>`;
+  });
+  return h + `</div></div>`;
+}
+function calMonth(list) {
+  const m0 = new Date(state.calStart.getFullYear(), state.calStart.getMonth(), 1);
+  const g0 = mondayOf(m0);
+  const cells = Array.from({ length: 42 }, (_, i) => addDays(g0, i));
+  return `<div class="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
+    <div class="grid grid-cols-7 border-b border-line bg-soft/70 text-center text-[11px] font-semibold text-muted">${["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"].map(x => `<div class="py-2">${x}</div>`).join("")}</div>
+    <div class="grid grid-cols-7">${cells.map(c => {
+      const inM = c.getMonth() === m0.getMonth(), isT = c.getTime() === startOfDay(TODAY).getTime();
+      const ev = list.filter(r => overlaps(r.start, r.end, c, addDays(c, 1)));
+      return `<div class="min-h-[110px] border-b border-r border-line p-1.5 ${inM ? "" : "bg-soft/50 opacity-60"}">
+        <div class="mb-1 flex justify-end"><span class="text-xs ${isT ? "flex h-6 w-6 items-center justify-center rounded-full bg-brand font-bold text-white" : "text-muted"}">${c.getDate()}</span></div>
+        <div class="space-y-1">${ev.slice(0, 3).map(r => { const p = projectOf(r); return `<button onclick="openDetail(${r.id})" class="block w-full truncate rounded-md px-1.5 py-0.5 text-left text-[10px] font-medium text-white transition hover:brightness-110" style="background:${color(r.projectId)}" title="${esc(p.client)} · ${r.techIds.map(techName).join(", ")}">${p.client.split(" ").slice(0, 2).join(" ")} · ${r.techIds.map(id => initials(techName(id))).join(", ")}</button>`; }).join("")}
+        ${ev.length > 3 ? `<p class="px-1 text-[10px] text-muted">+${ev.length - 3} mais</p>` : ""}</div></div>`; }).join("")}</div></div>`;
+}
+function calList(list) {
+  const rows = list.slice().sort((a, b) => a.start - b.start);
+  if (!rows.length) return `<div class="rounded-2xl border border-line bg-card">${empty("search-x", "Nada com esses filtros", "Ajuste o técnico ou a busca.")}</div>`;
+  return `<div class="overflow-x-auto rounded-2xl border border-line bg-card shadow-sm"><table class="w-full min-w-[820px] text-sm">
+    <thead class="border-b border-line bg-soft/70 text-left text-[11px] uppercase tracking-wide text-muted"><tr><th class="px-4 py-3">Período</th><th class="px-4 py-3">Cliente / projeto</th><th class="px-4 py-3">Objetivo</th><th class="px-4 py-3">Técnicos</th><th class="px-4 py-3">GP</th><th></th></tr></thead>
+    <tbody class="divide-y divide-line">${rows.map(r => { const p = projectOf(r); return `<tr onclick="openDetail(${r.id})" class="cursor-pointer transition hover:bg-soft/60">
+      <td class="whitespace-nowrap px-4 py-3"><span class="mr-2 inline-block h-2.5 w-2.5 rounded-full" style="background:${color(r.projectId)}"></span>${fRange(r.start, r.end)}</td>
+      <td class="px-4 py-3"><p class="font-medium">${p.client}</p><p class="font-mono text-[10px] text-muted">${p.code} · ${esc(r.location)}</p></td>
+      <td class="px-4 py-3 text-muted">${esc(r.purpose)}</td>
+      <td class="px-4 py-3"><div class="flex -space-x-1.5">${r.techIds.map(id => avatar(TECHS.find(t => t.id === id))).join("")}</div></td>
+      <td class="px-4 py-3 text-muted">${r.gp}</td><td class="px-4 py-3 text-muted"><i data-lucide="chevron-right" class="h-4 w-4"></i></td></tr>`; }).join("")}</tbody></table></div>`;
+}
+
+function rerenderKeep(id) { const el = document.getElementById(id); const pos = el.selectionStart; render(); const n = document.getElementById(id); n.focus(); n.setSelectionRange(pos, pos); }
+
+/* ============ MODAIS ============ */
+function closeModal() { document.getElementById("modal").innerHTML = ""; }
+function modal(inner, wide = "max-w-lg") {
+  document.getElementById("modal").innerHTML = `<div onclick="if(event.target===this)closeModal()" class="glass fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+    <div class="pop w-full ${wide} overflow-hidden rounded-2xl border border-line bg-card shadow-2xl">${inner}</div></div>`;
+  lucide.createIcons();
+}
+const mHead = (title, sub = "") => `<div class="flex items-start justify-between border-b border-line px-5 py-4"><div><h2 class="text-lg font-semibold">${title}</h2>${sub ? `<p class="text-xs text-muted">${sub}</p>` : ""}</div><button onclick="closeModal()" class="rounded-lg p-1.5 text-muted hover:bg-soft"><i data-lucide="x" class="h-4 w-4"></i></button></div>`;
+const field = (label, inner, hint = "", errId = "") => `<div><label class="mb-1.5 block text-xs font-semibold text-muted">${label}</label>${inner}${hint ? `<p class="mt-1 text-[11px] text-muted">${hint}</p>` : ""}${errId ? `<p id="${errId}" class="mt-1 hidden text-[11px] font-medium text-red-600 dark:text-red-400"></p>` : ""}</div>`;
+const inputCls = "h-10 w-full rounded-lg border border-line px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20";
+const projBox = p => `<div class="flex items-center gap-3 rounded-xl border border-line bg-soft/60 p-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brandsoft text-brandtx"><i data-lucide="bus" class="h-4 w-4"></i></span><div class="min-w-0"><p class="truncate text-sm font-semibold">${p.client} <span class="font-mono text-xs font-normal text-muted">· ${p.code}</span></p><p class="text-[11px] text-muted">${p.city} · <span class="font-semibold text-brandtx">${p.phase}</span></p></div></div>`;
+function showErr(id, msg) { const el = document.getElementById(id); el.textContent = msg; el.classList.toggle("hidden", !msg); }
+
+/* --- Solicitar (GP) --- */
+function openRequest(pid) {
+  const p = BASE_PROJECTS.find(x => x.id === pid);
+  const s = addDays(startOfDay(TODAY), 7); s.setHours(8); const e = addDays(s, 2); e.setHours(18);
+  modal(mHead("Solicitar agenda de visita técnica", "O Aprovador avalia e define os técnicos") + `
+    <div class="max-h-[68vh] space-y-4 overflow-y-auto px-5 py-4">
+      ${projBox(p)}
+      ${field("Objetivo da visita *", `<select id="fPurpose" onchange="purposeToggle()" class="${inputCls}"><option value="">Selecione...</option>
+        <option>Projeto Executivo</option>
+        <optgroup label="Bilhetagem">${PRESETS.slice(1, 4).map(x => `<option>${x}</option>`).join("")}</optgroup>
+        <optgroup label="ITS / Gestão de Frotas">${PRESETS.slice(4).map(x => `<option>${x}</option>`).join("")}</optgroup>
+        <option value="__outro">Outro (digitar nome da visita)…</option></select>
+        <input id="fPurposeFree" class="${inputCls} mt-2 hidden" placeholder="Ex.: Vistoria pós-instalação" maxlength="80">`, "Use um objetivo padrão ou selecione “Outro” para digitar livremente.", "ePurpose")}
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        ${field("Início desejado *", `<input id="fStart" type="datetime-local" value="${toLocal(s)}" class="${inputCls}">`)}
+        ${field("Fim desejado *", `<input id="fEnd" type="datetime-local" value="${toLocal(e)}" class="${inputCls}">`, "", "eDates")}
+      </div>
+      ${field("Local", `<input id="fLoc" value="${p.city} — Garagem" class="${inputCls}">`)}
+      ${field("Observações", `<textarea id="fNotes" rows="2" class="w-full rounded-lg border border-line px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20" placeholder="Informações úteis para o Aprovador e os técnicos..."></textarea>`)}
+      <div class="flex items-start gap-2.5 rounded-xl bg-sky-500/10 px-3.5 py-3 text-xs text-sky-800 dark:text-sky-200"><i data-lucide="info" class="mt-0.5 h-4 w-4 shrink-0"></i><span>A solicitação fica <b>pendente</b> até o Aprovador avaliar. Os <b>técnicos são definidos pelo Aprovador</b> na aprovação, e a visita só entra no calendário depois de aprovada.</span></div>
+    </div>
+    <div class="flex justify-end gap-2 border-t border-line px-5 py-3">${btn("Cancelar", "closeModal()", "ghost")}${btn("Enviar solicitação", `submitRequest(${pid})`, "primary", "send")}</div>`);
+}
+function purposeToggle() { const free = fPurpose.value === "__outro"; fPurposeFree.classList.toggle("hidden", !free); if (free) fPurposeFree.focus(); }
+function submitRequest(pid) {
+  const sel = fPurpose.value, free = fPurposeFree.value.trim();
+  const purpose = sel === "__outro" ? free : sel;
+  const s = new Date(fStart.value), e = new Date(fEnd.value);
+  const pErr = !sel ? "Escolha o objetivo da visita." : sel === "__outro" && !free ? "Digite o nome da visita." : "";
+  const dErr = isNaN(s) || isNaN(e) ? "Informe início e fim." : e <= s ? "O fim deve ser depois do início." : s < TODAY ? "O início não pode ser no passado." : "";
+  showErr("ePurpose", pErr); showErr("eDates", dErr);
+  if (pErr || dErr) { toast("Revise os campos destacados.", "warn"); return; }
+  const r = req({ projectId: pid, gp: ME, purpose, start: s, end: e, status: "pendente", createdAt: new Date(TODAY), location: fLoc.value, notes: fNotes.value });
+  state.requests.unshift(r); state.gpTab = "pendentes"; closeModal(); render();
+  toast(`Solicitação enviada para <b>${projectOf(r).client}</b>. Aguardando o Aprovador.`);
+}
+
+/* --- Cancelar (GP) --- */
+function openCancel(id) {
+  const r = state.requests.find(x => x.id === id), p = projectOf(r);
+  modal(mHead("Cancelar solicitação?") + `<div class="space-y-2 px-5 py-4 text-sm"><p>A solicitação de <b>${p.client}</b> (${esc(r.purpose)}) será cancelada e sairá da fila do Aprovador.</p><p class="text-xs text-muted">Você poderá fazer uma nova solicitação depois.</p></div>
+    <div class="flex justify-end gap-2 border-t border-line px-5 py-3">${btn("Voltar", "closeModal()", "ghost")}${btn("Cancelar solicitação", `doCancel(${id})`, "dangerSolid", "ban")}</div>`, "max-w-md");
+}
+function doCancel(id) { const r = state.requests.find(x => x.id === id); r.status = "cancelada"; r.reviewedAt = new Date(TODAY); r.history.push({ at: new Date(TODAY), text: `Cancelada por ${r.gp}` }); closeModal(); render(); toast("Solicitação cancelada.", "info"); }
+
+/* --- Aprovar (Aprovador) --- */
+let apSel = [];
+const conflictsFor = (techId, s, e, ignoreId) => state.requests.filter(r => r.id !== ignoreId && r.status === "aprovada" && r.techIds.includes(techId) && overlaps(s, e, r.start, r.end));
+function openApprove(id, preselect = []) {
+  const r = state.requests.find(x => x.id === id), p = projectOf(r); apSel = preselect.slice();
+  modal(mHead("Aprovar agendamento", `Solicitado por ${r.gp} em ${fDT(r.createdAt)}`) + `
+    <div class="max-h-[68vh] space-y-4 overflow-y-auto px-5 py-4">
+      ${projBox(p)}
+      <div class="rounded-xl border border-line px-3.5 py-2.5 text-xs"><span class="text-muted">Objetivo:</span> <b>${esc(r.purpose)}</b>${r.notes ? `<p class="mt-1 text-muted">“${esc(r.notes)}”</p>` : ""}</div>
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        ${field("Início aprovado *", `<input id="aStart" type="datetime-local" value="${toLocal(r.start)}" onchange="drawTechs(${id})" class="${inputCls}">`, `Pedido: ${fDT(r.start)}`)}
+        ${field("Fim aprovado *", `<input id="aEnd" type="datetime-local" value="${toLocal(r.end)}" onchange="drawTechs(${id})" class="${inputCls}">`, `Pedido: ${fDT(r.end)}`, "aDates")}
+      </div>
+      <div><label class="mb-1.5 block text-xs font-semibold text-muted">Técnicos alocados * <span class="font-normal">(mín. 1 — clique para selecionar)</span></label><div id="techBox" class="grid gap-2 sm:grid-cols-2"></div><div id="techMsg" class="mt-2"></div></div>
+    </div>
+    <div class="flex items-center justify-end gap-2 border-t border-line px-5 py-3">${btn("Voltar", "closeModal()", "ghost")}<span id="apBtn"></span></div>`);
+  drawTechs(id);
+}
+function drawTechs(id) {
+  const s = new Date(aStart.value), e = new Date(aEnd.value);
+  const validDates = !isNaN(s) && !isNaN(e) && e > s;
+  showErr("aDates", validDates ? "" : "O fim deve ser depois do início.");
+  techBox.innerHTML = TECHS.map(t => {
+    const c = validDates ? conflictsFor(t.id, s, e, id) : [];
+    const on = apSel.includes(t.id);
+    return `<button onclick="toggleTech(${id},${t.id})" class="flex items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition ${on ? (c.length ? "border-red-500 bg-red-500/10" : "border-brand bg-brandsoft") : "border-line hover:bg-soft"}">
+      ${avatar(t, "h-8 w-8 text-[10px]")}<span class="min-w-0 flex-1"><span class="block truncate text-sm font-medium">${t.name}</span>
+      <span class="block truncate text-[10px] ${c.length ? "font-semibold text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}">${c.length ? `Ocupado: ${projectOf(c[0]).client} (${fD(c[0].start)}–${fD(c[0].end)})` : `Disponível · ${t.area}`}</span></span>
+      <i data-lucide="${on ? "check-circle-2" : "circle"}" class="h-4 w-4 shrink-0 ${on ? "text-brandtx" : "text-muted"}"></i></button>`; }).join("");
+  const conflicted = validDates ? apSel.filter(t => conflictsFor(t, s, e, id).length) : [];
+  techMsg.innerHTML = conflicted.length
+    ? `<div class="fade-in flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-700 dark:text-red-300"><i data-lucide="alert-triangle" class="mt-0.5 h-4 w-4 shrink-0"></i><span><b>Conflito de agenda:</b> ${conflicted.map(t => { const c = conflictsFor(t, s, e, id)[0]; return `${techName(t)} já está em <b>${projectOf(c).client}</b> de ${fDT(c.start)} a ${fDT(c.end)}`; }).join("; ")}. Remova o técnico ou ajuste o período.</span></div>`
+    : apSel.length === 0 ? `<p class="text-[11px] text-muted">Selecione pelo menos 1 técnico.</p>` : `<p class="text-[11px] text-emerald-600 dark:text-emerald-400"><i data-lucide="check" class="mr-0.5 inline h-3 w-3"></i>${apSel.length} técnico(s) sem conflito.</p>`;
+  const blocked = !validDates || apSel.length === 0 || conflicted.length > 0;
+  apBtn.innerHTML = btn("Aprovar e publicar no calendário", `doApprove(${id})`, "ok", "calendar-check", "", blocked ? `disabled title="Resolva as pendências acima"` : "");
+  lucide.createIcons();
+}
+function toggleTech(id, t) { apSel = apSel.includes(t) ? apSel.filter(x => x !== t) : [...apSel, t]; drawTechs(id); }
+function doApprove(id) {
+  const r = state.requests.find(x => x.id === id);
+  const s = new Date(aStart.value), e = new Date(aEnd.value);
+  if (+s !== +r.start || +e !== +r.end) r.history.push({ at: new Date(TODAY), text: `Período ajustado pelo Aprovador para ${fRange(s, e)}` });
+  r.start = s; r.end = e; r.techIds = apSel.slice(); r.status = "aprovada"; r.reviewedAt = new Date(TODAY);
+  r.history.push({ at: new Date(TODAY), text: `Aprovada por Aprovador · técnicos: ${r.techIds.map(techName).join(", ")}` });
+  closeModal(); render();
+  toast(`Aprovada! <b>${projectOf(r).client}</b> publicado no calendário. <button onclick="go('cal')" class="font-semibold text-brandtx underline">Ver</button>`);
+}
+
+/* --- Reprovar (Aprovador) --- */
+let rejId = null;
+function openReject(id) {
+  rejId = id;
+  const r = state.requests.find(x => x.id === id), p = projectOf(r);
+  modal(mHead("Reprovar solicitação", `${p.client} · ${esc(r.purpose)}`) + `
+    <div class="space-y-3 px-5 py-4">
+      ${field("Justificativa *", `<textarea id="rText" rows="4" oninput="rejCheck()" class="w-full rounded-lg border border-line px-3 py-2 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20" placeholder="Explique o motivo para o Gerente de Projeto..."></textarea>`, "Obrigatória. O GP verá esta justificativa na solicitação.", "rErr")}
+      <div><p class="mb-1.5 text-[11px] text-muted">Sugestões rápidas:</p><div class="flex flex-wrap gap-1.5">${["Técnicos indisponíveis no período", "Cliente sem liberação de acesso", "Pré-requisitos do projeto pendentes"].map(x => `<button onclick="rText.value='${x}.';rejCheck()" class="rounded-full border border-line px-2.5 py-1 text-[11px] text-muted transition hover:border-red-500/40 hover:bg-red-500/5 hover:text-fg">${x}</button>`).join("")}</div></div>
+    </div>
+    <div class="flex justify-end gap-2 border-t border-line px-5 py-3">${btn("Voltar", "closeModal()", "ghost")}<span id="rBtn"></span></div>`, "max-w-md");
+  rejCheck();
+}
+function rejCheck() {
+  const v = rText.value.trim(), ok = v.length >= 5;
+  showErr("rErr", v && !ok ? "Escreva uma justificativa um pouco mais completa." : "");
+  rBtn.innerHTML = btn("Reprovar", `doReject(${rejId})`, "dangerSolid", "x", "", ok ? "" : `disabled title="A justificativa é obrigatória"`);
+  lucide.createIcons();
+}
+function doReject(id) {
+  const r = state.requests.find(x => x.id === id);
+  r.status = "reprovada"; r.reason = rText.value.trim(); r.reviewedAt = new Date(TODAY);
+  r.history.push({ at: new Date(TODAY), text: "Reprovada por Aprovador" });
+  closeModal(); render(); toast(`Solicitação reprovada. <b>${r.gp}</b> verá a justificativa.`, "warn");
+}
+
+/* --- Detalhe (painel lateral) --- */
+function openDetail(id) {
+  const r = state.requests.find(x => x.id === id), p = projectOf(r);
+  const techs = r.techIds.map(t => TECHS.find(x => x.id === t));
+  const isAp = state.role === "ap" || state.page === "cal";
+  const actions = r.status === "pendente"
+    ? (state.role === "ap" ? btn("Aprovar", `openApprove(${id})`, "ok", "check", "flex-1") + btn("Reprovar", `openReject(${id})`, "danger", "x", "flex-1") : btn("Cancelar solicitação", `openCancel(${id})`, "ghost", "ban", "flex-1"))
+    : r.status === "aprovada" && state.page !== "cal" ? btn("Ver no calendário", "go('cal')", "primary", "calendar-range", "flex-1")
+    : r.status === "reprovada" && !isAp ? btn("Nova solicitação para este projeto", `openRequest(${r.projectId})`, "primary", "rotate-ccw", "flex-1") : "";
+  document.getElementById("modal").innerHTML = `<div onclick="if(event.target===this)closeModal()" class="glass fade-in fixed inset-0 z-50 flex justify-end bg-black/35">
+    <aside class="slide flex h-full w-full max-w-md flex-col border-l border-line bg-card shadow-2xl">
+      <div class="border-b border-line px-5 py-4">
+        <div class="flex items-start justify-between"><p class="text-[11px] font-semibold uppercase tracking-wider text-brandtx">${r.status === "aprovada" ? "Agendamento aprovado" : "Solicitação de agenda"}</p><button onclick="closeModal()" class="rounded-lg p-1.5 text-muted hover:bg-soft"><i data-lucide="x" class="h-4 w-4"></i></button></div>
+        <h2 class="mt-1 text-lg font-semibold">${esc(r.purpose)}</h2><div class="mt-1.5 flex items-center gap-2">${pill(r.status)}${r.custom ? `<span class="rounded bg-soft px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted">objetivo personalizado</span>` : ""}</div>
+      </div>
+      <div class="flex-1 space-y-5 overflow-y-auto px-5 py-4 text-sm">
+        ${projBox(p)}
+        <dl class="grid grid-cols-[120px_1fr] gap-y-2.5 text-[13px]">
+          <dt class="text-muted">Período</dt><dd class="font-medium">${fRange(r.start, r.end)}</dd>
+          <dt class="text-muted">Local</dt><dd>${esc(r.location)}</dd>
+          <dt class="text-muted">Solicitante (GP)</dt><dd>${r.gp}</dd>
+          <dt class="text-muted">Técnicos</dt><dd>${techs.length ? `<div class="flex flex-wrap gap-1.5">${techs.map(t => `<span class="inline-flex items-center gap-1.5 rounded-full bg-soft py-0.5 pl-0.5 pr-2.5 text-xs">${avatar(t, "h-5 w-5 text-[8px]")}${t.name}</span>`).join("")}</div>` : `<span class="text-muted">Definidos pelo Aprovador na aprovação</span>`}</dd>
+          ${r.notes ? `<dt class="text-muted">Observações</dt><dd class="text-muted">${esc(r.notes)}</dd>` : ""}
+        </dl>
+        ${r.status === "reprovada" ? `<div class="rounded-xl border border-red-500/30 bg-red-500/10 p-3.5 text-xs text-red-700 dark:text-red-300"><p class="mb-1 font-semibold"><i data-lucide="message-square-warning" class="mr-1 inline h-3.5 w-3.5"></i>Justificativa da reprovação</p>${esc(r.reason)}</div>` : ""}
+        <div><p class="mb-2.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted"><i data-lucide="history" class="h-3.5 w-3.5"></i>Histórico</p>
+          <ol class="relative space-y-3 border-l-2 border-line pl-4">${r.history.slice().reverse().map((h, i) => `<li class="relative"><span class="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full ring-4 ring-card ${i === 0 ? "bg-brand" : "bg-line"}"></span><p class="text-[13px]">${h.text}</p><p class="text-[11px] text-muted">${fDT(h.at)}</p></li>`).join("")}</ol></div>
+      </div>
+      ${actions ? `<div class="flex gap-2 border-t border-line px-5 py-3">${actions}</div>` : ""}
+    </aside></div>`;
+  lucide.createIcons();
+}
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closeModal(); document.getElementById("pop")?.remove(); } });
+
+// Atalhos pela URL: mockup.html#cal, #ap, #dark, #mes, #lista (combináveis: #cal,dark)
+const H = location.hash.slice(1).split(",");
+if (H.includes("cal")) state.page = "cal";
+if (H.includes("ap")) state.role = "ap";
+if (H.includes("mes")) state.calView = "mes";
+if (H.includes("lista")) state.calView = "lista";
+if (H.includes("dark")) { state.dark = true; document.documentElement.classList.add("dark"); }
+loadScenario("tipico");
+setTimeout(() => toast("Use <b>Cenário</b> e <b>Ver como</b> no topo para explorar o protótipo.", "info"), 400);
+</script>
+</body>
+</html>

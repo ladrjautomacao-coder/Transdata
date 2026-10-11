@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   FolderKanban, LayoutDashboard, HardHat, BookOpenCheck, Users, LogOut, ShieldCheck,
   Settings, KeyRound, LifeBuoy, Wallet, ChevronsLeft, Search, MoreVertical, UserRound, Eye, FileUp, Building2, Tag,
+  CalendarPlus, CalendarRange,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -55,6 +56,11 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
       items: [
         { title: "Implantação", url: "/implantacao", icon: HardHat, module: "implantacao", end: true },
         { title: "Report IMP", url: "/implantacao/report-imp", icon: FileUp, module: "report_imp" },
+        // Em desenvolvimento: visível só para super_admin (rota e RLS também travam)
+        ...(isSuperAdmin ? [
+          { title: "Solicitação de agenda", url: "/implantacao/solicitacoes", icon: CalendarPlus, module: "implantacao" as const },
+          { title: "Calendário", url: "/implantacao/calendario", icon: CalendarRange, module: "implantacao" as const },
+        ] : []),
       ],
     },
     {
@@ -79,7 +85,7 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
         { title: "Manual do Sistema", url: "/manual", icon: BookOpenCheck, module: "admin_manual" },
       ],
     },
-  ], [badges.financeiro, badges.suporte, badges.projects]);
+  ], [badges.financeiro, badges.suporte, badges.projects, isSuperAdmin]);
 
   const visibleGroups = groups
     .map(g => ({

@@ -8,6 +8,7 @@ import { TenantBrandingProvider, useTenantBranding } from "@/contexts/TenantBran
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
+import { SuperAdminRoute } from "@/components/SuperAdminRoute";
 import { AppLayout } from "@/components/AppLayout";
 import Login from "./pages/Login";
 import PublicSignup from "./pages/PublicSignup";
@@ -25,6 +26,8 @@ import TeamMembers from "./pages/TeamMembers";
 import Products from "./pages/Products";
 import Implantacao from "./pages/Implantacao";
 import ReportImp from "./pages/ReportImp";
+import SolicitacaoAgenda from "./pages/SolicitacaoAgenda";
+import CalendarioImplantacao from "./pages/CalendarioImplantacao";
 import Suporte from "./pages/Suporte";
 import Financeiro from "./pages/Financeiro";
 import AcervoTecnico from "./pages/AcervoTecnico";
@@ -78,6 +81,9 @@ function AppRoutes() {
           <Route path="/comercial" element={<VisaoComercial />} />
           <Route path="/implantacao" element={<Implantacao />} />
           <Route path="/implantacao/report-imp" element={<ReportImp />} />
+          {/* Em desenvolvimento: só super_admin */}
+          <Route path="/implantacao/solicitacoes" element={<SuperAdminRoute><SolicitacaoAgenda /></SuperAdminRoute>} />
+          <Route path="/implantacao/calendario" element={<SuperAdminRoute><CalendarioImplantacao /></SuperAdminRoute>} />
 
           <Route path="/suporte" element={<Suporte />} />
           <Route path="/financeiro" element={<Financeiro />} />
