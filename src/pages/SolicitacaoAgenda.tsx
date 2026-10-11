@@ -395,7 +395,7 @@ export default function SolicitacaoAgenda() {
       {mode === "gp" ? gpView() : apView()}
 
       <RequestDialog project={reqProject} open={!!reqProject} onOpenChange={o => { if (!o) setReqProject(null); }}
-        onCreated={() => { setGpTab("pendente"); load(); }} />
+        existing={requests} onCreated={() => { setGpTab("pendente"); load(); }} />
       <ApproveDialog request={approving} technicians={technicians} allRequests={requests} open={!!approving}
         initialSelected={approveInitial}
         onOpenChange={o => { if (!o) { setApproving(null); setApproveInitial([]); } }} onDone={refreshDetail} onManageTechnicians={() => setTechOpen(true)}

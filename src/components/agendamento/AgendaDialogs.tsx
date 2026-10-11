@@ -36,8 +36,13 @@ const fmtDT = (iso: string | Date) => {
 const FieldError = ({ msg }: { msg?: string }) => msg ? <p className="mt-1 text-[11px] font-medium text-destructive">{msg}</p> : null;
 
 /* ─── Solicitar agenda (GP) ─────────────────────────────────────────────── */
-export function RequestDialog({ project, open, onOpenChange, onCreated }: {
+const DUPLICATE_PURPOSE_MSG = "Você já agendou este projeto justamente com este objetivo da visita, revise o Projeto.";
+const normPurpose = (s: string) => s.trim().toLowerCase();
+
+export function RequestDialog({ project, open, onOpenChange, onCreated, existing = [] }: {
   project: EligibleProject | null; open: boolean; onOpenChange: (o: boolean) => void; onCreated: () => void;
+  /** Solicitações já existentes (todas); usadas para impedir objetivo repetido no mesmo projeto. */
+  existing?: ImplantationRequest[];
 }) {
   const [purpose, setPurpose] = useState("");
   const [custom, setCustom] = useState("");
@@ -59,11 +64,19 @@ export function RequestDialog({ project, open, onOpenChange, onCreated }: {
   if (!project) return null;
   const phase = project.sub_phase ? subPhasesByStatus[project.status as keyof typeof subPhasesByStatus]?.find(s => s.id === project.sub_phase)?.label : null;
 
+  // Visitas ativas (pendente/aprovada) deste projeto: o mesmo objetivo não pode se repetir
+  const activeVisits = existing
+    .filter(r => r.project_id === project.id && (r.status === "pendente" || r.status === "aprovada"))
+    .sort((a, b) => +periodOf(a).start - +periodOf(b).start);
+  const usedPurpose = (p: string) => activeVisits.find(r => normPurpose(r.visit_purpose) === normPurpose(p));
+  const chosen = purpose === OTHER ? custom : purpose;
+  const duplicate = chosen.trim() ? usedPurpose(chosen) : undefined;
+
   const submit = async () => {
     const finalPurpose = purpose === OTHER ? custom.trim() : purpose;
     const s = new Date(start), e = new Date(end);
     const next: typeof errors = {
-      purpose: !purpose ? "Escolha o objetivo da visita." : purpose === OTHER && !custom.trim() ? "Digite o nome da visita." : undefined,
+      purpose: !purpose ? "Escolha o objetivo da visita." : purpose === OTHER && !custom.trim() ? "Digite o nome da visita." : duplicate ? DUPLICATE_PURPOSE_MSG : undefined,
       dates: isNaN(+s) || isNaN(+e) ? "Informe início e fim." : e <= s ? "O fim deve ser depois do início." : s < new Date() ? "O início não pode ser no passado." : undefined,
     };
     setErrors(next);
@@ -106,7 +119,14 @@ export function RequestDialog({ project, open, onOpenChange, onCreated }: {
                 {VISIT_PURPOSE_GROUPS.map((g, i) => (
                   <SelectGroup key={i}>
                     {g.label && <SelectLabel>{g.label}</SelectLabel>}
-                    {g.items.map(it => <SelectItem key={it} value={it}>{it}</SelectItem>)}
+                    {g.items.map(it => {
+                      const used = usedPurpose(it);
+                      return (
+                        <SelectItem key={it} value={it}>
+                          {it}{used && <span className="ml-2 text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400">já agendada</span>}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectGroup>
                 ))}
                 <SelectSeparator />
@@ -117,8 +137,30 @@ export function RequestDialog({ project, open, onOpenChange, onCreated }: {
               <Input autoFocus className="mt-2" value={custom} maxLength={80} onChange={e => setCustom(e.target.value)} placeholder="Ex.: Vistoria pós-instalação" />
             )}
             <p className="mt-1 text-[11px] text-muted-foreground">Use um objetivo padrão ou selecione “Outro” para digitar livremente.</p>
-            <FieldError msg={errors.purpose} />
+            {duplicate ? (
+              <div className="mt-2 flex items-start gap-2.5 rounded-lg border border-destructive/40 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  <b>{DUPLICATE_PURPOSE_MSG}</b>
+                  <br />“{duplicate.visit_purpose}” já está {duplicate.status === "aprovada" ? "aprovada" : "pendente de aprovação"} para {formatPeriod(periodOf(duplicate).start, periodOf(duplicate).end)}.
+                </span>
+              </div>
+            ) : <FieldError msg={errors.purpose} />}
           </div>
+          {activeVisits.length > 0 && (
+            <div className="rounded-lg border border-border/60 px-3.5 py-2.5">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Visitas já na agenda deste projeto</p>
+              <ul className="space-y-1">
+                {activeVisits.map(r => (
+                  <li key={r.id} className="flex items-center gap-2 text-xs">
+                    <StatusPill status={r.status} />
+                    <span className="font-medium">{r.visit_purpose}</span>
+                    <span className="text-muted-foreground">· {formatPeriod(periodOf(r).start, periodOf(r).end)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             <div><Label className="text-xs">Início desejado *</Label><Input className="mt-1.5" type="datetime-local" value={start} onChange={e => setStart(e.target.value)} /></div>
             <div><Label className="text-xs">Fim desejado *</Label><Input className="mt-1.5" type="datetime-local" value={end} onChange={e => setEnd(e.target.value)} /></div>
@@ -133,7 +175,7 @@ export function RequestDialog({ project, open, onOpenChange, onCreated }: {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={submit} disabled={saving}>{saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}Enviar solicitação</Button>
+          <Button onClick={submit} disabled={saving || !!duplicate} title={duplicate ? DUPLICATE_PURPOSE_MSG : undefined}>{saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}Enviar solicitação</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
