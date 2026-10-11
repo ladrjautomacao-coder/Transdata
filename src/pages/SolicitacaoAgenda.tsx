@@ -53,6 +53,7 @@ export default function SolicitacaoAgenda() {
   const [reqProject, setReqProject] = useState<EligibleProject | null>(null);
   const [detail, setDetail] = useState<ImplantationRequest | null>(null);
   const [approving, setApproving] = useState<ImplantationRequest | null>(null);
+  const [approveInitial, setApproveInitial] = useState<string[]>([]);
   const [rejecting, setRejecting] = useState<ImplantationRequest | null>(null);
   const [cancelling, setCancelling] = useState<ImplantationRequest | null>(null);
   const [techOpen, setTechOpen] = useState(false);
@@ -335,7 +336,8 @@ export default function SolicitacaoAgenda() {
                         {showAvail && (
                           <li className={`border-l-[3px] bg-muted/20 px-4 pb-3 pt-1 ${REQUEST_STATUS.pendente.border}`}>
                             <AvailabilityPreview start={new Date(r.requested_start)} end={new Date(r.requested_end)}
-                              technicians={technicians} requests={requests} ignoreId={r.id} compact onManageTechnicians={() => setTechOpen(true)} />
+                              technicians={technicians} requests={requests} ignoreId={r.id} compact onManageTechnicians={() => setTechOpen(true)}
+                              onPickTechnician={techId => { setApproveInitial([techId]); setApproving(r); }} />
                           </li>
                         )}
                       </Fragment>
@@ -358,7 +360,9 @@ export default function SolicitacaoAgenda() {
       <RequestDialog project={reqProject} open={!!reqProject} onOpenChange={o => { if (!o) setReqProject(null); }}
         onCreated={() => { setGpTab("pendente"); load(); }} />
       <ApproveDialog request={approving} technicians={technicians} allRequests={requests} open={!!approving}
-        onOpenChange={o => { if (!o) setApproving(null); }} onDone={refreshDetail} onManageTechnicians={() => setTechOpen(true)} />
+        initialSelected={approveInitial}
+        onOpenChange={o => { if (!o) { setApproving(null); setApproveInitial([]); } }} onDone={refreshDetail} onManageTechnicians={() => setTechOpen(true)}
+        onTechnicianAdded={t => setTechnicians(list => [...list, t].sort((a, b) => a.full_name.localeCompare(b.full_name)))} />
       <RejectDialog request={rejecting} open={!!rejecting} onOpenChange={o => { if (!o) setRejecting(null); }} onDone={refreshDetail} />
       <CancelDialog request={cancelling} open={!!cancelling} onOpenChange={o => { if (!o) setCancelling(null); }} onDone={refreshDetail} />
       <TechniciansDialog open={techOpen} onOpenChange={setTechOpen} onChanged={() => fetchTechnicians().then(setTechnicians).catch(() => undefined)} />

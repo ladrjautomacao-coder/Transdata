@@ -149,12 +149,13 @@ export async function cancelRequest(id: string) {
   if (error) throw error;
 }
 
-export async function saveTechnician(input: { id?: string; full_name: string; email: string | null; area: string | null; active?: boolean }) {
+export async function saveTechnician(input: { id?: string; full_name: string; email: string | null; area: string | null; active?: boolean }): Promise<Technician> {
   const { id, ...rest } = input;
-  const { error } = id
-    ? await db.from("implantation_technicians").update(rest).eq("id", id)
-    : await db.from("implantation_technicians").insert(rest);
+  const { data, error } = id
+    ? await db.from("implantation_technicians").update(rest).eq("id", id).select("id, full_name, email, area, active").single()
+    : await db.from("implantation_technicians").insert(rest).select("id, full_name, email, area, active").single();
   if (error) throw error;
+  return data as Technician;
 }
 
 /** Conflitos de um técnico com agendamentos aprovados (exceto a própria solicitação). */

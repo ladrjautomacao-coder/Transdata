@@ -141,21 +141,47 @@ export function RequestDialog({ project, open, onOpenChange, onCreated }: {
 }
 
 /* ─── Aprovar (Aprovador) ───────────────────────────────────────────────── */
-export function ApproveDialog({ request, technicians, allRequests, open, onOpenChange, onDone, onManageTechnicians }: {
+export function ApproveDialog({ request, technicians, allRequests, open, onOpenChange, onDone, onManageTechnicians, initialSelected, onTechnicianAdded }: {
   request: ImplantationRequest | null; technicians: Technician[]; allRequests: ImplantationRequest[];
   open: boolean; onOpenChange: (o: boolean) => void; onDone: () => void; onManageTechnicians: () => void;
+  /** Técnicos já marcados ao abrir (ex.: escolhidos no painel de disponibilidade). */
+  initialSelected?: string[];
+  /** Chamado após o cadastro rápido de um técnico dentro desta janela. */
+  onTechnicianAdded?: (t: Technician) => void;
 }) {
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [techSearch, setTechSearch] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newArea, setNewArea] = useState("");
+  const [savingTech, setSavingTech] = useState(false);
 
   useEffect(() => {
     if (!open || !request) return;
     setStart(toLocalInput(new Date(request.requested_start)));
     setEnd(toLocalInput(new Date(request.requested_end)));
-    setSelected([]);
+    setSelected(initialSelected ?? []);
+    setTechSearch(""); setAdding(false); setNewName(""); setNewArea("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, request]);
+
+  // Cadastro rápido: cria o técnico e já o deixa selecionado
+  const addTechnician = async () => {
+    if (!newName.trim()) return;
+    setSavingTech(true);
+    try {
+      const t = await saveTechnician({ full_name: newName.trim(), email: null, area: newArea.trim() || null });
+      onTechnicianAdded?.(t);
+      setSelected(v => [...v, t.id]);
+      setNewName(""); setNewArea(""); setAdding(false);
+      toast.success(`${t.full_name} cadastrado(a) e selecionado(a).`);
+    } catch (err) {
+      toast.error("Não foi possível cadastrar o técnico", { description: errorMessage(err) });
+    } finally { setSavingTech(false); }
+  };
 
   const s = new Date(start), e = new Date(end);
   const validDates = !isNaN(+s) && !isNaN(+e) && e > s;
@@ -203,21 +229,33 @@ export function ApproveDialog({ request, technicians, allRequests, open, onOpenC
               <p className="mt-1 text-[11px] text-muted-foreground">Pedido: {fmtDT(request.requested_end)}</p></div>
           </div>
           {!validDates && <FieldError msg="O fim deve ser depois do início." />}
-          {validDates && technicians.length > 0 && (
-            <AvailabilityPreview start={s} end={e} technicians={technicians} requests={allRequests} ignoreId={request.id} selectedIds={selected} compact />
-          )}
-          <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <Label className="text-xs">Técnicos alocados * <span className="font-normal text-muted-foreground">(mín. 1)</span></Label>
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onManageTechnicians}><UserRoundCog className="mr-1 h-3.5 w-3.5" />Gerenciar técnicos</Button>
-            </div>
-            {technicians.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
-                Nenhum técnico cadastrado. <button className="font-semibold text-primary hover:underline" onClick={onManageTechnicians}>Cadastrar técnicos</button>
+          <div className="rounded-xl border border-primary/30 bg-primary/[0.03] p-3.5">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <Label className="text-sm font-semibold">Quem vai atuar nesta demanda? *</Label>
+              <span className="text-[11px] text-muted-foreground">clique para selecionar (mín. 1)</span>
+              <div className="ml-auto flex items-center gap-1">
+                {technicians.length > 6 && (
+                  <Input value={techSearch} onChange={ev => setTechSearch(ev.target.value)} placeholder="Buscar técnico..." className="h-7 w-40 text-xs" />
+                )}
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setAdding(a => !a)}><Plus className="mr-1 h-3.5 w-3.5" />Novo técnico</Button>
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onManageTechnicians} title="Editar ou desativar técnicos"><UserRoundCog className="h-3.5 w-3.5" /></Button>
               </div>
-            ) : (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {technicians.map(t => {
+            </div>
+            {(adding || technicians.length === 0) && (
+              <div className="mb-2.5 rounded-lg border border-dashed border-primary/40 bg-background p-2.5">
+                <p className="mb-2 text-[11px] text-muted-foreground">{technicians.length === 0 ? "Nenhum técnico cadastrado ainda. Cadastre o primeiro — ele já entra selecionado:" : "Cadastrar novo técnico (já entra selecionado):"}</p>
+                <div className="grid gap-2 sm:grid-cols-[1.5fr_1fr_auto]">
+                  <Input autoFocus value={newName} onChange={ev => setNewName(ev.target.value)} onKeyDown={ev => { if (ev.key === "Enter") addTechnician(); }} placeholder="Nome do técnico *" className="h-9" />
+                  <Input value={newArea} onChange={ev => setNewArea(ev.target.value)} onKeyDown={ev => { if (ev.key === "Enter") addTechnician(); }} placeholder="Área (ex.: Bilhetagem)" className="h-9" />
+                  <Button size="sm" className="h-9" onClick={addTechnician} disabled={!newName.trim() || savingTech}>
+                    {savingTech ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}Adicionar
+                  </Button>
+                </div>
+              </div>
+            )}
+            {technicians.length > 0 && (
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {technicians.filter(t => !techSearch.trim() || `${t.full_name} ${t.area ?? ""}`.toLowerCase().includes(techSearch.trim().toLowerCase())).map(t => {
                   const c = conflictMap[t.id] ?? [];
                   const on = selected.includes(t.id);
                   return (
@@ -248,12 +286,23 @@ export function ApproveDialog({ request, technicians, allRequests, open, onOpenC
               <p className="mt-2 text-[11px] text-emerald-600 dark:text-emerald-400"><Check className="mr-1 inline h-3 w-3" />{selected.length} técnico(s) sem conflito.</p>
             ) : technicians.length > 0 && <p className="mt-2 text-[11px] text-muted-foreground">Selecione pelo menos 1 técnico.</p>}
           </div>
+          {validDates && technicians.length > 0 && (
+            <AvailabilityPreview start={s} end={e} technicians={technicians} requests={allRequests} ignoreId={request.id}
+              selectedIds={selected} onPickTechnician={toggle} compact />
+          )}
         </div>
-        <DialogFooter>
+        <DialogFooter className="items-center gap-2 sm:justify-between">
+          <p className="text-xs text-muted-foreground">
+            {selected.length
+              ? <>Atuando: <b className="text-foreground">{selected.map(id => technicians.find(t => t.id === id)?.full_name).filter(Boolean).join(", ")}</b></>
+              : "Nenhum técnico selecionado"}
+          </p>
+          <div className="flex gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Voltar</Button>
           <Button onClick={submit} disabled={blocked || saving} className="bg-emerald-600 text-white hover:bg-emerald-500">
             {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <CalendarCheck className="mr-1.5 h-4 w-4" />}Aprovar e publicar no calendário
           </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

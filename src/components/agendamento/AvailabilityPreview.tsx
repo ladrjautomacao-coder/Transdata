@@ -1,4 +1,4 @@
-import { CalendarRange, CheckCircle2, Hourglass, UserRoundCog } from "lucide-react";
+import { CalendarRange, CheckCircle2, Circle, Hourglass, UserRoundCog } from "lucide-react";
 import {
   colorFor, conflictsFor, formatPeriod, periodOf, techniciansOf,
   type ImplantationRequest, type Technician,
@@ -18,9 +18,12 @@ const dayIdx = (d: Date, s0: Date) => Math.round((+startOfDay(d) - +s0) / DAY);
  * Mostra o que já está aprovado, destaca o período pedido e resume quem está livre,
  * para o Aprovador decidir sem precisar abrir o Calendário.
  */
-export function AvailabilityPreview({ start, end, technicians, requests, ignoreId, selectedIds = [], onManageTechnicians, compact }: {
+export function AvailabilityPreview({ start, end, technicians, requests, ignoreId, selectedIds = [], onManageTechnicians, onPickTechnician, compact }: {
   start: Date; end: Date; technicians: Technician[]; requests: ImplantationRequest[];
-  ignoreId?: string; selectedIds?: string[]; onManageTechnicians?: () => void; compact?: boolean;
+  ignoreId?: string; selectedIds?: string[]; onManageTechnicians?: () => void;
+  /** Torna o nome do técnico clicável (escolher/remover da demanda). */
+  onPickTechnician?: (technicianId: string) => void;
+  compact?: boolean;
 }) {
   if (isNaN(+start) || isNaN(+end) || end <= start) return null;
 
@@ -86,13 +89,22 @@ export function AvailabilityPreview({ start, end, technicians, requests, ignoreI
               const isSel = selectedIds.includes(t.id);
               return (
                 <div key={t.id} className={`flex border-b last:border-0 ${isSel ? "bg-primary/5" : ""}`} style={{ height: compact ? 34 : 40 }}>
-                  <div className="flex w-[150px] shrink-0 items-center gap-2 px-3">
+                  <button
+                    type="button"
+                    disabled={!onPickTechnician}
+                    onClick={() => onPickTechnician?.(t.id)}
+                    title={onPickTechnician ? (isSel ? "Remover da demanda" : isFree ? "Escolher para atuar nesta demanda" : "Ocupado no período — escolher mesmo assim") : undefined}
+                    className="flex w-[150px] shrink-0 items-center gap-2 px-3 text-left transition-colors enabled:hover:bg-primary/10 disabled:cursor-default"
+                  >
                     <TechAvatar tech={t} size="h-6 w-6 text-[9px]" />
-                    <div className="min-w-0 leading-tight">
+                    <div className="min-w-0 flex-1 leading-tight">
                       <p className={`truncate text-xs ${isSel ? "font-semibold text-primary" : "font-medium"}`}>{t.full_name}</p>
                       <p className={`text-[9px] font-semibold uppercase ${isFree ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>{isFree ? "livre" : "ocupado"}</p>
                     </div>
-                  </div>
+                    {onPickTechnician && (isSel
+                      ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-primary" />
+                      : <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />)}
+                  </button>
                   <div className="relative flex flex-1">
                     <div className="pointer-events-none absolute inset-y-0 border-x border-dashed border-primary/40 bg-primary/[0.07]" style={{ left: pct(reqA), width: pct(reqB - reqA + 1) }} />
                     {days.map(d => <div key={+d} className={`flex-1 border-l ${d.getDay() === 0 || d.getDay() === 6 ? "bg-muted/40" : ""}`} />)}
