@@ -25,6 +25,7 @@ import {
   type EligibleProject, type HistoryEntry, type ImplantationRequest, type Technician,
 } from "@/lib/implantationScheduling";
 import { ProjectBox, StatusPill, TechAvatar } from "./AgendaShared";
+import { AvailabilityPreview } from "./AvailabilityPreview";
 
 const OTHER = "__outro";
 const fmtDT = (iso: string | Date) => {
@@ -184,7 +185,7 @@ export function ApproveDialog({ request, technicians, allRequests, open, onOpenC
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Aprovar agendamento</DialogTitle>
           <DialogDescription>Solicitado por {request.requester_name ?? "—"} em {fmtDT(request.created_at)}</DialogDescription>
@@ -202,6 +203,9 @@ export function ApproveDialog({ request, technicians, allRequests, open, onOpenC
               <p className="mt-1 text-[11px] text-muted-foreground">Pedido: {fmtDT(request.requested_end)}</p></div>
           </div>
           {!validDates && <FieldError msg="O fim deve ser depois do início." />}
+          {validDates && technicians.length > 0 && (
+            <AvailabilityPreview start={s} end={e} technicians={technicians} requests={allRequests} ignoreId={request.id} selectedIds={selected} compact />
+          )}
           <div>
             <div className="mb-1.5 flex items-center justify-between">
               <Label className="text-xs">Técnicos alocados * <span className="font-normal text-muted-foreground">(mín. 1)</span></Label>

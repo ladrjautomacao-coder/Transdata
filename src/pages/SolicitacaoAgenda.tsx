@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Ban, CalendarPlus, Check, CheckCircle2, ChevronDown, FolderKanban, FolderSearch, Hourglass, Inbox, Lock,
+  Ban, CalendarPlus, CalendarRange, Check, CheckCircle2, ChevronDown, FolderKanban, FolderSearch, Hourglass, Inbox, Lock,
   RefreshCw, Search, SearchX, ShieldCheck, UserRound, UserRoundCog, UsersRound, WifiOff, X, XCircle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,6 +18,7 @@ import {
   type EligibleProject, type ImplantationRequest, type RequestStatus, type Technician,
 } from "@/lib/implantationScheduling";
 import { EmptyBlock, Kpi, RequestRow } from "@/components/agendamento/AgendaShared";
+import { AvailabilityPreview } from "@/components/agendamento/AvailabilityPreview";
 import {
   ApproveDialog, CancelDialog, RejectDialog, RequestDetailSheet, RequestDialog, TechniciansDialog,
 } from "@/components/agendamento/AgendaDialogs";
@@ -46,6 +47,7 @@ export default function SolicitacaoAgenda() {
   const [apSearch, setApSearch] = useState("");
   const [apRequester, setApRequester] = useState("");
   const [collapsed, setCollapsed] = useState<Partial<Record<RequestStatus, boolean>>>({ cancelada: true });
+  const [hiddenAvail, setHiddenAvail] = useState<Record<string, boolean>>({});
 
   // diálogos
   const [reqProject, setReqProject] = useState<EligibleProject | null>(null);
@@ -317,13 +319,28 @@ export default function SolicitacaoAgenda() {
               </button>
               {!col && (rs.length ? (
                 <ul className="divide-y">
-                  {rs.map(r => (
-                    <RequestRow key={r.id} request={r} showRequester onOpen={() => setDetail(r)}
-                      actions={r.status === "pendente" ? <>
-                        <Button size="sm" className="h-8 bg-emerald-600 px-2.5 text-xs text-white hover:bg-emerald-500" onClick={() => setApproving(r)}><Check className="mr-1 h-3.5 w-3.5" />Aprovar</Button>
-                        <Button size="sm" variant="outline" className="h-8 border-destructive/40 px-2.5 text-xs text-destructive hover:bg-destructive/10" onClick={() => setRejecting(r)}><X className="mr-1 h-3.5 w-3.5" />Reprovar</Button>
-                      </> : undefined} />
-                  ))}
+                  {rs.map(r => {
+                    const showAvail = r.status === "pendente" && !hiddenAvail[r.id];
+                    return (
+                      <Fragment key={r.id}>
+                        <RequestRow request={r} showRequester onOpen={() => setDetail(r)}
+                          actions={r.status === "pendente" ? <>
+                            <Button size="sm" variant="ghost" className="h-8 px-2 text-xs text-muted-foreground" title={showAvail ? "Ocultar disponibilidade" : "Ver disponibilidade da semana"}
+                              onClick={() => setHiddenAvail(h => ({ ...h, [r.id]: !h[r.id] }))}>
+                              <CalendarRange className="mr-1 h-3.5 w-3.5" />{showAvail ? "Ocultar" : "Disponibilidade"}
+                            </Button>
+                            <Button size="sm" className="h-8 bg-emerald-600 px-2.5 text-xs text-white hover:bg-emerald-500" onClick={() => setApproving(r)}><Check className="mr-1 h-3.5 w-3.5" />Aprovar</Button>
+                            <Button size="sm" variant="outline" className="h-8 border-destructive/40 px-2.5 text-xs text-destructive hover:bg-destructive/10" onClick={() => setRejecting(r)}><X className="mr-1 h-3.5 w-3.5" />Reprovar</Button>
+                          </> : undefined} />
+                        {showAvail && (
+                          <li className={`border-l-[3px] bg-muted/20 px-4 pb-3 pt-1 ${REQUEST_STATUS.pendente.border}`}>
+                            <AvailabilityPreview start={new Date(r.requested_start)} end={new Date(r.requested_end)}
+                              technicians={technicians} requests={requests} ignoreId={r.id} compact onManageTechnicians={() => setTechOpen(true)} />
+                          </li>
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </ul>
               ) : <p className="px-4 py-6 text-center text-xs text-muted-foreground">Nenhuma solicitação {q || apRequester ? "com esses filtros" : "neste status"}.</p>)}
             </section>
