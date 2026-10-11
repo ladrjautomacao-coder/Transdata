@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatLocation } from "@/lib/location";
 import { statusLabels, subPhasesByStatus } from "@/pages/ProjectManagement";
 import {
-  HIDDEN_BY_DEFAULT_STATUSES, REQUEST_STATUS, calendarLinkFor, errorMessage, fetchRequests, fetchTechnicians, periodOf,
+  HIDDEN_BY_DEFAULT_STATUSES, REQUEST_STATUS, calendarLinkFor, errorMessage, fetchRequests, fetchTechnicians, formatPeriod, periodOf,
   type EligibleProject, type ImplantationRequest, type RequestStatus, type Technician,
 } from "@/lib/implantationScheduling";
 import { EmptyBlock, Kpi, RequestRow } from "@/components/agendamento/AgendaShared";
@@ -85,14 +85,31 @@ export default function SolicitacaoAgenda() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Lista padrão: só os projetos que o GP logado gerencia (exceto implementados).
-  // O GP é o team_member com o mesmo e-mail do usuário. A busca (abaixo) usa a base inteira.
-  const myProjects = useMemo(
-    () => projects.filter(p => !!myManagerId && p.manager_id === myManagerId && !HIDDEN_BY_DEFAULT_STATUSES.includes(p.status)),
-    [projects, myManagerId]);
-
-  const pendingByProject = useMemo(() => new Set(requests.filter(r => r.status === "pendente").map(r => r.project_id)), [requests]);
   const myRequests = useMemo(() => requests.filter(r => r.requested_by === user?.id), [requests, user?.id]);
+
+  // Lista padrão ("Meus projetos"):
+  //  - projetos que o GP logado gerencia (exceto implementados) — GP = team_member com o mesmo e-mail;
+  //  - + projetos em que o usuário já solicitou agenda (para marcar as próximas visitas: 2ª, 3ª…),
+  //    mesmo sem ser o GP ou já implementados.
+  // Agendar NÃO tira o projeto da lista. A busca (abaixo) usa a base inteira.
+  const myProjects = useMemo(() => {
+    const requested = new Set(myRequests.filter(r => r.status !== "cancelada").map(r => r.project_id));
+    return projects.filter(p =>
+      requested.has(p.id) ||
+      (!!myManagerId && p.manager_id === myManagerId && !HIDDEN_BY_DEFAULT_STATUSES.includes(p.status)));
+  }, [projects, myManagerId, myRequests]);
+
+  // Visitas (pendentes e aprovadas) de cada projeto, para mostrar "N visitas · próxima: …"
+  const visitsByProject = useMemo(() => {
+    const m = new Map<string, ImplantationRequest[]>();
+    requests.filter(r => r.status === "pendente" || r.status === "aprovada").forEach(r => {
+      const list = m.get(r.project_id) ?? [];
+      list.push(r);
+      m.set(r.project_id, list);
+    });
+    m.forEach(list => list.sort((a, b) => +periodOf(a).start - +periodOf(b).start));
+    return m;
+  }, [requests]);
 
   const refreshDetail = useCallback(async () => {
     await load();
@@ -163,8 +180,8 @@ export default function SolicitacaoAgenda() {
     return (
       <>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Kpi icon={FolderKanban} label="Meus projetos" value={myProjects.length} caption="que eu gerencio" tone="bg-violet-500/15 text-violet-600 dark:text-violet-300"
-            info="Projetos em que você é o Gerente de Projetos, exceto os implementados. Para agendar em projeto de outro GP ou em projeto implementado (visita extra), use a busca: ela procura em toda a base." />
+          <Kpi icon={FolderKanban} label="Meus projetos" value={myProjects.length} caption="que gerencio ou já agendei" tone="bg-violet-500/15 text-violet-600 dark:text-violet-300"
+            info="Projetos em que você é o Gerente de Projetos (exceto implementados) e projetos em que você já solicitou agenda — eles continuam aqui para você marcar as próximas visitas. Para outro projeto, use a busca: ela procura em toda a base." />
           <Kpi icon={Hourglass} label="Pendentes" value={count("pendente")} caption="aguardando aprovador" tone="bg-amber-500/15 text-amber-600 dark:text-amber-300"
             info="Suas solicitações que ainda não foram avaliadas. Clique para filtrar." onClick={() => setGpTab("pendente")} />
           <Kpi icon={CheckCircle2} label="Aprovadas" value={count("aprovada")} caption="no calendário" tone="bg-emerald-500/15 text-emerald-600 dark:text-emerald-300"
@@ -184,7 +201,7 @@ export default function SolicitacaoAgenda() {
             <p className="border-b bg-muted/30 px-4 py-1.5 text-[11px] text-muted-foreground">
               {q
                 ? <>Buscando em <b className="text-foreground">toda a base</b> (todos os GPs e status, inclusive implementados) · {list.length} resultado{list.length !== 1 ? "s" : ""}</>
-                : <>Mostrando só os projetos que você gerencia. Para outro projeto ou <b className="text-foreground">visita extra</b>, use a busca.</>}
+                : <>Projetos que você gerencia ou em que já agendou visitas. Para outro projeto ou <b className="text-foreground">visita extra</b>, use a busca.</>}
             </p>
             {!q && myProjects.length === 0 ? (
               <EmptyBlock icon={FolderSearch}
@@ -212,10 +229,31 @@ export default function SolicitacaoAgenda() {
                           {formatLocation(p.city, p.state, p.country_code)} · <span className={hot ? "font-semibold text-primary" : ""}>{phase ?? statusLabels[p.status as keyof typeof statusLabels]}</span>
                           {q && p.manager?.full_name ? ` · GP: ${p.manager.full_name}` : ""}
                         </p>
-                        {pendingByProject.has(p.id) && <p className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-300"><Hourglass className="mr-0.5 inline h-3 w-3" />Já existe solicitação pendente</p>}
+                        {(() => {
+                          const visits = visitsByProject.get(p.id) ?? [];
+                          if (!visits.length) return null;
+                          const now = new Date();
+                          const next = visits.find(r => periodOf(r).end >= now);
+                          const nPend = visits.filter(r => r.status === "pendente").length;
+                          return (
+                            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary">
+                                <CalendarRange className="h-3 w-3" />{visits.length} visita{visits.length !== 1 ? "s" : ""} na agenda
+                              </span>
+                              {next && (
+                                <span className="text-muted-foreground">
+                                  próxima: <b className="font-medium text-foreground/80">{next.visit_purpose}</b> em {formatPeriod(periodOf(next).start, periodOf(next).end).split(" ")[0]}
+                                  {next.status === "pendente" ? " (pendente)" : ""}
+                                </span>
+                              )}
+                              {nPend > 0 && <span className="text-amber-600 dark:text-amber-300"><Hourglass className="mr-0.5 inline h-3 w-3" />{nPend} aguardando aprovação</span>}
+                            </p>
+                          );
+                        })()}
                       </div>
-                      <Button size="sm" variant={hot ? "default" : "outline"} className="h-8 text-xs" onClick={() => setReqProject(p)}>
-                        <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />Solicitar agenda
+                      <Button size="sm" variant={hot ? "default" : "outline"} className="h-8 text-xs" onClick={() => setReqProject(p)}
+                        title={(visitsByProject.get(p.id)?.length ?? 0) > 0 ? "Agendar mais uma visita para este projeto" : undefined}>
+                        <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />{(visitsByProject.get(p.id)?.length ?? 0) > 0 ? "Nova visita" : "Solicitar agenda"}
                       </Button>
                     </li>
                   );
