@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Filter, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Constants } from "@/integrations/supabase/types";
 import { statusLabels } from "@/pages/ProjectManagement";
 import { teamRoleLabels } from "@/lib/teamRoleLabels";
@@ -17,11 +18,12 @@ interface Props {
   countries?: string[];
   cities: string[];
   columns: readonly string[];
+  className?: string;
 }
 
-export default function KanbanFilters({ filters, setFilter, clearFilters, hasActiveFilters, managers, countries, cities, columns }: Props) {
+export default function KanbanFilters({ filters, setFilter, clearFilters, hasActiveFilters, managers, countries, cities, columns, className }: Props) {
   return (
-    <div className="w-[260px] shrink-0 rounded-xl border border-border/60 bg-card p-4 shadow-sm flex flex-col gap-4">
+    <div className={cn("w-[260px] shrink-0 rounded-xl border border-border/60 bg-card p-4 shadow-sm flex flex-col gap-4", className)}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-semibold">
           <Filter className="h-4 w-4 text-primary" />

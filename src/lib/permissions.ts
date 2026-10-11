@@ -11,7 +11,7 @@ export const MODULES = [
   { key: "implantacao", label: "Implantação", group: "operacao", actions: ["view"] as const },
   { key: "report_imp", label: "Report IMP", group: "operacao", actions: ["view", "create", "delete"] as const },
   { key: "suporte", label: "Suporte Técnico", group: "operacao", actions: ["view"] as const },
-  { key: "financeiro", label: "Financeiro", group: "operacao", actions: ["view"] as const },
+  { key: "financeiro", label: "Gestão de Contratos", group: "operacao", actions: ["view"] as const },
   { key: "admin_team", label: "Admin — Equipe", group: "admin", actions: ["view", "edit"] as const },
   { key: "admin_users", label: "Admin — Usuários / Permissões", group: "admin", actions: ["view", "edit"] as const },
   { key: "admin_settings", label: "Admin — Configurações", group: "admin", actions: ["view", "edit"] as const },

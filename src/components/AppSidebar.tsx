@@ -64,9 +64,9 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
       ],
     },
     {
-      label: "Financeiro",
+      label: "Gestão de Contratos",
       icon: Wallet,
-      items: [{ title: "Financeiro", url: "/financeiro", icon: Wallet, module: "financeiro", badge: badges.financeiro }],
+      items: [{ title: "Gestão de Contratos", url: "/financeiro", icon: Wallet, module: "financeiro", badge: badges.financeiro }],
     },
     {
       label: "Suporte Técnico",
@@ -108,14 +108,15 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
       className="border-r-0"
       style={{
         fontFamily: "'Source Sans 3', sans-serif",
-        "--sidebar-background": "0 0% 100%",
-        "--sidebar-foreground": "222 18% 18%",
-        "--sidebar-primary": "276 63% 28%",
-        "--sidebar-primary-foreground": "0 0% 100%",
-        "--sidebar-accent": "276 40% 95%",
-        "--sidebar-accent-foreground": "276 63% 24%",
-        "--sidebar-border": "220 14% 90%",
-        "--sidebar-ring": "276 63% 28%",
+        // Valores em src/index.css (--app-sidebar-*): claro = branco da marca, escuro = tema escuro.
+        "--sidebar-background": "var(--app-sidebar-background)",
+        "--sidebar-foreground": "var(--app-sidebar-foreground)",
+        "--sidebar-primary": "var(--app-sidebar-primary)",
+        "--sidebar-primary-foreground": "var(--app-sidebar-primary-foreground)",
+        "--sidebar-accent": "var(--app-sidebar-accent)",
+        "--sidebar-accent-foreground": "var(--app-sidebar-accent-foreground)",
+        "--sidebar-border": "var(--app-sidebar-border)",
+        "--sidebar-ring": "var(--app-sidebar-ring)",
       } as React.CSSProperties}
     >
       {/* Header */}
@@ -155,20 +156,20 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
       </div>
 
       {!collapsed && (
-        <div className="shrink-0 bg-white px-3 pb-3 pt-2">
+        <div className="shrink-0 bg-white px-3 pb-3 pt-2 dark:bg-sidebar">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500 dark:text-muted-foreground" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar no menu..."
-              className="h-8 rounded-md border-slate-200 bg-white pl-8 text-xs text-slate-800 placeholder:text-slate-500 focus-visible:ring-sidebar-ring"
+              className="h-8 rounded-md border-slate-200 bg-white pl-8 text-xs text-slate-800 placeholder:text-slate-500 focus-visible:ring-sidebar-ring dark:border-sidebar-border dark:bg-sidebar-accent dark:text-sidebar-foreground dark:placeholder:text-muted-foreground"
             />
           </div>
         </div>
       )}
 
-      <SidebarContent className="bg-white">
+      <SidebarContent className="bg-white dark:bg-sidebar">
         {visibleGroups.map(g => (
           <SidebarNavGroup
             key={g.label}
@@ -184,7 +185,7 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
       </SidebarContent>
 
       {/* Footer */}
-      <SidebarFooter className="border-t border-sidebar-border bg-white p-2">
+      <SidebarFooter className="border-t border-sidebar-border bg-white p-2 dark:bg-sidebar">
         <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-[11px] font-bold text-sidebar-primary-foreground">
             {initials}
@@ -192,8 +193,8 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
           {!collapsed && (
             <>
               <div className="flex min-w-0 flex-col">
-                <span className="truncate text-xs font-medium text-slate-800">{name}</span>
-                <span className="truncate text-[10px] text-slate-500">{roleLabel}</span>
+                <span className="truncate text-xs font-medium text-slate-800 dark:text-sidebar-foreground">{name}</span>
+                <span className="truncate text-[10px] text-slate-500 dark:text-muted-foreground">{roleLabel}</span>
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -201,7 +202,7 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
                     variant="ghost"
                     size="icon"
                     aria-label="Opções da conta"
-                    className="ml-auto h-7 w-7 text-slate-500 hover:bg-slate-100 hover:text-sidebar-primary"
+                    className="ml-auto h-7 w-7 text-slate-500 hover:bg-slate-100 hover:text-sidebar-primary dark:text-muted-foreground dark:hover:bg-sidebar-accent"
                   >
                     <MoreVertical className="h-4 w-4" />
                   </Button>

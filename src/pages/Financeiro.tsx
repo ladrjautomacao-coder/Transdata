@@ -10,7 +10,7 @@ export default function Financeiro() {
     <div className="flex flex-col h-[calc(100vh-3rem)]">
       <div className="flex items-center justify-between px-4 py-2 border-b bg-background">
         <div>
-          <h1 className="text-lg font-semibold">Financeiro</h1>
+          <h1 className="text-lg font-semibold">Gestão de Contratos</h1>
           <p className="text-xs text-muted-foreground">Data Studio {branding.portalName}</p>
         </div>
         <Button variant="outline" size="sm" asChild>
@@ -22,7 +22,7 @@ export default function Financeiro() {
       </div>
       <iframe
         src={FINANCEIRO_URL}
-        title="Módulo Financeiro"
+        title="Gestão de Contratos"
         className="flex-1 w-full border-0"
         allow="clipboard-read; clipboard-write; fullscreen"
       />

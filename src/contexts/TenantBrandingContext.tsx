@@ -65,6 +65,28 @@ function extractSlug(hostname: string): string | null {
   return parts[0];
 }
 
+/**
+ * Aplica a cor primária do tenant ("H S% L%"). Vai numa <style> e não inline no
+ * <html>, para o tema escuro poder trocar por uma versão clara da mesma cor —
+ * a cor da marca original some sobre fundo escuro. O tema claro fica igual.
+ */
+function applyPrimaryColor(color: string) {
+  let css = `:root{--primary:${color};--ring:${color}}`;
+  const hsl = color.trim().match(/^(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%$/);
+  if (hsl) {
+    const [h, s, l] = hsl.slice(1).map(Number);
+    const dark = `${h} ${Math.min(s + 10, 85)}% ${Math.max(l, 74)}%`;
+    css += `:root.dark{--primary:${dark};--ring:${dark};--primary-foreground:${h} 50% 12%}`;
+  }
+  let el = document.getElementById("tenant-primary-color") as HTMLStyleElement | null;
+  if (!el) {
+    el = document.createElement("style");
+    el.id = "tenant-primary-color";
+    document.head.appendChild(el);
+  }
+  el.textContent = css;
+}
+
 /** Domínio raiz "de verdade", sem o "www." — usado pra montar subdomínios. */
 export function apexHostname(hostname: string): string {
   const parts = hostname.split(".");
@@ -119,10 +141,7 @@ export function TenantBrandingProvider({ children }: { children: ReactNode }) {
         : `${branding.portalName} - Gestão de Projetos`;
 
       const root = document.documentElement;
-      if (branding.primaryColor) {
-        root.style.setProperty("--primary", branding.primaryColor);
-        root.style.setProperty("--ring", branding.primaryColor);
-      }
+      if (branding.primaryColor) applyPrimaryColor(branding.primaryColor);
       if (branding.sidebarColor) {
         root.style.setProperty("--sidebar-background", branding.sidebarColor);
       }

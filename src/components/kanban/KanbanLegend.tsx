@@ -1,8 +1,9 @@
 import { useSettings } from "@/contexts/SettingsContext";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Info } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export default function KanbanLegend() {
+export default function KanbanLegend({ className }: { className?: string }) {
   const { settings } = useSettings();
   const g = settings.slaGreenMaxDays;
   const y = settings.slaYellowMaxDays;
@@ -16,7 +17,7 @@ export default function KanbanLegend() {
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border/50 bg-card/60 px-3 py-1.5">
+    <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border/50 bg-card/60 px-3 py-1.5", className)}>
       <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         Sem atualização
       </span>

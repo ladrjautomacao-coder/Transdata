@@ -652,11 +652,14 @@ export default function ProjectDetail() {
         <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
       </Button>
 
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold">{project.company_name}</h1>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-1 basis-60 flex-col gap-1">
+          <h1 className="text-xl font-bold sm:text-2xl">{project.company_name}</h1>
           {project.project_code && (
-            <span className="font-mono text-xs px-2 py-1 rounded bg-muted text-muted-foreground w-fit">
+            <span
+              className="block w-fit max-w-full truncate rounded bg-muted px-2 py-1 font-mono text-xs text-muted-foreground"
+              title={project.project_code}
+            >
               Código: {project.project_code}
             </span>
           )}

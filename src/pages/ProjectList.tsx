@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ArrowLeft, Search, ArrowUpDown, Trash2, Eye, Plus, CalendarClock } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ProjectTimeline } from "@/components/ProjectTimeline";
 import { EmptyState } from "@/components/EmptyState";
 import { format } from "date-fns";
@@ -35,11 +36,11 @@ const statusLabels: Record<ProjectStatus, string> = {
 };
 
 const statusColors: Record<ProjectStatus, string> = {
-  comercial: "bg-blue-100 text-blue-800 border-blue-300",
+  comercial: "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/35",
   planejamento: "bg-primary/15 text-primary border-primary/30",
-  implantacao: "bg-amber-100 text-amber-800 border-amber-300",
-  encerrado: "bg-emerald-100 text-emerald-800 border-emerald-300",
-  suspenso: "bg-red-100 text-red-800 border-red-300",
+  implantacao: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/35",
+  encerrado: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/35",
+  suspenso: "bg-red-100 text-red-800 border-red-300 dark:bg-red-500/15 dark:text-red-300 dark:border-red-500/35",
 };
 
 interface ProjectRow {
@@ -215,70 +216,90 @@ export default function ProjectList() {
         <EmptyState type="search" title="Nenhum projeto encontrado" description="Tente ajustar os filtros ou a busca para encontrar resultados." />
       ) : (
         <div className="rounded-lg border overflow-auto">
-          <Table>
+          <TooltipProvider delayDuration={150}>
+          <Table className="text-[13px] [&_td]:px-2 [&_td]:py-2.5 [&_th]:px-2">
             <TableHeader>
               <TableRow>
                 <SortHeader label="Empresa" field="company_name" />
                 <TableHead className="whitespace-nowrap">Cidade/Estado</TableHead>
-                <TableHead className="whitespace-nowrap">{teamRoleLabels.manager ?? "Gerente"}</TableHead>
-                <TableHead className="whitespace-nowrap">{teamRoleLabels.executive ?? "Executivo"}</TableHead>
+                <TableHead className="whitespace-nowrap">Equipe</TableHead>
                 <SortHeader label="D-zero" field="d_zero_date" />
                 <SortHeader label="Handover" field="handover_date" />
                 <SortHeader label="Status" field="status" />
                 <TableHead className="whitespace-nowrap">Soluções</TableHead>
-                <TableHead className="whitespace-nowrap">Cronograma</TableHead>
-                <TableHead className="whitespace-nowrap w-[80px]"></TableHead>
+                <TableHead className="sticky right-0 w-[104px] bg-background"><span className="sr-only">Ações</span></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map(p => (
+              {filtered.map(p => {
+                const location = formatLocation(p.city, p.state, p.country_code);
+                const solutions = (p.project_solutions ?? []).map(ps => ps.solution?.name).filter(Boolean) as string[];
+                const extraSolutions = solutions.slice(2);
+                return (
                 <TableRow key={p.id} className="hover:bg-muted/50">
-                  <TableCell className="font-medium">{p.company_name}</TableCell>
-                  <TableCell>{formatLocation(p.city, p.state, p.country_code)}</TableCell>
-                  <TableCell>{p.manager?.full_name || "—"}</TableCell>
-                  <TableCell>{p.executive?.full_name || "—"}</TableCell>
-                  <TableCell>{fmtDate(p.d_zero_date)}</TableCell>
-                  <TableCell>{fmtDate(p.handover_date)}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={statusColors[p.status]}>{statusLabels[p.status]}</Badge>
+                  <TableCell className="font-medium">
+                    <div className="line-clamp-2 w-[200px]" title={p.company_name}>{p.company_name}</div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {p.project_solutions?.map((ps, i) => (
-                        <Badge key={i} variant="secondary" className="text-xs">{ps.solution?.name}</Badge>
-                      ))}
+                    <div className="max-w-[130px] truncate" title={location}>{location}</div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="max-w-[150px]" title={`${teamRoleLabels.manager ?? "Gerente"}: ${p.manager?.full_name || "—"} · ${teamRoleLabels.executive ?? "Executivo"}: ${p.executive?.full_name || "—"}`}>
+                      <div className="truncate">{p.manager?.full_name || "—"}</div>
+                      <div className="truncate text-xs text-muted-foreground">{p.executive?.full_name || "—"}</div>
                     </div>
                   </TableCell>
+                  <TableCell className="whitespace-nowrap">{fmtDate(p.d_zero_date)}</TableCell>
+                  <TableCell className="whitespace-nowrap">{fmtDate(p.handover_date)}</TableCell>
                   <TableCell>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
-                          <CalendarClock className="h-3.5 w-3.5" />
-                          Cronograma
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-4" align="end">
-                        <ProjectTimeline status={p.status} companyName={p.company_name} />
-                      </PopoverContent>
-                    </Popover>
+                    <Badge variant="outline" className={`whitespace-nowrap ${statusColors[p.status]}`}>{statusLabels[p.status]}</Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1">
+                    <div className="flex max-w-[190px] flex-wrap items-center gap-1">
+                      {solutions.slice(0, 2).map(name => (
+                        <Badge key={name} variant="secondary" className="whitespace-nowrap text-xs">{name}</Badge>
+                      ))}
+                      {extraSolutions.length > 0 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge variant="secondary" className="cursor-default text-xs" tabIndex={0}>+{extraSolutions.length}</Badge>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-[240px] text-xs">{extraSolutions.join(", ")}</TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                  </TableCell>
+                  {/* Ações fixas na borda direita: continuam visíveis quando a tabela rola na horizontal */}
+                  <TableCell className="sticky right-0 bg-background shadow-[-8px_0_8px_-8px_rgb(0_0_0/0.2)]">
+                    <div className="flex items-center justify-end gap-1">
                       <Button
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-primary hover:bg-primary/10"
                         onClick={() => navigate(`/projetos/${p.id}`)}
                         title="Visualizar / Editar"
+                        aria-label={`Visualizar ou editar ${p.company_name}`}
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Cronograma" aria-label={`Cronograma de ${p.company_name}`}>
+                            <CalendarClock className="h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-4" align="end">
+                          <ProjectTimeline status={p.status} companyName={p.company_name} />
+                        </PopoverContent>
+                      </Popover>
                       {isAdmin && (
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive hover:bg-destructive/10"
                           onClick={() => { setDeleteTarget(p); setDeleteConfirmText(""); }}
+                          title="Excluir"
+                          aria-label={`Excluir ${p.company_name}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -286,9 +307,11 @@ export default function ProjectList() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
+          </TooltipProvider>
         </div>
       )}
 

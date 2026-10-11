@@ -134,8 +134,8 @@
     --card-foreground: 270 20% 95%;
     --popover: 273 40% 12%;
     --popover-foreground: 270 20% 95%;
-    --primary: 273 65% 55%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 273 80% 74%;
+    --primary-foreground: 273 50% 12%;
     --secondary: 273 30% 18%;
     --secondary-foreground: 270 20% 90%;
     --muted: 273 30% 15%;
@@ -144,7 +144,7 @@
     --accent-foreground: 17 90% 75%;
     --border: 273 30% 20%;
     --input: 273 30% 20%;
-    --ring: 273 65% 55%;
+    --ring: 273 80% 74%;
     --sidebar-background: 273 55% 10%;
     --sidebar-foreground: 270 20% 88%;
     --sidebar-primary: 17 89% 58%;
@@ -153,6 +153,29 @@
     --sidebar-accent-foreground: 270 20% 92%;
     --sidebar-border: 273 40% 18%;
     --sidebar-ring: 17 89% 58%;
+  }
+
+  /* Paleta do menu lateral (AppSidebar). Claro: branco com roxo da marca, como
+     sempre foi. Escuro: acompanha o tema, usando os tokens do próprio tenant. */
+  :root {
+    --app-sidebar-background: 0 0% 100%;
+    --app-sidebar-foreground: 222 18% 18%;
+    --app-sidebar-primary: 276 63% 28%;
+    --app-sidebar-primary-foreground: 0 0% 100%;
+    --app-sidebar-accent: 276 40% 95%;
+    --app-sidebar-accent-foreground: 276 63% 24%;
+    --app-sidebar-border: 220 14% 90%;
+    --app-sidebar-ring: 276 63% 28%;
+  }
+  :root.dark {
+    --app-sidebar-background: var(--background);
+    --app-sidebar-foreground: var(--foreground);
+    --app-sidebar-primary: var(--primary);
+    --app-sidebar-primary-foreground: var(--primary-foreground);
+    --app-sidebar-accent: var(--secondary);
+    --app-sidebar-accent-foreground: var(--secondary-foreground);
+    --app-sidebar-border: var(--border);
+    --app-sidebar-ring: var(--ring);
   }
 }
 

@@ -52,9 +52,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true;
     let initialized = false;
+    // getSession e onAuthStateChange podem disparar quase juntos; só a chamada mais
+    // recente encerra o loading, senão as rotas protegidas veem isAdmin=false e redirecionam.
+    let applySeq = 0;
 
     const applySession = async (session: Session | null) => {
       if (!isMounted) return;
+      const seq = ++applySeq;
 
       setLoading(true);
       setSession(session);
@@ -67,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         resetUserData();
       }
 
-      if (isMounted) setLoading(false);
+      if (isMounted && seq === applySeq) setLoading(false);
     };
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {

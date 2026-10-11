@@ -18,6 +18,8 @@ import { toast } from "sonner";
 import KanbanFilters from "@/components/kanban/KanbanFilters";
 import KanbanColumn from "@/components/kanban/KanbanColumn";
 import KanbanLegend from "@/components/kanban/KanbanLegend";
+import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { statusLabels } from "@/lib/statusLabels";
 
 export { statusLabels };
@@ -183,7 +185,8 @@ export default function ProjectManagement() {
     return map;
   }, [filtered]);
 
-  const hasActiveFilters = Object.values(filters).some(v => v !== "");
+  const activeFilterCount = Object.values(filters).filter(v => v !== "").length;
+  const hasActiveFilters = activeFilterCount > 0;
 
   const onDragEnd = useCallback(async (result: DropResult) => {
     const { draggableId, destination } = result;
@@ -252,11 +255,13 @@ export default function ProjectManagement() {
     }
   }, [projects, user]);
 
+  const countLabel = `${filtered.length} projeto${filtered.length !== 1 ? "s" : ""}`;
+
   return (
     <div className="flex flex-col h-[calc(100vh-7rem)]">
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/projetos")}>
+        <Button variant="ghost" size="icon" onClick={() => navigate("/projetos")} aria-label="Voltar para Projetos" title="Voltar">
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
@@ -266,13 +271,59 @@ export default function ProjectManagement() {
           </div>
           <h1 className="text-2xl font-bold">Kanban</h1>
         </div>
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
+        <div className="ml-auto hidden flex-wrap items-center justify-end gap-3 lg:flex">
           <KanbanLegend />
-          <span className="text-sm text-muted-foreground">
-            {filtered.length} projeto{filtered.length !== 1 ? "s" : ""}
-          </span>
+          <span className="text-sm text-muted-foreground">{countLabel}</span>
         </div>
+      </div>
 
+      {/* Celular/tablet: filtros e legenda viram botões para o quadro usar a largura toda */}
+      <div className="mb-3 flex items-center gap-2 lg:hidden">
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="outline" size="sm" className="h-9">
+              <Filter className="mr-1.5 h-4 w-4" />
+              Filtros
+              {hasActiveFilters && (
+                <span className="ml-1.5 rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">{activeFilterCount}</span>
+              )}
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl px-3 pb-5 pt-8">
+            <SheetTitle className="sr-only">Filtros</SheetTitle>
+            <KanbanFilters
+              filters={filters}
+              setFilter={setFilter}
+              clearFilters={clearFilters}
+              hasActiveFilters={hasActiveFilters}
+              managers={managers}
+              countries={countryOptions}
+              cities={cities}
+              columns={columns}
+              className="w-full border-0 shadow-none"
+            />
+            <SheetClose asChild>
+              <Button className="mt-2 w-full">Ver {countLabel}</Button>
+            </SheetClose>
+          </SheetContent>
+        </Sheet>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="h-9">
+              <span className="mr-1.5 flex gap-0.5" aria-hidden>
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="h-2 w-2 rounded-full bg-yellow-500" />
+                <span className="h-2 w-2 rounded-full bg-orange-500" />
+                <span className="h-2 w-2 rounded-full bg-red-500" />
+              </span>
+              Legenda
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-auto max-w-[min(340px,calc(100vw-24px))] p-1">
+            <KanbanLegend className="border-0 bg-transparent" />
+          </PopoverContent>
+        </Popover>
+        <span className="ml-auto text-sm text-muted-foreground">{countLabel}</span>
       </div>
 
       {/* Body: Filters + Board */}
@@ -286,6 +337,7 @@ export default function ProjectManagement() {
           countries={countryOptions}
           cities={cities}
           columns={columns}
+          className="hidden lg:flex"
         />
 
         {/* Kanban Board */}
