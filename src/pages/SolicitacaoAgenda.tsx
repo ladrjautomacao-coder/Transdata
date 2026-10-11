@@ -67,21 +67,20 @@ export default function SolicitacaoAgenda() {
           .order("company_name"),
         fetchRequests(),
         fetchTechnicians(),
-        user?.email
-          ? supabase.from("team_members").select("id").ilike("email", user.email).eq("active", true).maybeSingle()
-          : Promise.resolve({ data: null }),
+        // e-mail de team_members não é legível pelo cliente; a função resolve o GP no banco
+        supabase.rpc("get_my_manager_id"),
       ]);
       if (projRes.error) throw projRes.error;
       setProjects((projRes.data as unknown as EligibleProject[]) ?? []);
       setRequests(reqs);
       setTechnicians(techs);
-      setMyManagerId((mgrRes.data as { id: string } | null)?.id ?? null);
+      setMyManagerId((mgrRes.data as string | null) ?? null);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
       setLoading(false);
     }
-  }, [profile, user?.email]);
+  }, [profile]);
 
   useEffect(() => { load(); }, [load]);
 

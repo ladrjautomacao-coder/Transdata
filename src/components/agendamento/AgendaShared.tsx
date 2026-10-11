@@ -18,22 +18,26 @@ export function StatusPill({ status }: { status: RequestStatus }) {
   );
 }
 
-export function Kpi({ icon: Icon, label, value, caption, tone, info, onClick }: {
+export function Kpi({ icon: Icon, label, value, caption, tone, info, onClick, stacked = false }: {
   icon: LucideIcon; label: string; value: number | string; caption: string; tone: string; info: string; onClick?: () => void;
+  /** Ícone sempre em cima (para colunas estreitas, ex.: painel lateral). */
+  stacked?: boolean;
 }) {
+  const row = !stacked;
   return (
     <div className="relative">
       <button
         type="button"
         onClick={onClick}
         disabled={!onClick}
-        className="flex h-full w-full items-center gap-4 rounded-xl border border-border/60 bg-card p-4 pr-9 text-left shadow-sm transition-all enabled:hover:-translate-y-0.5 enabled:hover:shadow-md disabled:cursor-default"
+        className={`flex h-full w-full flex-col items-start gap-2 rounded-xl border border-border/60 bg-card p-3 pr-7 text-left shadow-sm transition-all enabled:hover:-translate-y-0.5 enabled:hover:shadow-md disabled:cursor-default ${row ? "sm:flex-row sm:items-center sm:gap-4 sm:p-4 sm:pr-9" : ""}`}
       >
-        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${tone}`}><Icon className="h-5 w-5" /></span>
+        {/* Celular: ícone em cima para os textos caberem inteiros */}
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${row ? "sm:h-11 sm:w-11" : ""} ${tone}`}><Icon className={`h-4 w-4 ${row ? "sm:h-5 sm:w-5" : ""}`} /></span>
         <span className="min-w-0">
-          <span className="block truncate text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+          <span className={`block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground ${row ? "sm:truncate" : ""}`}>{label}</span>
           <span className="block text-2xl font-bold leading-tight">{value}</span>
-          <span className="block truncate text-[11px] text-muted-foreground">{caption}</span>
+          <span className={`block text-[11px] text-muted-foreground ${row ? "sm:truncate" : ""}`}>{caption}</span>
         </span>
       </button>
       <Popover>

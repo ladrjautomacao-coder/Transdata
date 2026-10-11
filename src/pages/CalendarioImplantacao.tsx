@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  CalendarDays, CalendarX, ChevronLeft, ChevronRight, ChevronRight as Chevron, Inbox, List, Lock, RefreshCw,
+  ArrowRight, CalendarDays, CalendarX, ChevronLeft, ChevronRight, ChevronRight as Chevron, Clock, Hourglass, Inbox, List, Lock, MapPin, RefreshCw,
   Search, SearchX, ShieldCheck, UsersRound, WifiOff, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,9 @@ import {
   colorFor, errorMessage, fetchRequests, fetchTechnicians, formatPeriod, initials, periodOf, techniciansOf,
   type ImplantationRequest, type Technician,
 } from "@/lib/implantationScheduling";
-import { EmptyBlock, TechAvatar } from "@/components/agendamento/AgendaShared";
+import { EmptyBlock, Kpi, TechAvatar } from "@/components/agendamento/AgendaShared";
+import { formatLocation } from "@/lib/location";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { RequestDetailSheet } from "@/components/agendamento/AgendaDialogs";
 
 type View = "tecnico" | "mes" | "lista";
@@ -52,6 +54,7 @@ export default function CalendarioImplantacao() {
   const [techFilter, setTechFilter] = useState("");
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState<ImplantationRequest | null>(null);
+  const [pickedDay, setPickedDay] = useState<Date | null>(null);
 
   // Rola até a visita destacada, tira o destaque depois de alguns segundos e limpa a URL
   useEffect(() => {
@@ -172,7 +175,16 @@ export default function CalendarioImplantacao() {
   } else if (view === "tecnico") {
     body = <Timeline start={anchor} techs={rowTechs} list={filtered} onOpen={setDetail} highlightId={highlightId} />;
   } else if (view === "mes") {
-    body = <MonthGrid month={anchor} list={filtered} onOpen={setDetail} highlightId={highlightId} />;
+    // Dia do painel: o clicado (se for deste mês), senão hoje (se for deste mês), senão o dia 1
+    const now = new Date();
+    const selectedDay = pickedDay && sameMonth(pickedDay, anchor) ? pickedDay : sameMonth(now, anchor) ? startOfDay(now) : anchor;
+    body = (
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+        <MonthGrid month={anchor} list={filtered} onOpen={setDetail} highlightId={highlightId} selected={selectedDay} onSelect={setPickedDay} />
+        <MonthSidePanel month={anchor} list={filtered} techTotal={technicians.length} pendingCount={pendingCount} selected={selectedDay}
+          onOpen={setDetail} onPending={() => navigate("/implantacao/solicitacoes?visao=aprovador")} />
+      </div>
+    );
   } else {
     body = <ListView list={filtered} onOpen={setDetail} highlightId={highlightId} />;
   }
@@ -189,7 +201,9 @@ export default function CalendarioImplantacao() {
 
 /* ─── Linha do tempo por técnico (14 dias) ─── */
 function Timeline({ start, techs, list, onOpen, highlightId }: { start: Date; techs: Technician[]; list: ImplantationRequest[]; onOpen: (r: ImplantationRequest) => void; highlightId: string | null }) {
-  const N = 14, COL = 76, NAME = 220;
+  // No celular a coluna de técnicos encolhe para caberem ~3 dias na tela
+  const isMobile = useIsMobile();
+  const N = 14, COL = 76, NAME = isMobile ? 128 : 220;
   const s0 = mondayOf(start), sEnd = addDays(s0, N);
   const days = Array.from({ length: N }, (_, i) => addDays(s0, i));
   const today = startOfDay(new Date()).getTime();
@@ -198,7 +212,7 @@ function Timeline({ start, techs, list, onOpen, highlightId }: { start: Date; te
     <div className="overflow-x-auto rounded-xl border border-border/60 bg-card shadow-sm">
       <div style={{ minWidth: NAME + N * COL }}>
         <div className="flex border-b bg-muted/50 text-[11px] font-semibold text-muted-foreground">
-          <div className="shrink-0 px-4 py-2.5" style={{ width: NAME }}>Técnico</div>
+          <div className="shrink-0 px-2.5 py-2.5 sm:px-4" style={{ width: NAME }}>Técnico</div>
           {days.map(d => {
             const isT = d.getTime() === today, we = d.getDay() === 0 || d.getDay() === 6;
             return (
@@ -217,12 +231,12 @@ function Timeline({ start, techs, list, onOpen, highlightId }: { start: Date; te
           }, 0);
           return (
             <div key={t.id} className="relative flex border-b last:border-0" style={{ height: 78 }}>
-              <div className="flex shrink-0 items-center gap-3 px-4" style={{ width: NAME }}>
+              <div className="flex shrink-0 items-center gap-2 px-2.5 sm:gap-3 sm:px-4" style={{ width: NAME }} title={t.full_name}>
                 <TechAvatar tech={t} size="h-9 w-9 text-[11px]" />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{t.full_name}</p>
-                  <p className="truncate text-[11px] text-muted-foreground">{t.area ? `${t.area} · ` : ""}{busy} dia{busy !== 1 ? "s" : ""} alocado{busy !== 1 ? "s" : ""}</p>
-                  <div className="mt-1 h-1 w-28 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${busy > 7 ? "bg-orange-500" : "bg-emerald-500"}`} style={{ width: `${Math.min(100, (busy / 10) * 100)}%` }} /></div>
+                  <p className="line-clamp-2 text-xs font-semibold leading-tight sm:truncate sm:text-sm">{t.full_name}</p>
+                  <p className="truncate text-[10px] text-muted-foreground sm:text-[11px]">{t.area && !isMobile ? `${t.area} · ` : ""}{busy} dia{busy !== 1 ? "s" : ""}{isMobile ? "" : ` alocado${busy !== 1 ? "s" : ""}`}</p>
+                  <div className="mt-1 h-1 w-16 overflow-hidden sm:w-28 rounded-full bg-muted"><div className={`h-full rounded-full ${busy > 7 ? "bg-orange-500" : "bg-emerald-500"}`} style={{ width: `${Math.min(100, (busy / 10) * 100)}%` }} /></div>
                 </div>
               </div>
               {days.map(d => (
@@ -243,7 +257,7 @@ function Timeline({ start, techs, list, onOpen, highlightId }: { start: Date; te
                   </button>
                 );
               })}
-              {mine.length === 0 && <p className="pointer-events-none absolute inset-y-0 flex items-center text-[11px] italic text-muted-foreground" style={{ left: NAME + 14 }}>Disponível no período</p>}
+              {mine.length === 0 && <p className="pointer-events-none absolute inset-y-0 flex items-center text-[11px] italic text-muted-foreground" style={{ left: NAME + 14 }}>{isMobile ? "Livre" : "Disponível no período"}</p>}
             </div>
           );
         })}
@@ -253,38 +267,223 @@ function Timeline({ start, techs, list, onOpen, highlightId }: { start: Date; te
 }
 
 /* ─── Mês ─── */
-function MonthGrid({ month, list, onOpen, highlightId }: { month: Date; list: ImplantationRequest[]; onOpen: (r: ImplantationRequest) => void; highlightId: string | null }) {
+const MAX_LANES = 3;
+const sameMonth = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
+/** Último dia ocupado (fim exatamente à meia-noite não ocupa o dia seguinte). */
+const lastDayOf = (r: ImplantationRequest) => startOfDay(new Date(+periodOf(r).end - 1));
+const coversDay = (r: ImplantationRequest, d: Date) => periodOf(r).start < addDays(d, 1) && d < periodOf(r).end;
+const dayTitle = (d: Date) => `${WD[d.getDay()]}, ${d.getDate()} de ${MONTHS[d.getMonth()]}`;
+
+function MonthGrid({ month, list, onOpen, highlightId, selected, onSelect }: {
+  month: Date; list: ImplantationRequest[]; onOpen: (r: ImplantationRequest) => void; highlightId: string | null;
+  selected: Date; onSelect: (d: Date) => void;
+}) {
+  const isMobile = useIsMobile();
   const m0 = new Date(month.getFullYear(), month.getMonth(), 1);
-  const cells = Array.from({ length: 42 }, (_, i) => addDays(mondayOf(m0), i));
+  const first = mondayOf(m0);
+  const weeks = Array.from({ length: 6 }, (_, w) => Array.from({ length: 7 }, (_, i) => addDays(first, w * 7 + i)));
   const today = startOfDay(new Date()).getTime();
-  return (
-    <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-      <div className="grid grid-cols-7 border-b bg-muted/50 text-center text-[11px] font-semibold text-muted-foreground">
-        {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map(x => <div key={x} className="py-2">{x}</div>)}
+  const sel = startOfDay(selected).getTime();
+
+  const dayCell = (d: Date, i: number, extra: number, compact: boolean) => {
+    const inM = d.getMonth() === m0.getMonth();
+    const isToday = d.getTime() === today, isSel = d.getTime() === sel;
+    const count = list.filter(r => coversDay(r, d)).length;
+    return (
+      <div
+        key={+d}
+        role="button"
+        tabIndex={0}
+        aria-label={`${dayTitle(d)}${count ? ` · ${count} visita${count > 1 ? "s" : ""}` : ""}`}
+        aria-pressed={isSel}
+        onClick={() => onSelect(d)}
+        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(d); } }}
+        className={`relative cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${i ? "border-l border-border/60" : ""} ${isSel ? "bg-primary/[0.07] ring-2 ring-inset ring-primary/55" : i >= 5 ? "bg-muted/30 hover:bg-muted/50" : "hover:bg-muted/40"}`}
+      >
+        <div className={`flex items-center ${compact ? "justify-center pt-1.5" : "justify-between px-2.5 pt-2"}`}>
+          <span className={`text-xs ${isToday ? "flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1 font-bold text-primary-foreground" : inM ? "font-semibold text-foreground" : "text-muted-foreground/60"}`}>{d.getDate()}</span>
+          {!compact && (isToday
+            ? <span className="text-[10px] font-semibold text-primary">Hoje</span>
+            : count > 1 && <span className="text-[10px] text-muted-foreground">{count} visitas</span>)}
+        </div>
+        {compact && count > 0 && (
+          <div className="mt-1 flex justify-center gap-0.5">
+            {list.filter(r => coversDay(r, d)).slice(0, 3).map(r => <span key={r.id} className="h-1.5 w-1.5 rounded-full" style={{ background: colorFor(r.project_id) }} />)}
+          </div>
+        )}
+        {!compact && extra > 0 && <span className="absolute bottom-1.5 left-2.5 text-[10px] font-medium text-muted-foreground">+{extra} mais</span>}
       </div>
-      <div className="grid grid-cols-7">
-        {cells.map(c => {
-          const ev = list.filter(r => periodOf(r).start < addDays(c, 1) && c < periodOf(r).end);
-          const inM = c.getMonth() === m0.getMonth();
-          return (
-            <div key={+c} className={`min-h-[108px] border-b border-r p-1.5 ${inM ? "" : "bg-muted/40 opacity-60"}`}>
-              <div className="mb-1 flex justify-end">
-                <span className={`text-xs ${c.getTime() === today ? "flex h-6 w-6 items-center justify-center rounded-full bg-primary font-bold text-primary-foreground" : "text-muted-foreground"}`}>{c.getDate()}</span>
-              </div>
-              <div className="space-y-1">
-                {ev.slice(0, 3).map(r => (
-                  <button key={r.id} type="button" data-req={r.id} onClick={() => onOpen(r)} title={`${r.project?.company_name} · ${techniciansOf(r).map(t => t.full_name).join(", ")}`}
-                    className={`block w-full truncate rounded-md px-1.5 py-0.5 text-left text-[10px] font-medium text-white transition hover:brightness-110 ${r.id === highlightId ? HIGHLIGHT : ""}`} style={{ background: colorFor(r.project_id) }}>
-                    {r.project?.company_name} · {techniciansOf(r).map(t => initials(t.full_name)).join(", ")}
-                  </button>
-                ))}
-                {ev.length > 3 && <p className="px-1 text-[10px] text-muted-foreground">+{ev.length - 3} mais</p>}
-              </div>
-            </div>
-          );
-        })}
+    );
+  };
+
+  return (
+    <div className="min-w-0 flex-1 overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+      <div className="grid grid-cols-7 bg-muted/50">
+        {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((x, i) => (
+          <div key={x} className={`py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground ${isMobile ? "text-center" : "px-3"} ${i >= 5 ? "opacity-70" : ""}`}>{isMobile ? x[0] : x}</div>
+        ))}
+      </div>
+      {weeks.map(wk => {
+        const w0 = wk[0], wEnd = addDays(w0, 7);
+        if (isMobile) {
+          return <div key={+w0} className="grid h-14 grid-cols-7 border-t border-border/60">{wk.map((d, i) => dayCell(d, i, 0, true))}</div>;
+        }
+        // Faixas contínuas: cada visita ocupa uma "pista" na semana, sem se sobrepor a outra
+        const inWeek = list
+          .filter(r => periodOf(r).start < wEnd && periodOf(r).end > w0)
+          .sort((a, b) => +periodOf(a).start - +periodOf(b).start || +periodOf(b).end - +periodOf(a).end);
+        const laneEnds: number[] = [];
+        const placed: { r: ImplantationRequest; a: number; b: number; lane: number }[] = [];
+        const hiddenPerDay = Array(7).fill(0);
+        inWeek.forEach(r => {
+          const a = Math.max(0, Math.round((+startOfDay(periodOf(r).start) - +w0) / DAY));
+          const b = Math.min(6, Math.round((+lastDayOf(r) - +w0) / DAY));
+          let lane = 0;
+          while (laneEnds[lane] !== undefined && laneEnds[lane] >= a) lane++;
+          if (lane >= MAX_LANES) { for (let k = a; k <= b; k++) hiddenPerDay[k]++; return; }
+          laneEnds[lane] = b;
+          placed.push({ r, a, b, lane });
+        });
+        const height = Math.max(112, 40 + laneEnds.length * 26 + 22);
+        return (
+          <div key={+w0} className="relative grid grid-cols-7 border-t border-border/60" style={{ height }}>
+            {wk.map((d, i) => dayCell(d, i, hiddenPerDay[i], false))}
+            {placed.map(({ r, a, b, lane }) => {
+              const { start } = periodOf(r);
+              const contL = start < w0, contR = periodOf(r).end > wEnd && lastDayOf(r) >= wEnd;
+              const c = colorFor(r.project_id);
+              const techs = techniciansOf(r);
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  data-req={r.id}
+                  onClick={() => onOpen(r)}
+                  title={`${r.project?.company_name} · ${r.visit_purpose} · ${formatPeriod(start, periodOf(r).end)}${techs.length ? ` · ${techs.map(t => t.full_name).join(", ")}` : ""}`}
+                  className={`absolute z-10 flex h-[22px] items-center gap-1.5 overflow-hidden pr-1.5 text-left text-[11px] text-foreground transition hover:brightness-110 hover:shadow-md ${contL ? "rounded-l-none pl-1.5" : "rounded-l-md border-l-[3px] pl-2"} ${contR ? "rounded-r-none" : "rounded-r-md"} ${r.id === highlightId ? HIGHLIGHT : ""}`}
+                  style={{
+                    top: 34 + lane * 26,
+                    left: `calc(${(a / 7) * 100}% + ${contL ? 0 : 6}px)`,
+                    width: `calc(${((b - a + 1) / 7) * 100}% - ${(contL ? 0 : 6) + (contR ? 0 : 6)}px)`,
+                    background: `${c}2e`,
+                    borderLeftColor: c,
+                  }}
+                >
+                  {contL && <span className="font-bold" style={{ color: c }}>‹</span>}
+                  {!contL && <span className="shrink-0 font-semibold" style={{ color: c }}>{p2(start.getHours())}h</span>}
+                  <span className="truncate font-semibold">{r.project?.company_name}</span>
+                  {b > a && <span className="min-w-0 flex-1 truncate text-muted-foreground">· {r.visit_purpose}</span>}
+                  {b === a && <span className="flex-1" />}
+                  <span className="flex shrink-0 -space-x-1">{techs.map(t => <TechAvatar key={t.id} tech={t} size="h-4 w-4 text-[7px]" />)}</span>
+                  {contR && <span className="font-bold" style={{ color: c }}>›</span>}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/60 px-3.5 py-2.5 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-[18px] rounded-sm border-l-[3px] border-primary bg-primary/20" />Visita (cor por projeto)</span>
+        {!isMobile && <span>‹ › continua na semana anterior/seguinte</span>}
+        <span className="sm:ml-auto">{isMobile ? "Toque num dia para ver a agenda dele" : "Clique numa visita para ver os detalhes · clique num dia para ver a agenda dele"}</span>
       </div>
     </div>
+  );
+}
+
+function MonthSidePanel({ month, list, techTotal, pendingCount, selected, onOpen, onPending }: {
+  month: Date; list: ImplantationRequest[]; techTotal: number; pendingCount: number; selected: Date;
+  onOpen: (r: ImplantationRequest) => void; onPending: () => void;
+}) {
+  const m0 = new Date(month.getFullYear(), month.getMonth(), 1), m1 = new Date(month.getFullYear(), month.getMonth() + 1, 1);
+  const inMonth = list.filter(r => periodOf(r).start < m1 && periodOf(r).end > m0);
+  // dias de campo: dias de cada visita dentro do mês × técnicos alocados
+  const fieldDays = inMonth.reduce((acc, r) => {
+    const a = Math.max(+startOfDay(periodOf(r).start), +m0), b = Math.min(+lastDayOf(r), +addDays(m1, -1));
+    return acc + (Math.round((b - a) / DAY) + 1) * Math.max(1, techniciansOf(r).length);
+  }, 0);
+  const techsInMonth = new Set(inMonth.flatMap(r => techniciansOf(r).map(t => t.id))).size;
+  const ofDay = list.filter(r => coversDay(r, selected)).sort((a, b) => +periodOf(a).start - +periodOf(b).start);
+  const today = startOfDay(new Date());
+  const upcoming = list.filter(r => periodOf(r).start >= today).sort((a, b) => +periodOf(a).start - +periodOf(b).start).slice(0, 4);
+  const monthName = MONTHS[month.getMonth()];
+
+  return (
+    <aside className="flex w-full flex-col gap-3 xl:w-[320px] xl:shrink-0">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-2">
+        <Kpi stacked icon={CalendarDays} label="Visitas no mês" value={inMonth.length} caption="aprovadas" tone="bg-primary/10 text-primary"
+          info={`Visitas aprovadas com pelo menos um dia em ${monthName}, respeitando os filtros acima.`} />
+        <Kpi stacked icon={Clock} label="Dias de campo" value={fieldDays} caption="somando técnicos" tone="bg-sky-500/15 text-sky-600 dark:text-sky-300"
+          info={`Soma dos dias de visita dentro de ${monthName}, multiplicada pelo número de técnicos de cada visita.`} />
+        <Kpi stacked icon={UsersRound} label="Técnicos" value={`${techsInMonth}/${techTotal}`} caption="alocados no mês" tone="bg-emerald-500/15 text-emerald-600 dark:text-emerald-300"
+          info={`Técnicos com pelo menos uma visita em ${monthName}, do total de técnicos ativos.`} />
+        <Kpi stacked icon={Hourglass} label="Pendentes" value={pendingCount} caption="aguardando aprovação" tone="bg-amber-500/15 text-amber-600 dark:text-amber-300"
+          info="Solicitações ainda não avaliadas pelo Aprovador. Elas não aparecem no calendário até serem aprovadas." onClick={pendingCount > 0 ? onPending : undefined} />
+      </div>
+
+      <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+        <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
+          <CalendarDays className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-semibold">{dayTitle(selected)}</h2>
+          <span className="ml-auto text-[11px] text-muted-foreground">{ofDay.length ? `${ofDay.length} visita${ofDay.length > 1 ? "s" : ""}` : ""}</span>
+        </div>
+        {ofDay.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-muted-foreground">Nenhuma visita neste dia.</p>
+        ) : (
+          <ul>
+            {ofDay.map(r => {
+              const { start, end } = periodOf(r);
+              return (
+                <li key={r.id} role="button" tabIndex={0} onClick={() => onOpen(r)} onKeyDown={e => { if (e.key === "Enter") onOpen(r); }}
+                  className="flex cursor-pointer gap-3 border-t border-border/60 px-4 py-3 transition-colors first:border-t-0 hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none">
+                  <span className="w-[3px] shrink-0 rounded-full" style={{ background: colorFor(r.project_id) }} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{r.project?.company_name ?? "Projeto removido"}</p>
+                    <p className="truncate text-xs text-muted-foreground">{r.visit_purpose}</p>
+                    <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                      <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{formatPeriod(start, end)}</span>
+                      {r.project && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{formatLocation(r.project.city, r.project.state, r.project.country_code)}</span>}
+                    </p>
+                  </div>
+                  <span className="flex shrink-0 -space-x-1.5 self-start">{techniciansOf(r).map(t => <TechAvatar key={t.id} tech={t} size="h-6 w-6 text-[9px]" />)}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+        <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
+          <ArrowRight className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-semibold">Próximas visitas</h2>
+        </div>
+        {upcoming.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-muted-foreground">Nenhuma visita aprovada daqui para frente.</p>
+        ) : (
+          <ul>
+            {upcoming.map(r => {
+              const { start } = periodOf(r);
+              return (
+                <li key={r.id} role="button" tabIndex={0} onClick={() => onOpen(r)} onKeyDown={e => { if (e.key === "Enter") onOpen(r); }}
+                  className="flex cursor-pointer items-center gap-3 border-t border-border/60 px-4 py-2.5 transition-colors first:border-t-0 hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none">
+                  <span className="w-9 shrink-0 text-center">
+                    <span className="block text-base font-bold leading-none">{start.getDate()}</span>
+                    <span className="text-[10px] uppercase text-muted-foreground">{MONTHS[start.getMonth()].slice(0, 3)}</span>
+                  </span>
+                  <span className="w-[3px] self-stretch rounded-full" style={{ background: colorFor(r.project_id) }} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-semibold">{r.project?.company_name ?? "Projeto removido"}</span>
+                    <span className="block truncate text-[11px] text-muted-foreground">{r.visit_purpose}</span>
+                  </span>
+                  <span className="flex shrink-0 -space-x-1">{techniciansOf(r).map(t => <TechAvatar key={t.id} tech={t} size="h-5 w-5 text-[8px]" />)}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+    </aside>
   );
 }
 
