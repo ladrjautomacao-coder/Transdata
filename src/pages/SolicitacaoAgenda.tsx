@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatLocation } from "@/lib/location";
 import { statusLabels, subPhasesByStatus } from "@/pages/ProjectManagement";
 import {
-  ELIGIBLE_PROJECT_STATUSES, REQUEST_STATUS, errorMessage, fetchRequests, fetchTechnicians, periodOf,
+  HIDDEN_BY_DEFAULT_STATUSES, REQUEST_STATUS, errorMessage, fetchRequests, fetchTechnicians, periodOf,
   type EligibleProject, type ImplantationRequest, type RequestStatus, type Technician,
 } from "@/lib/implantationScheduling";
 import { EmptyBlock, Kpi, RequestRow } from "@/components/agendamento/AgendaShared";
@@ -63,7 +63,6 @@ export default function SolicitacaoAgenda() {
         supabase.from("projects")
           .select("id, company_name, project_code, city, state, country_code, status, sub_phase, manager_id, manager:team_members!projects_manager_id_fkey(full_name)")
           .eq("tenant_id", profile.tenant_id)
-          .in("status", [...ELIGIBLE_PROJECT_STATUSES])
           .order("company_name"),
         fetchRequests(),
         fetchTechnicians(),
@@ -86,7 +85,9 @@ export default function SolicitacaoAgenda() {
   useEffect(() => { load(); }, [load]);
 
   // Se o usuário não é GP de nenhum projeto, mostra todos (útil para o super admin testar)
-  const myProjects = useMemo(() => projects.filter(p => !!myManagerId && p.manager_id === myManagerId), [projects, myManagerId]);
+  // Lista padrão: todos os projetos, exceto implementados. A busca (abaixo) usa a base inteira.
+  const activeProjects = useMemo(() => projects.filter(p => !HIDDEN_BY_DEFAULT_STATUSES.includes(p.status)), [projects]);
+  const myProjects = useMemo(() => activeProjects.filter(p => !!myManagerId && p.manager_id === myManagerId), [activeProjects, myManagerId]);
   useEffect(() => { if (!loading && myProjects.length === 0) setOnlyMine(false); }, [loading, myProjects.length]);
 
   const pendingByProject = useMemo(() => new Set(requests.filter(r => r.status === "pendente").map(r => r.project_id)), [requests]);
@@ -149,17 +150,20 @@ export default function SolicitacaoAgenda() {
 
   /* ─── Visão do GP ─── */
   const gpView = () => {
-    const base = onlyMine ? myProjects : projects;
+    const base = onlyMine ? myProjects : activeProjects;
     const q = projSearch.trim().toLowerCase();
-    const list = base.filter(p => !q || `${p.company_name} ${p.project_code ?? ""}`.toLowerCase().includes(q));
+    // Com busca: procura em TODA a base (qualquer status e qualquer GP), para visita extra.
+    const list = q
+      ? projects.filter(p => `${p.company_name} ${p.project_code ?? ""} ${p.city}`.toLowerCase().includes(q))
+      : base;
     const count = (s: RequestStatus) => myRequests.filter(r => r.status === s).length;
     const tabs: [GpTab, string, number][] = [["todas", "Todas", myRequests.length], ["pendente", "Pendentes", count("pendente")], ["aprovada", "Aprovadas", count("aprovada")], ["reprovada", "Reprovadas", count("reprovada")]];
     const reqList = myRequests.filter(r => gpTab === "todas" || r.status === gpTab);
     return (
       <>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Kpi icon={FolderKanban} label="Projetos elegíveis" value={base.length} caption="planejamento / implantação" tone="bg-violet-500/15 text-violet-600 dark:text-violet-300"
-            info="Projetos em Planejamento ou Implantação que podem receber visita técnica." />
+          <Kpi icon={FolderKanban} label="Projetos elegíveis" value={base.length} caption="exceto implementados" tone="bg-violet-500/15 text-violet-600 dark:text-violet-300"
+            info="Todos os projetos, exceto os implementados. Para agendar uma visita extra em projeto implementado, use a busca: ela procura em toda a base." />
           <Kpi icon={Hourglass} label="Pendentes" value={count("pendente")} caption="aguardando aprovador" tone="bg-amber-500/15 text-amber-600 dark:text-amber-300"
             info="Suas solicitações que ainda não foram avaliadas. Clique para filtrar." onClick={() => setGpTab("pendente")} />
           <Kpi icon={CheckCircle2} label="Aprovadas" value={count("aprovada")} caption="no calendário" tone="bg-emerald-500/15 text-emerald-600 dark:text-emerald-300"
@@ -176,26 +180,35 @@ export default function SolicitacaoAgenda() {
               )}
               <div className="relative ml-auto">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                <Input value={projSearch} onChange={e => setProjSearch(e.target.value)} placeholder="Buscar projeto..." className="h-8 w-48 pl-8 text-xs" />
+                <Input value={projSearch} onChange={e => setProjSearch(e.target.value)} placeholder="Buscar em toda a base..." className="h-8 w-52 pl-8 text-xs" />
               </div>
             </div>
-            {base.length === 0 ? (
-              <EmptyBlock icon={FolderSearch} title="Nenhum projeto elegível" text="Não há projetos em Planejamento ou Implantação no momento." />
+            <p className="border-b bg-muted/30 px-4 py-1.5 text-[11px] text-muted-foreground">
+              {q
+                ? <>Buscando em <b className="text-foreground">toda a base</b>, inclusive projetos implementados · {list.length} resultado{list.length !== 1 ? "s" : ""}</>
+                : <>Implementados ficam ocultos. Para uma <b className="text-foreground">visita extra</b>, busque o projeto pelo nome ou código.</>}
+            </p>
+            {!q && base.length === 0 ? (
+              <EmptyBlock icon={FolderSearch} title="Nenhum projeto elegível" text="Não há projetos em andamento. Use a busca para encontrar um projeto implementado e agendar uma visita extra." />
             ) : list.length === 0 ? (
-              <EmptyBlock icon={SearchX} title="Nada encontrado" text={`Nenhum projeto corresponde a “${projSearch}”.`} action={<Button variant="outline" size="sm" onClick={() => setProjSearch("")}>Limpar busca</Button>} />
+              <EmptyBlock icon={SearchX} title="Nada encontrado" text={`Nenhum projeto da base corresponde a “${projSearch}”.`} action={<Button variant="outline" size="sm" onClick={() => setProjSearch("")}>Limpar busca</Button>} />
             ) : (
               <ul className="max-h-[560px] divide-y overflow-y-auto">
                 {list.map(p => {
                   const hot = p.sub_phase === "cronograma_visita";
+                  const extra = HIDDEN_BY_DEFAULT_STATUSES.includes(p.status);
                   const phase = p.sub_phase ? subPhasesByStatus[p.status as keyof typeof subPhasesByStatus]?.find(s => s.id === p.sub_phase)?.label : null;
                   return (
                     <li key={p.id} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40">
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold">{p.company_name}</p>
+                        <p className="flex items-center gap-2 truncate text-sm font-semibold">
+                          {p.company_name}
+                          {extra && <span className="shrink-0 rounded-full bg-teal-500/15 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">{statusLabels.encerrado} · visita extra</span>}
+                        </p>
                         <p className="truncate text-[11px] text-muted-foreground">
                           {p.project_code && <span className="font-mono">{p.project_code} · </span>}
                           {formatLocation(p.city, p.state, p.country_code)} · <span className={hot ? "font-semibold text-primary" : ""}>{phase ?? statusLabels[p.status as keyof typeof statusLabels]}</span>
-                          {!onlyMine && p.manager?.full_name ? ` · GP: ${p.manager.full_name}` : ""}
+                          {(!onlyMine || q) && p.manager?.full_name ? ` · GP: ${p.manager.full_name}` : ""}
                         </p>
                         {pendingByProject.has(p.id) && <p className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-300"><Hourglass className="mr-0.5 inline h-3 w-3" />Já existe solicitação pendente</p>}
                       </div>

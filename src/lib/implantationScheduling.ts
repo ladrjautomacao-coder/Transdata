@@ -24,8 +24,10 @@ export const VISIT_PURPOSE_GROUPS: { label: string | null; items: string[] }[] =
   { label: "ITS / Gestão de Frotas", items: VISIT_PURPOSE_PRESETS.slice(4) as unknown as string[] },
 ];
 
-/** Status do projeto em que o GP pode solicitar visita. */
-export const ELIGIBLE_PROJECT_STATUSES = ["planejamento", "implantacao"] as const;
+/** Status escondidos da lista padrão de projetos elegíveis. A busca ignora
+ *  este filtro e procura na base inteira, para permitir visita extra em
+ *  projeto já implementado. */
+export const HIDDEN_BY_DEFAULT_STATUSES: readonly string[] = ["encerrado"];
 
 export type RequestStatus = "pendente" | "aprovada" | "reprovada" | "cancelada";
 

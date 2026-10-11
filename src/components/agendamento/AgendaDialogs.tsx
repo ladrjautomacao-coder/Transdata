@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSepa
 import { formatLocation } from "@/lib/location";
 import { statusLabels, subPhasesByStatus } from "@/pages/ProjectManagement";
 import {
-  VISIT_PURPOSE_GROUPS, VISIT_PURPOSE_PRESETS, approveRequest, cancelRequest, conflictsFor, createRequest,
+  HIDDEN_BY_DEFAULT_STATUSES, VISIT_PURPOSE_GROUPS, VISIT_PURPOSE_PRESETS, approveRequest, cancelRequest, conflictsFor, createRequest,
   errorMessage, fetchHistory, fetchTechnicians, formatPeriod, periodOf, rejectRequest, saveTechnician,
   techniciansOf, toLocalInput,
   type EligibleProject, type HistoryEntry, type ImplantationRequest, type Technician,
@@ -91,6 +91,12 @@ export function RequestDialog({ project, open, onOpenChange, onCreated }: {
         </DialogHeader>
         <div className="space-y-4">
           <ProjectBox project={project} extra={<> · <span className="font-semibold text-primary">{phase ?? statusLabels[project.status as keyof typeof statusLabels]}</span></>} />
+          {HIDDEN_BY_DEFAULT_STATUSES.includes(project.status) && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-teal-500/30 bg-teal-500/10 px-3.5 py-2.5 text-xs text-teal-800 dark:text-teal-200">
+              <Info className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>Projeto já <b>{statusLabels.encerrado.toLowerCase()}</b>: esta solicitação será uma <b>visita extra</b>.</span>
+            </div>
+          )}
           <div>
             <Label className="text-xs">Objetivo da visita *</Label>
             <Select value={purpose} onValueChange={setPurpose}>
