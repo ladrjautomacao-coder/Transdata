@@ -37,7 +37,7 @@ export function SidebarItem({ item }: { item: NavItem }) {
         <NavLink
           to={item.url}
           end={item.end}
-          className="group/nav flex items-center gap-2 rounded-md px-2.5 py-2 text-slate-700 border-l-[3px] border-transparent transition-colors duration-150 hover:bg-slate-100 hover:text-slate-950 dark:text-sidebar-foreground dark:hover:bg-sidebar-accent dark:hover:text-sidebar-foreground"
+          className="group/nav flex items-center gap-2 rounded-md px-3 py-2 text-slate-700 border-l-[3px] border-transparent transition-colors duration-150 hover:bg-slate-100 hover:text-slate-950 dark:text-sidebar-foreground dark:hover:bg-sidebar-accent dark:hover:text-sidebar-foreground"
           activeClassName="!bg-[#f1e8f6] !text-[#4b1768] font-semibold !border-[#4b1768] dark:!bg-primary/15 dark:!text-primary dark:!border-primary"
         >
           <item.icon className="h-4 w-4 shrink-0 transition-colors group-hover/nav:text-[#4b1768] group-[.font-semibold]/nav:text-[#4b1768] dark:group-hover/nav:text-primary dark:group-[.font-semibold]/nav:text-primary" />
@@ -121,18 +121,18 @@ export function SidebarNavGroup({
   }
 
   return (
-    <UISidebarGroup className="py-1.5">
+    <UISidebarGroup className="py-[3px]">
       <div className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm dark:border-sidebar-border dark:bg-sidebar">
         <button
           type="button"
           aria-expanded={isExpanded}
           onClick={() => setExpanded((value) => !value)}
-          className="group/folder flex min-h-[4.5rem] w-full flex-col items-center justify-center gap-1 border-b border-[#4b1768]/15 bg-[#f8f4fb] px-2 py-2 text-center text-[#4b1768] transition-colors hover:bg-[#f1e8f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4b1768] dark:border-sidebar-border dark:bg-sidebar-accent dark:text-sidebar-accent-foreground dark:hover:bg-primary/15 dark:focus-visible:ring-primary group-data-[collapsible=icon]:min-h-10 group-data-[collapsible=icon]:border-b-0"
+          className={`group/folder flex min-h-11 w-full items-center px-3 text-left text-[#4b1768] ${isExpanded ? "border-b" : ""} border-[#4b1768]/15 bg-[#f8f4fb] transition-colors hover:bg-[#f1e8f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4b1768] dark:border-sidebar-border dark:bg-sidebar-accent dark:text-sidebar-accent-foreground dark:hover:bg-primary/15 dark:focus-visible:ring-primary group-data-[collapsible=icon]:min-h-10 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:border-b-0 group-data-[collapsible=icon]:px-0`}
         >
-          <span className="flex w-full items-center justify-center gap-1.5">
+          <span className="flex w-full items-center gap-2.5 group-data-[collapsible=icon]:justify-center">
             <Icon className="h-5 w-5 shrink-0" />
-            <span className="text-base font-semibold leading-tight group-data-[collapsible=icon]:hidden">{label}</span>
-            <ChevronDown className={`h-3.5 w-3.5 transition-transform group-data-[collapsible=icon]:hidden ${isExpanded ? "rotate-180" : ""}`} />
+            <span className="text-[15px] font-semibold leading-tight group-data-[collapsible=icon]:hidden">{label}</span>
+            <ChevronDown className={`ml-auto h-3.5 w-3.5 shrink-0 transition-transform group-data-[collapsible=icon]:hidden ${isExpanded ? "rotate-180" : ""}`} />
           </span>
         </button>
         {isExpanded && (
