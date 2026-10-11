@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   CalendarDays, CalendarX, ChevronLeft, ChevronRight, ChevronRight as Chevron, Inbox, List, Lock, RefreshCw,
   Search, SearchX, ShieldCheck, UsersRound, WifiOff, X,
@@ -26,6 +26,8 @@ const p2 = (n: number) => String(n).padStart(2, "0");
 const fD = (d: Date) => `${p2(d.getDate())}/${p2(d.getMonth() + 1)}`;
 const fDT = (d: Date) => `${fD(d)} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
 const VIEW_KEY = "transdata:implantacao-calendario-view";
+/** Destaque da visita aberta via "Ver no calendário". */
+const HIGHLIGHT = "z-10 ring-4 ring-amber-400 ring-offset-2 ring-offset-background animate-pulse";
 
 export default function CalendarioImplantacao() {
   const navigate = useNavigate();
@@ -36,13 +38,31 @@ export default function CalendarioImplantacao() {
   const [view, setViewState] = useState<View>(() => {
     try { return (localStorage.getItem(VIEW_KEY) as View) || "tecnico"; } catch { return "tecnico"; }
   });
+  // ?data=AAAA-MM-DD&destaque=<id>: abre já na data da visita, com ela destacada
+  const [params, setParams] = useSearchParams();
+  const linkDate = (() => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(params.get("data") ?? "");
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+  })();
   const [anchor, setAnchor] = useState(() => {
-    const t = new Date();
+    const t = linkDate ?? new Date();
     return view === "mes" ? new Date(t.getFullYear(), t.getMonth(), 1) : mondayOf(t);
   });
+  const [highlightId, setHighlightId] = useState<string | null>(() => params.get("destaque"));
   const [techFilter, setTechFilter] = useState("");
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState<ImplantationRequest | null>(null);
+
+  // Rola até a visita destacada, tira o destaque depois de alguns segundos e limpa a URL
+  useEffect(() => {
+    if (loading || !highlightId) return;
+    const el = document.querySelector(`[data-req="${highlightId}"]`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    const t = setTimeout(() => setHighlightId(null), 6000);
+    setParams({}, { replace: true });
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, highlightId, view]);
 
   const load = useCallback(async () => {
     setError(null);
@@ -150,11 +170,11 @@ export default function CalendarioImplantacao() {
       </div>
     );
   } else if (view === "tecnico") {
-    body = <Timeline start={anchor} techs={rowTechs} list={filtered} onOpen={setDetail} />;
+    body = <Timeline start={anchor} techs={rowTechs} list={filtered} onOpen={setDetail} highlightId={highlightId} />;
   } else if (view === "mes") {
-    body = <MonthGrid month={anchor} list={filtered} onOpen={setDetail} />;
+    body = <MonthGrid month={anchor} list={filtered} onOpen={setDetail} highlightId={highlightId} />;
   } else {
-    body = <ListView list={filtered} onOpen={setDetail} />;
+    body = <ListView list={filtered} onOpen={setDetail} highlightId={highlightId} />;
   }
 
   return (
@@ -168,7 +188,7 @@ export default function CalendarioImplantacao() {
 }
 
 /* ─── Linha do tempo por técnico (14 dias) ─── */
-function Timeline({ start, techs, list, onOpen }: { start: Date; techs: Technician[]; list: ImplantationRequest[]; onOpen: (r: ImplantationRequest) => void }) {
+function Timeline({ start, techs, list, onOpen, highlightId }: { start: Date; techs: Technician[]; list: ImplantationRequest[]; onOpen: (r: ImplantationRequest) => void; highlightId: string | null }) {
   const N = 14, COL = 76, NAME = 220;
   const s0 = mondayOf(start), sEnd = addDays(s0, N);
   const days = Array.from({ length: N }, (_, i) => addDays(s0, i));
@@ -214,8 +234,8 @@ function Timeline({ start, techs, list, onOpen }: { start: Date; techs: Technici
                 const b = Math.min(N - 1, Math.round((+startOfDay(re) - +s0) / DAY));
                 const c = colorFor(r.project_id);
                 return (
-                  <button key={r.id} type="button" onClick={() => onOpen(r)} title={`${r.project?.company_name} · ${formatPeriod(rs, re)}`}
-                    className="absolute top-2.5 flex h-[58px] flex-col justify-center overflow-hidden rounded-xl px-3 text-left text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
+                  <button key={r.id} type="button" data-req={r.id} onClick={() => onOpen(r)} title={`${r.project?.company_name} · ${formatPeriod(rs, re)}`}
+                    className={`absolute top-2.5 flex h-[58px] flex-col justify-center overflow-hidden rounded-xl px-3 text-left text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg ${r.id === highlightId ? HIGHLIGHT : ""}`}
                     style={{ left: NAME + a * COL + 4, width: (b - a + 1) * COL - 8, background: `linear-gradient(135deg, ${c}, ${c}cc)` }}>
                     <p className="truncate text-xs font-semibold">{r.project?.company_name}</p>
                     <p className="truncate text-[10px] opacity-90">{fDT(rs)} → {fDT(re)}</p>
@@ -233,7 +253,7 @@ function Timeline({ start, techs, list, onOpen }: { start: Date; techs: Technici
 }
 
 /* ─── Mês ─── */
-function MonthGrid({ month, list, onOpen }: { month: Date; list: ImplantationRequest[]; onOpen: (r: ImplantationRequest) => void }) {
+function MonthGrid({ month, list, onOpen, highlightId }: { month: Date; list: ImplantationRequest[]; onOpen: (r: ImplantationRequest) => void; highlightId: string | null }) {
   const m0 = new Date(month.getFullYear(), month.getMonth(), 1);
   const cells = Array.from({ length: 42 }, (_, i) => addDays(mondayOf(m0), i));
   const today = startOfDay(new Date()).getTime();
@@ -253,8 +273,8 @@ function MonthGrid({ month, list, onOpen }: { month: Date; list: ImplantationReq
               </div>
               <div className="space-y-1">
                 {ev.slice(0, 3).map(r => (
-                  <button key={r.id} type="button" onClick={() => onOpen(r)} title={`${r.project?.company_name} · ${techniciansOf(r).map(t => t.full_name).join(", ")}`}
-                    className="block w-full truncate rounded-md px-1.5 py-0.5 text-left text-[10px] font-medium text-white transition hover:brightness-110" style={{ background: colorFor(r.project_id) }}>
+                  <button key={r.id} type="button" data-req={r.id} onClick={() => onOpen(r)} title={`${r.project?.company_name} · ${techniciansOf(r).map(t => t.full_name).join(", ")}`}
+                    className={`block w-full truncate rounded-md px-1.5 py-0.5 text-left text-[10px] font-medium text-white transition hover:brightness-110 ${r.id === highlightId ? HIGHLIGHT : ""}`} style={{ background: colorFor(r.project_id) }}>
                     {r.project?.company_name} · {techniciansOf(r).map(t => initials(t.full_name)).join(", ")}
                   </button>
                 ))}
@@ -269,7 +289,7 @@ function MonthGrid({ month, list, onOpen }: { month: Date; list: ImplantationReq
 }
 
 /* ─── Lista ─── */
-function ListView({ list, onOpen }: { list: ImplantationRequest[]; onOpen: (r: ImplantationRequest) => void }) {
+function ListView({ list, onOpen, highlightId }: { list: ImplantationRequest[]; onOpen: (r: ImplantationRequest) => void; highlightId: string | null }) {
   const rows = [...list].sort((a, b) => +periodOf(a).start - +periodOf(b).start);
   if (!rows.length) return <div className="rounded-xl border border-border/60 bg-card"><EmptyBlock icon={SearchX} title="Nada com esses filtros" text="Ajuste o técnico ou a busca." /></div>;
   return (
@@ -282,7 +302,7 @@ function ListView({ list, onOpen }: { list: ImplantationRequest[]; onOpen: (r: I
           {rows.map(r => {
             const { start, end } = periodOf(r);
             return (
-              <tr key={r.id} onClick={() => onOpen(r)} className="cursor-pointer transition-colors hover:bg-muted/40">
+              <tr key={r.id} data-req={r.id} onClick={() => onOpen(r)} className={`cursor-pointer transition-colors hover:bg-muted/40 ${r.id === highlightId ? "bg-amber-400/20" : ""}`}>
                 <td className="whitespace-nowrap px-4 py-3"><span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ background: colorFor(r.project_id) }} />{formatPeriod(start, end)}</td>
                 <td className="px-4 py-3"><p className="font-medium">{r.project?.company_name}</p><p className="font-mono text-[10px] text-muted-foreground">{r.project?.project_code}{r.location ? ` · ${r.location}` : ""}</p></td>
                 <td className="px-4 py-3 text-muted-foreground">{r.visit_purpose}</td>

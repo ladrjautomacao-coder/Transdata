@@ -100,6 +100,13 @@ export const periodOf = (r: ImplantationRequest) => ({
   end: new Date(r.approved_end ?? r.requested_end),
 });
 
+/** Link do Calendário já posicionado na data da visita e com ela destacada. */
+export function calendarLinkFor(r: ImplantationRequest) {
+  const d = periodOf(r).start;
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `/implantacao/calendario?data=${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}&destaque=${r.id}`;
+}
+
 export const techniciansOf = (r: ImplantationRequest) =>
   r.members.map(m => m.technician).filter((t): t is Technician => !!t);
 

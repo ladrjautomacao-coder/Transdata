@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatLocation } from "@/lib/location";
 import { statusLabels, subPhasesByStatus } from "@/pages/ProjectManagement";
 import {
-  HIDDEN_BY_DEFAULT_STATUSES, REQUEST_STATUS, errorMessage, fetchRequests, fetchTechnicians, periodOf,
+  HIDDEN_BY_DEFAULT_STATUSES, REQUEST_STATUS, calendarLinkFor, errorMessage, fetchRequests, fetchTechnicians, periodOf,
   type EligibleProject, type ImplantationRequest, type RequestStatus, type Technician,
 } from "@/lib/implantationScheduling";
 import { EmptyBlock, Kpi, RequestRow } from "@/components/agendamento/AgendaShared";
@@ -371,7 +371,7 @@ export default function SolicitacaoAgenda() {
         onReject={() => { setRejecting(detail); setDetail(null); }}
         onCancel={() => { setCancelling(detail); setDetail(null); }}
         onNewRequest={() => { const p = projects.find(x => x.id === detail?.project_id); setDetail(null); if (p) setReqProject(p); }}
-        onGoCalendar={() => navigate("/implantacao/calendario")} />
+        onGoCalendar={() => { if (detail) navigate(calendarLinkFor(detail)); }} />
     </div>
   );
 }
