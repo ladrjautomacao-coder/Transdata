@@ -210,16 +210,37 @@ function Timeline({ start, techs, list, onOpen, highlightId }: { start: Date; te
   const s0 = mondayOf(start), sEnd = addDays(s0, N);
   const days = Array.from({ length: N }, (_, i) => addDays(s0, i));
   const today = startOfDay(new Date()).getTime();
+  // Faixa sobre os dias: "Semana atual", "Próxima semana", "Semana passada" ou "Semana de"
+  const thisWeek = +mondayOf(new Date());
+  const weekLabel = (w0: Date) => {
+    const diff = Math.round((+w0 - thisWeek) / (7 * DAY));
+    return diff === 0 ? "Semana atual" : diff === 1 ? "Próxima semana" : diff === -1 ? "Semana passada" : "Semana de";
+  };
+  const weeks = [s0, addDays(s0, 7)];
   if (techs.length === 0) return <div className="rounded-xl border border-border/60 bg-card"><EmptyBlock icon={UsersRound} title="Nenhum técnico" text="Cadastre técnicos em Solicitação de agenda › Aprovador › Técnicos." /></div>;
   return (
     <div className="overflow-x-auto rounded-xl border border-border/60 bg-card shadow-sm">
       <div style={{ minWidth: NAME + N * COL }}>
+        <div className="flex border-b bg-muted/30">
+          <div className="shrink-0" style={{ width: NAME }} />
+          {weeks.map((w0, i) => {
+            const current = +w0 === thisWeek;
+            return (
+              <div key={+w0} style={{ width: 7 * COL }}
+                className={`flex shrink-0 items-center gap-2 px-3 py-2 ${i ? "border-l-2 border-border" : "border-l"} ${current ? "bg-primary/10 text-primary shadow-[inset_0_3px_0_hsl(var(--primary))]" : "text-foreground/80 shadow-[inset_0_3px_0_hsl(var(--border))]"}`}>
+                <span className="text-[11px] font-bold uppercase tracking-[0.14em]">{weekLabel(w0)}</span>
+                <span className="text-xs opacity-80">{fD(w0)} a {fD(addDays(w0, 6))}</span>
+                {current && <span className="ml-auto hidden rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground sm:inline">hoje · {WD[new Date().getDay()].toLowerCase()} {new Date().getDate()}</span>}
+              </div>
+            );
+          })}
+        </div>
         <div className="flex border-b bg-muted/50 text-[11px] font-semibold text-muted-foreground">
           <div className="shrink-0 px-2.5 py-2.5 sm:px-4" style={{ width: NAME }}>Técnico</div>
-          {days.map(d => {
+          {days.map((d, i) => {
             const isT = d.getTime() === today, we = d.getDay() === 0 || d.getDay() === 6;
             return (
-              <div key={+d} className={`shrink-0 border-l py-1.5 text-center ${we ? "opacity-60" : ""} ${isT ? "text-primary" : ""}`} style={{ width: COL }}>
+              <div key={+d} className={`shrink-0 ${i === 7 ? "border-l-2" : "border-l"} py-1.5 text-center ${we ? "opacity-60" : ""} ${isT ? "text-primary" : ""}`} style={{ width: COL }}>
                 {WD[d.getDay()]}
                 <div className={`text-base font-bold ${isT ? "mx-auto flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground" : "text-foreground"}`}>{d.getDate()}</div>
               </div>
@@ -242,8 +263,8 @@ function Timeline({ start, techs, list, onOpen, highlightId }: { start: Date; te
                   <div className="mt-1 h-1 w-16 overflow-hidden sm:w-28 rounded-full bg-muted"><div className={`h-full rounded-full ${busy > 7 ? "bg-orange-500" : "bg-emerald-500"}`} style={{ width: `${Math.min(100, (busy / 10) * 100)}%` }} /></div>
                 </div>
               </div>
-              {days.map(d => (
-                <div key={+d} className={`shrink-0 border-l ${d.getDay() === 0 || d.getDay() === 6 ? "bg-muted/40" : ""} ${d.getTime() === today ? "bg-primary/[0.06]" : ""}`} style={{ width: COL }} />
+              {days.map((d, i) => (
+                <div key={+d} className={`shrink-0 ${i === 7 ? "border-l-2" : "border-l"} ${d.getDay() === 0 || d.getDay() === 6 ? "bg-muted/40" : ""} ${d.getTime() === today ? "bg-primary/[0.06]" : ""}`} style={{ width: COL }} />
               ))}
               {mine.map(r => {
                 const { start: rs, end: re } = periodOf(r);
