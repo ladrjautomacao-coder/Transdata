@@ -185,7 +185,9 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
 /* ─── Aprovar (Aprovador) ───────────────────────────────────────────────── */
 export function ApproveDialog({ request, technicians, allRequests, open, onOpenChange, onDone, onManageTechnicians, initialSelected, onTechnicianAdded }: {
   request: ImplantationRequest | null; technicians: Technician[]; allRequests: ImplantationRequest[];
-  open: boolean; onOpenChange: (o: boolean) => void; onDone: () => void; onManageTechnicians: () => void;
+  open: boolean; onOpenChange: (o: boolean) => void; onDone: () => void;
+  /** Ausente = sem permissão de cadastro de técnicos (some "Novo técnico" e o atalho de edição). */
+  onManageTechnicians?: () => void;
   /** Técnicos já marcados ao abrir (ex.: escolhidos no painel de disponibilidade). */
   initialSelected?: string[];
   /** Chamado após o cadastro rápido de um técnico dentro desta janela. */
@@ -279,11 +281,16 @@ export function ApproveDialog({ request, technicians, allRequests, open, onOpenC
                 {technicians.length > 6 && (
                   <Input value={techSearch} onChange={ev => setTechSearch(ev.target.value)} placeholder="Buscar técnico..." className="h-7 w-40 text-xs" />
                 )}
-                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setAdding(a => !a)}><Plus className="mr-1 h-3.5 w-3.5" />Novo técnico</Button>
-                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onManageTechnicians} title="Editar ou desativar técnicos"><UserRoundCog className="h-3.5 w-3.5" /></Button>
+                {onManageTechnicians && <>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setAdding(a => !a)}><Plus className="mr-1 h-3.5 w-3.5" />Novo técnico</Button>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onManageTechnicians} title="Editar ou desativar técnicos" aria-label="Editar ou desativar técnicos"><UserRoundCog className="h-3.5 w-3.5" /></Button>
+                </>}
               </div>
             </div>
-            {(adding || technicians.length === 0) && (
+            {!onManageTechnicians && technicians.length === 0 && (
+              <p className="mb-2.5 rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200">Nenhum técnico cadastrado. Peça a quem gerencia os técnicos da agenda para cadastrá-los.</p>
+            )}
+            {onManageTechnicians && (adding || technicians.length === 0) && (
               <div className="mb-2.5 rounded-lg border border-dashed border-primary/40 bg-background p-2.5">
                 <p className="mb-2 text-[11px] text-muted-foreground">{technicians.length === 0 ? "Nenhum técnico cadastrado ainda. Cadastre o primeiro — ele já entra selecionado:" : "Cadastrar novo técnico (já entra selecionado):"}</p>
                 <div className="grid gap-2 sm:grid-cols-[1.5fr_1fr_auto]">

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  ArrowRight, CalendarDays, CalendarX, ChevronLeft, ChevronRight, ChevronRight as Chevron, Clock, Hourglass, Inbox, List, Lock, MapPin, RefreshCw,
+  ArrowRight, CalendarDays, CalendarX, ChevronLeft, ChevronRight, ChevronRight as Chevron, Clock, Hourglass, Inbox, List, MapPin, RefreshCw,
   Search, SearchX, ShieldCheck, UsersRound, WifiOff, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
 import { EmptyBlock, Kpi, TechAvatar } from "@/components/agendamento/AgendaShared";
 import { formatLocation } from "@/lib/location";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { usePermissions } from "@/hooks/usePermissions";
 import { RequestDetailSheet } from "@/components/agendamento/AgendaDialogs";
 
 type View = "tecnico" | "mes" | "lista";
@@ -33,6 +34,8 @@ const HIGHLIGHT = "z-10 ring-4 ring-amber-400 ring-offset-2 ring-offset-backgrou
 
 export default function CalendarioImplantacao() {
   const navigate = useNavigate();
+  const { can } = usePermissions();
+  const canApprove = can("agenda_solicitacao", "approve");
   const [requests, setRequests] = useState<ImplantationRequest[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [loading, setLoading] = useState(true);
@@ -108,7 +111,7 @@ export default function CalendarioImplantacao() {
     <div className="flex flex-wrap items-end gap-4">
       <div>
         <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-          Implantação <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal text-amber-700 dark:text-amber-300"><Lock className="h-3 w-3" />Em desenvolvimento · só Super Admin</span>
+          Implantação
         </span>
         <h1 className="text-2xl font-bold tracking-tight">Calendário</h1>
         <p className="text-sm text-muted-foreground">Agendamentos aprovados — onde cada técnico estará, e de quando até quando.</p>
@@ -159,7 +162,7 @@ export default function CalendarioImplantacao() {
       {(techFilter || search) && <Button variant="outline" size="sm" className="h-9 text-xs" onClick={() => { setTechFilter(""); setSearch(""); }}><X className="mr-1 h-3.5 w-3.5" />Limpar</Button>}
       <span className="ml-auto flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-[11px] text-muted-foreground">
         <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-        <span>Somente <b className="text-foreground">aprovados</b>.{pendingCount > 0 && <> {pendingCount} pendente(s) não aparecem — <button type="button" className="font-semibold text-primary hover:underline" onClick={() => navigate("/implantacao/solicitacoes?visao=aprovador")}>avaliar</button></>}</span>
+        <span>Somente <b className="text-foreground">aprovados</b>.{pendingCount > 0 && <> {pendingCount} pendente(s) não aparecem{canApprove && <> — <button type="button" className="font-semibold text-primary hover:underline" onClick={() => navigate("/implantacao/solicitacoes?visao=aprovador")}>avaliar</button></>}</>}</span>
       </span>
     </div>
   );
@@ -169,7 +172,7 @@ export default function CalendarioImplantacao() {
     body = (
       <div className="rounded-xl border border-border/60 bg-card">
         <EmptyBlock icon={CalendarX} title="Nenhum agendamento aprovado" text="Quando o Aprovador aprovar uma solicitação, ela aparece aqui na linha do tempo do técnico."
-          action={pendingCount > 0 ? <Button onClick={() => navigate("/implantacao/solicitacoes?visao=aprovador")}><Inbox className="mr-1.5 h-4 w-4" />Ver solicitações pendentes</Button> : undefined} />
+          action={pendingCount > 0 && canApprove ? <Button onClick={() => navigate("/implantacao/solicitacoes?visao=aprovador")}><Inbox className="mr-1.5 h-4 w-4" />Ver solicitações pendentes</Button> : undefined} />
       </div>
     );
   } else if (view === "tecnico") {
@@ -182,7 +185,7 @@ export default function CalendarioImplantacao() {
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
         <MonthGrid month={anchor} list={filtered} onOpen={setDetail} highlightId={highlightId} selected={selectedDay} onSelect={setPickedDay} />
         <MonthSidePanel month={anchor} list={filtered} techTotal={technicians.length} pendingCount={pendingCount} selected={selectedDay}
-          onOpen={setDetail} onPending={() => navigate("/implantacao/solicitacoes?visao=aprovador")} />
+          onOpen={setDetail} onPending={canApprove ? () => navigate("/implantacao/solicitacoes?visao=aprovador") : undefined} />
       </div>
     );
   } else {
@@ -393,7 +396,7 @@ function MonthGrid({ month, list, onOpen, highlightId, selected, onSelect }: {
 
 function MonthSidePanel({ month, list, techTotal, pendingCount, selected, onOpen, onPending }: {
   month: Date; list: ImplantationRequest[]; techTotal: number; pendingCount: number; selected: Date;
-  onOpen: (r: ImplantationRequest) => void; onPending: () => void;
+  onOpen: (r: ImplantationRequest) => void; onPending?: () => void;
 }) {
   const m0 = new Date(month.getFullYear(), month.getMonth(), 1), m1 = new Date(month.getFullYear(), month.getMonth() + 1, 1);
   const inMonth = list.filter(r => periodOf(r).start < m1 && periodOf(r).end > m0);

@@ -1,11 +1,12 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Ban, CalendarPlus, CalendarRange, Check, CheckCircle2, ChevronDown, FolderKanban, FolderSearch, Hourglass, Inbox, Lock,
+  Ban, CalendarPlus, CalendarRange, Check, CheckCircle2, ChevronDown, FolderKanban, FolderSearch, Hourglass, Inbox,
   RefreshCw, Search, SearchX, ShieldCheck, UserRound, UserRoundCog, UsersRound, WifiOff, X, XCircle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,7 +30,12 @@ export default function SolicitacaoAgenda() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const [params, setParams] = useSearchParams();
-  const mode: Mode = params.get("visao") === "aprovador" ? "ap" : "gp";
+  // Painel de Permissões: Criar = solicitar visita; Aprovar = visão do Aprovador; Técnicos = cadastro
+  const { can, loading: permLoading } = usePermissions();
+  const canRequest = can("agenda_solicitacao", "create");
+  const canApprove = can("agenda_solicitacao", "approve");
+  const canManageTechs = can("agenda_tecnicos", "edit");
+  const mode: Mode = params.get("visao") === "aprovador" && (canApprove || permLoading) ? "ap" : "gp";
   const setMode = (m: Mode) => setParams(m === "ap" ? { visao: "aprovador" } : {}, { replace: true });
 
   const [projects, setProjects] = useState<EligibleProject[]>([]);
@@ -119,7 +125,7 @@ export default function SolicitacaoAgenda() {
     <div className="flex flex-wrap items-end gap-4">
       <div>
         <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-          Implantação <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal text-amber-700 dark:text-amber-300"><Lock className="h-3 w-3" />Em desenvolvimento · só Super Admin</span>
+          Implantação
         </span>
         <h1 className="text-2xl font-bold tracking-tight">Solicitação de agenda</h1>
         <p className="text-sm text-muted-foreground">
@@ -127,15 +133,15 @@ export default function SolicitacaoAgenda() {
         </p>
       </div>
       <div className="ml-auto flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg border border-border/60 bg-muted/50 p-0.5">
+        {canApprove && <div className="flex rounded-lg border border-border/60 bg-muted/50 p-0.5">
           {([["gp", "Gerente de Projeto", UserRound], ["ap", "Aprovador", ShieldCheck]] as const).map(([k, l, Icon]) => (
             <button key={k} type="button" onClick={() => setMode(k)}
               className={`flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors ${mode === k ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
               <Icon className="h-3.5 w-3.5" />{l}
             </button>
           ))}
-        </div>
-        {mode === "ap" && <Button variant="outline" size="sm" className="h-9" onClick={() => setTechOpen(true)}><UserRoundCog className="mr-1.5 h-4 w-4" />Técnicos</Button>}
+        </div>}
+        {mode === "ap" && canManageTechs && <Button variant="outline" size="sm" className="h-9" onClick={() => setTechOpen(true)}><UserRoundCog className="mr-1.5 h-4 w-4" />Técnicos</Button>}
         <Button variant="outline" size="sm" className="h-9" onClick={() => { setLoading(true); load(); }}><RefreshCw className="mr-1.5 h-4 w-4" />Atualizar</Button>
       </div>
     </div>
@@ -250,10 +256,10 @@ export default function SolicitacaoAgenda() {
                           );
                         })()}
                       </div>
-                      <Button size="sm" variant={hot ? "default" : "outline"} className="h-8 text-xs" onClick={() => setReqProject(p)}
+                      {canRequest && <Button size="sm" variant={hot ? "default" : "outline"} className="h-8 text-xs" onClick={() => setReqProject(p)}
                         title={(visitsByProject.get(p.id)?.length ?? 0) > 0 ? "Agendar mais uma visita para este projeto" : undefined}>
                         <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />{(visitsByProject.get(p.id)?.length ?? 0) > 0 ? "Nova visita" : "Solicitar agenda"}
-                      </Button>
+                      </Button>}
                     </li>
                   );
                 })}
@@ -319,8 +325,8 @@ export default function SolicitacaoAgenda() {
         </div>
         {technicians.length === 0 && (
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-            <UserRoundCog className="h-4 w-4" />Nenhum técnico cadastrado: cadastre os técnicos para poder aprovar solicitações.
-            <Button size="sm" className="ml-auto h-8" onClick={() => setTechOpen(true)}>Cadastrar técnicos</Button>
+            <UserRoundCog className="h-4 w-4" />Nenhum técnico cadastrado: {canManageTechs ? "cadastre os técnicos para poder aprovar solicitações." : "peça a quem gerencia os técnicos da agenda para cadastrá-los."}
+            {canManageTechs && <Button size="sm" className="ml-auto h-8" onClick={() => setTechOpen(true)}>Cadastrar técnicos</Button>}
           </div>
         )}
         <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-3 shadow-sm md:flex-row md:items-center">
@@ -372,7 +378,7 @@ export default function SolicitacaoAgenda() {
                         {showAvail && (
                           <li className={`border-l-[3px] bg-muted/20 px-4 pb-3 pt-1 ${REQUEST_STATUS.pendente.border}`}>
                             <AvailabilityPreview start={new Date(r.requested_start)} end={new Date(r.requested_end)}
-                              technicians={technicians} requests={requests} ignoreId={r.id} compact onManageTechnicians={() => setTechOpen(true)}
+                              technicians={technicians} requests={requests} ignoreId={r.id} compact onManageTechnicians={canManageTechs ? () => setTechOpen(true) : undefined}
                               onPickTechnician={techId => { setApproveInitial([techId]); setApproving(r); }} />
                           </li>
                         )}
@@ -397,7 +403,7 @@ export default function SolicitacaoAgenda() {
         existing={requests} onCreated={() => { setGpTab("pendente"); load(); }} />
       <ApproveDialog request={approving} technicians={technicians} allRequests={requests} open={!!approving}
         initialSelected={approveInitial}
-        onOpenChange={o => { if (!o) { setApproving(null); setApproveInitial([]); } }} onDone={refreshDetail} onManageTechnicians={() => setTechOpen(true)}
+        onOpenChange={o => { if (!o) { setApproving(null); setApproveInitial([]); } }} onDone={refreshDetail} onManageTechnicians={canManageTechs ? () => setTechOpen(true) : undefined}
         onTechnicianAdded={t => setTechnicians(list => [...list, t].sort((a, b) => a.full_name.localeCompare(b.full_name)))} />
       <RejectDialog request={rejecting} open={!!rejecting} onOpenChange={o => { if (!o) setRejecting(null); }} onDone={refreshDetail} />
       <CancelDialog request={cancelling} open={!!cancelling} onOpenChange={o => { if (!o) setCancelling(null); }} onDone={refreshDetail} />
@@ -406,7 +412,7 @@ export default function SolicitacaoAgenda() {
         onApprove={() => { setApproving(detail); setDetail(null); }}
         onReject={() => { setRejecting(detail); setDetail(null); }}
         onCancel={() => { setCancelling(detail); setDetail(null); }}
-        onNewRequest={() => { const p = projects.find(x => x.id === detail?.project_id); setDetail(null); if (p) setReqProject(p); }}
+        onNewRequest={canRequest ? () => { const p = projects.find(x => x.id === detail?.project_id); setDetail(null); if (p) setReqProject(p); } : undefined}
         onGoCalendar={() => { if (detail) navigate(calendarLinkFor(detail)); }} />
     </div>
   );

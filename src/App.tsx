@@ -8,7 +8,7 @@ import { TenantBrandingProvider, useTenantBranding } from "@/contexts/TenantBran
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
-import { SuperAdminRoute } from "@/components/SuperAdminRoute";
+import { PermissionRoute } from "@/components/PermissionRoute";
 import { AppLayout } from "@/components/AppLayout";
 import Login from "./pages/Login";
 import PublicSignup from "./pages/PublicSignup";
@@ -81,13 +81,12 @@ function AppRoutes() {
           <Route path="/comercial" element={<VisaoComercial />} />
           <Route path="/implantacao" element={<Implantacao />} />
           <Route path="/implantacao/report-imp" element={<ReportImp />} />
-          {/* Em desenvolvimento: só super_admin */}
-          <Route path="/implantacao/solicitacoes" element={<SuperAdminRoute><SolicitacaoAgenda /></SuperAdminRoute>} />
-          <Route path="/implantacao/calendario" element={<SuperAdminRoute><CalendarioImplantacao /></SuperAdminRoute>} />
+          <Route path="/implantacao/solicitacoes" element={<PermissionRoute module="agenda_solicitacao"><SolicitacaoAgenda /></PermissionRoute>} />
+          <Route path="/implantacao/calendario" element={<PermissionRoute module="agenda_calendario"><CalendarioImplantacao /></PermissionRoute>} />
 
           <Route path="/suporte" element={<Suporte />} />
           <Route path="/financeiro" element={<Financeiro />} />
-          <Route path="/acervo" element={<AcervoTecnico />} />
+          <Route path="/acervo" element={<PermissionRoute module="acervo"><AcervoTecnico /></PermissionRoute>} />
           <Route path="/admin/equipe" element={<AdminRoute><TeamMembers /></AdminRoute>} />
           <Route path="/admin/produtos" element={<AdminRoute><Products /></AdminRoute>} />
           <Route path="/admin/usuarios" element={<AdminRoute><UserManagement /></AdminRoute>} />

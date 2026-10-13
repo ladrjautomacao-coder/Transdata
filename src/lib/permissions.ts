@@ -10,6 +10,10 @@ export const MODULES = [
   { key: "visao_comercial", label: "Visão Comercial (leitura)", group: "projetos", actions: ["view"] as const },
   { key: "implantacao", label: "Implantação", group: "operacao", actions: ["view"] as const },
   { key: "report_imp", label: "Report IMP", group: "operacao", actions: ["view", "create", "delete"] as const },
+  { key: "agenda_solicitacao", label: "Solicitação de agenda (Criar = solicitar visita)", group: "operacao", actions: ["view", "create", "approve"] as const },
+  { key: "agenda_tecnicos", label: "Agenda — Técnicos (cadastro)", group: "operacao", actions: ["edit"] as const },
+  { key: "agenda_calendario", label: "Calendário de implantação", group: "operacao", actions: ["view"] as const },
+  { key: "acervo", label: "Acervo Técnico", group: "operacao", actions: ["view"] as const },
   { key: "suporte", label: "Suporte Técnico", group: "operacao", actions: ["view"] as const },
   { key: "financeiro", label: "Gestão de Contratos", group: "operacao", actions: ["view"] as const },
   { key: "admin_team", label: "Admin — Equipe", group: "admin", actions: ["view", "edit"] as const },
@@ -18,7 +22,7 @@ export const MODULES = [
   { key: "admin_manual", label: "Manual do Sistema", group: "admin", actions: ["view"] as const },
 ] as const;
 
-export const ALL_ACTIONS = ["view", "create", "edit", "delete", "move_card"] as const;
+export const ALL_ACTIONS = ["view", "create", "edit", "delete", "move_card", "approve"] as const;
 
 
 export const SECTIONS = [
@@ -39,6 +43,7 @@ export const ACTION_LABELS: Record<string, string> = {
   edit: "Editar",
   delete: "Excluir",
   move_card: "Mover Card",
+  approve: "Aprovar",
 };
 
 export const ROLE_LABELS: Record<string, string> = {
@@ -68,7 +73,7 @@ export const AVAILABLE_ROLES = [
 
 
 export type PermModule = typeof MODULES[number]["key"];
-export type PermAction = "view" | "create" | "edit" | "delete" | "move_card";
+export type PermAction = "view" | "create" | "edit" | "delete" | "move_card" | "approve";
 export type PermSection = typeof SECTIONS[number]["key"];
 
 export interface PermissionsShape {

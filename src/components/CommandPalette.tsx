@@ -15,6 +15,7 @@ import {
   LayoutDashboard, FolderKanban, List, HardHat, BookOpen, Plus, Building2, Users, ShieldCheck, Package,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface ProjectItem {
   id: string;
@@ -32,6 +33,7 @@ export function CommandPalette() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
+  const { can } = usePermissions();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -77,9 +79,11 @@ export function CommandPalette() {
           <CommandItem onSelect={() => go("/implantacao")}>
             <HardHat className="mr-2 h-4 w-4" /> Implantação
           </CommandItem>
-          <CommandItem onSelect={() => go("/acervo")}>
-            <BookOpen className="mr-2 h-4 w-4" /> Acervo Técnico
-          </CommandItem>
+          {can("acervo", "view") && (
+            <CommandItem onSelect={() => go("/acervo")}>
+              <BookOpen className="mr-2 h-4 w-4" /> Acervo Técnico
+            </CommandItem>
+          )}
           <CommandItem onSelect={() => go("/manual")}>
             <BookOpen className="mr-2 h-4 w-4" /> Manual do Sistema
           </CommandItem>
