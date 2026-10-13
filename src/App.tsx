@@ -81,7 +81,8 @@ function AppRoutes() {
           {/* Portal PSM antigo foi desativado; links salvos caem no Report IMP */}
           <Route path="/implantacao" element={<Navigate to="/implantacao/report-imp" replace />} />
           <Route path="/implantacao/report-imp" element={<ReportImp />} />
-          <Route path="/implantacao/solicitacoes" element={<PermissionRoute module="agenda_solicitacao"><SolicitacaoAgenda /></PermissionRoute>} />
+          <Route path="/implantacao/solicitacoes" element={<PermissionRoute module="agenda_solicitacao"><SolicitacaoAgenda key="gp" /></PermissionRoute>} />
+          <Route path="/implantacao/aprovacao" element={<PermissionRoute module="agenda_solicitacao" action="approve"><SolicitacaoAgenda key="ap" view="ap" /></PermissionRoute>} />
           <Route path="/implantacao/calendario" element={<PermissionRoute module="agenda_calendario"><CalendarioImplantacao /></PermissionRoute>} />
 
           <Route path="/suporte" element={<Suporte />} />

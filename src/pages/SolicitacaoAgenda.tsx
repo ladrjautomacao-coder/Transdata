@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Ban, CalendarPlus, CalendarRange, Check, CheckCircle2, ChevronDown, FolderKanban, FolderSearch, Hourglass, Inbox,
   RefreshCw, Search, SearchX, ShieldCheck, UserRound, UserRoundCog, UsersRound, WifiOff, X, XCircle,
@@ -26,17 +26,19 @@ import {
 type Mode = "gp" | "ap";
 type GpTab = "todas" | RequestStatus;
 
-export default function SolicitacaoAgenda() {
+/**
+ * Duas telas sobre os mesmos dados: "Solicitação de agenda" (GP, view="gp") e
+ * "Aprovação de agenda" (Aprovador, view="ap", rota /implantacao/aprovacao).
+ */
+export default function SolicitacaoAgenda({ view = "gp" }: { view?: Mode }) {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
-  const [params, setParams] = useSearchParams();
-  // Painel de Permissões: Criar = solicitar visita; Aprovar = visão do Aprovador; Técnicos = cadastro
-  const { can, loading: permLoading } = usePermissions();
+  const [params] = useSearchParams();
+  // Painel de Permissões: Criar = solicitar visita; Aprovar = tela de Aprovação; Técnicos = cadastro
+  const { can } = usePermissions();
   const canRequest = can("agenda_solicitacao", "create");
-  const canApprove = can("agenda_solicitacao", "approve");
   const canManageTechs = can("agenda_tecnicos", "edit");
-  const mode: Mode = params.get("visao") === "aprovador" && (canApprove || permLoading) ? "ap" : "gp";
-  const setMode = (m: Mode) => setParams(m === "ap" ? { visao: "aprovador" } : {}, { replace: true });
+  const mode: Mode = view;
 
   const [projects, setProjects] = useState<EligibleProject[]>([]);
   const [requests, setRequests] = useState<ImplantationRequest[]>([]);
@@ -127,25 +129,20 @@ export default function SolicitacaoAgenda() {
         <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
           Implantação
         </span>
-        <h1 className="text-2xl font-bold tracking-tight">Solicitação de agenda</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{mode === "gp" ? "Solicitação de agenda" : "Aprovação de agenda"}</h1>
         <p className="text-sm text-muted-foreground">
           {mode === "gp" ? "Solicite visitas técnicas para os seus projetos e acompanhe a avaliação do Aprovador." : "Avalie as solicitações dos Gerentes de Projeto e aloque os técnicos."}
         </p>
       </div>
       <div className="ml-auto flex flex-wrap items-center gap-2">
-        {canApprove && <div className="flex rounded-lg border border-border/60 bg-muted/50 p-0.5">
-          {([["gp", "Gerente de Projeto", UserRound], ["ap", "Aprovador", ShieldCheck]] as const).map(([k, l, Icon]) => (
-            <button key={k} type="button" onClick={() => setMode(k)}
-              className={`flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors ${mode === k ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-              <Icon className="h-3.5 w-3.5" />{l}
-            </button>
-          ))}
-        </div>}
         {mode === "ap" && canManageTechs && <Button variant="outline" size="sm" className="h-9" onClick={() => setTechOpen(true)}><UserRoundCog className="mr-1.5 h-4 w-4" />Técnicos</Button>}
         <Button variant="outline" size="sm" className="h-9" onClick={() => { setLoading(true); load(); }}><RefreshCw className="mr-1.5 h-4 w-4" />Atualizar</Button>
       </div>
     </div>
   );
+
+  // Links antigos (?visao=aprovador) agora têm tela própria
+  if (mode === "gp" && params.get("visao") === "aprovador") return <Navigate to="/implantacao/aprovacao" replace />;
 
   if (loading) {
     return (

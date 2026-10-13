@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import {
   FolderKanban, LayoutDashboard, HardHat, BookOpenCheck, Users, LogOut, ShieldCheck,
   Settings, KeyRound, LifeBuoy, Wallet, ChevronsLeft, Search, MoreVertical, UserRound, Eye, FileUp, Building2, Tag,
-  CalendarPlus, CalendarRange, BookOpen,
+  CalendarPlus, CalendarRange, BookOpen, ClipboardCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -56,6 +56,7 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
       items: [
         { title: "Report IMP", url: "/implantacao/report-imp", icon: FileUp, module: "report_imp" },
         { title: "Solicitação de agenda", url: "/implantacao/solicitacoes", icon: CalendarPlus, module: "agenda_solicitacao" },
+        { title: "Aprovação de agenda", url: "/implantacao/aprovacao", icon: ClipboardCheck, module: "agenda_solicitacao", action: "approve" },
         { title: "Calendário", url: "/implantacao/calendario", icon: CalendarRange, module: "agenda_calendario" },
       ],
     },
@@ -90,7 +91,7 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
     .map(g => ({
       ...g,
       items: g.items.filter(i =>
-        can(i.module, "view") &&
+        can(i.module, i.action ?? "view") &&
         (query.trim() === "" || i.title.toLowerCase().includes(query.trim().toLowerCase()))
       ),
     }))

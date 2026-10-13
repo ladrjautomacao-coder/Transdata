@@ -19,13 +19,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
-import type { PermModule } from "@/lib/permissions";
+import type { PermAction, PermModule } from "@/lib/permissions";
 
 export interface NavItem {
   title: string;
   url: string;
   icon: LucideIcon;
   module: PermModule;
+  /** Ação exigida para o item aparecer (padrão: "view"). */
+  action?: PermAction;
   end?: boolean;
   badge?: number;
 }

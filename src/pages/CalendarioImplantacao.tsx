@@ -162,7 +162,7 @@ export default function CalendarioImplantacao() {
       {(techFilter || search) && <Button variant="outline" size="sm" className="h-9 text-xs" onClick={() => { setTechFilter(""); setSearch(""); }}><X className="mr-1 h-3.5 w-3.5" />Limpar</Button>}
       <span className="ml-auto flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-[11px] text-muted-foreground">
         <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-        <span>Somente <b className="text-foreground">aprovados</b>.{pendingCount > 0 && <> {pendingCount} pendente(s) não aparecem{canApprove && <> — <button type="button" className="font-semibold text-primary hover:underline" onClick={() => navigate("/implantacao/solicitacoes?visao=aprovador")}>avaliar</button></>}</>}</span>
+        <span>Somente <b className="text-foreground">aprovados</b>.{pendingCount > 0 && <> {pendingCount} pendente(s) não aparecem{canApprove && <> — <button type="button" className="font-semibold text-primary hover:underline" onClick={() => navigate("/implantacao/aprovacao")}>avaliar</button></>}</>}</span>
       </span>
     </div>
   );
@@ -172,7 +172,7 @@ export default function CalendarioImplantacao() {
     body = (
       <div className="rounded-xl border border-border/60 bg-card">
         <EmptyBlock icon={CalendarX} title="Nenhum agendamento aprovado" text="Quando o Aprovador aprovar uma solicitação, ela aparece aqui na linha do tempo do técnico."
-          action={pendingCount > 0 && canApprove ? <Button onClick={() => navigate("/implantacao/solicitacoes?visao=aprovador")}><Inbox className="mr-1.5 h-4 w-4" />Ver solicitações pendentes</Button> : undefined} />
+          action={pendingCount > 0 && canApprove ? <Button onClick={() => navigate("/implantacao/aprovacao")}><Inbox className="mr-1.5 h-4 w-4" />Ver solicitações pendentes</Button> : undefined} />
       </div>
     );
   } else if (view === "tecnico") {
@@ -185,7 +185,7 @@ export default function CalendarioImplantacao() {
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
         <MonthGrid month={anchor} list={filtered} onOpen={setDetail} highlightId={highlightId} selected={selectedDay} onSelect={setPickedDay} />
         <MonthSidePanel month={anchor} list={filtered} techTotal={technicians.length} pendingCount={pendingCount} selected={selectedDay}
-          onOpen={setDetail} onPending={canApprove ? () => navigate("/implantacao/solicitacoes?visao=aprovador") : undefined} />
+          onOpen={setDetail} onPending={canApprove ? () => navigate("/implantacao/aprovacao") : undefined} />
       </div>
     );
   } else {
