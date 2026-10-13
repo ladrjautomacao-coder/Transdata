@@ -54,7 +54,6 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
       label: "Implantação",
       icon: HardHat,
       items: [
-        { title: "Implantação", url: "/implantacao", icon: HardHat, module: "implantacao", end: true },
         { title: "Report IMP", url: "/implantacao/report-imp", icon: FileUp, module: "report_imp" },
         { title: "Solicitação de agenda", url: "/implantacao/solicitacoes", icon: CalendarPlus, module: "agenda_solicitacao" },
         { title: "Calendário", url: "/implantacao/calendario", icon: CalendarRange, module: "agenda_calendario" },

@@ -8,7 +8,6 @@ export const MODULES = [
   { key: "dashboard", label: "Dashboard", group: "projetos", actions: ["view"] as const },
   { key: "projects", label: "Gestão de Projetos", group: "projetos", actions: ["view", "create", "edit", "delete", "move_card"] as const },
   { key: "visao_comercial", label: "Visão Comercial (leitura)", group: "projetos", actions: ["view"] as const },
-  { key: "implantacao", label: "Implantação", group: "operacao", actions: ["view"] as const },
   { key: "report_imp", label: "Report IMP", group: "operacao", actions: ["view", "create", "delete"] as const },
   { key: "agenda_solicitacao", label: "Solicitação de agenda (Criar = solicitar visita)", group: "operacao", actions: ["view", "create", "approve"] as const },
   { key: "agenda_tecnicos", label: "Agenda — Técnicos (cadastro)", group: "operacao", actions: ["edit"] as const },

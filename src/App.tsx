@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { TenantBrandingProvider, useTenantBranding } from "@/contexts/TenantBrandingContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
@@ -24,7 +24,6 @@ import Cronograma from "./pages/Cronograma";
 import VisaoComercial from "./pages/VisaoComercial";
 import TeamMembers from "./pages/TeamMembers";
 import Products from "./pages/Products";
-import Implantacao from "./pages/Implantacao";
 import ReportImp from "./pages/ReportImp";
 import SolicitacaoAgenda from "./pages/SolicitacaoAgenda";
 import CalendarioImplantacao from "./pages/CalendarioImplantacao";
@@ -79,7 +78,8 @@ function AppRoutes() {
           <Route path="/projetos/cronograma" element={<Cronograma />} />
           <Route path="/projetos/:id" element={<ProjectDetail />} />
           <Route path="/comercial" element={<VisaoComercial />} />
-          <Route path="/implantacao" element={<Implantacao />} />
+          {/* Portal PSM antigo foi desativado; links salvos caem no Report IMP */}
+          <Route path="/implantacao" element={<Navigate to="/implantacao/report-imp" replace />} />
           <Route path="/implantacao/report-imp" element={<ReportImp />} />
           <Route path="/implantacao/solicitacoes" element={<PermissionRoute module="agenda_solicitacao"><SolicitacaoAgenda /></PermissionRoute>} />
           <Route path="/implantacao/calendario" element={<PermissionRoute module="agenda_calendario"><CalendarioImplantacao /></PermissionRoute>} />

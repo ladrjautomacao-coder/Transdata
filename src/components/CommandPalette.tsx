@@ -12,7 +12,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import {
-  LayoutDashboard, FolderKanban, List, HardHat, BookOpen, Plus, Building2, Users, ShieldCheck, Package,
+  LayoutDashboard, FolderKanban, List, BookOpen, Plus, Building2, Users, ShieldCheck, Package,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -75,9 +75,6 @@ export function CommandPalette() {
           </CommandItem>
           <CommandItem onSelect={() => go("/projetos/lista")}>
             <List className="mr-2 h-4 w-4" /> Lista de Projetos
-          </CommandItem>
-          <CommandItem onSelect={() => go("/implantacao")}>
-            <HardHat className="mr-2 h-4 w-4" /> Implantação
           </CommandItem>
           {can("acervo", "view") && (
             <CommandItem onSelect={() => go("/acervo")}>
