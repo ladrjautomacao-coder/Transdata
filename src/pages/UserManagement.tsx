@@ -59,6 +59,12 @@ export default function UserManagement() {
     }
     const { data: pendingData } = await listPendingSignups();
     setPending(pendingData ?? []);
+    // Técnico da agenda: já sugere o perfil Implantação (o admin só confirma).
+    setPendingRole(r => {
+      const next = { ...r };
+      for (const p of pendingData ?? []) if (p.technician_name && !next[p.user_id]) next[p.user_id] = "implantacao";
+      return next;
+    });
     setLoading(false);
   }, [toast]);
 
@@ -197,6 +203,9 @@ export default function UserManagement() {
                     <span className="truncate text-sm font-semibold">{p.full_name}</span>
                     {!p.email_confirmed && (
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500 text-amber-600">E-mail não confirmado</Badge>
+                    )}
+                    {p.technician_name && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-primary/40 text-primary">Técnico da agenda: {p.technician_name}</Badge>
                     )}
                   </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">

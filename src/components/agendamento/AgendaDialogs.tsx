@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle, Ban, CalendarCheck, CalendarRange, Check, CheckCircle2, Circle, History, Info, Loader2,
-  MapPin, MessageSquareWarning, Monitor, Plus, RotateCcw, Send, Trash2, UserRoundCog, X,
+  MapPin, MessageSquareWarning, Monitor, Pencil, Plus, RotateCcw, Send, Trash2, UserRoundCog, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -649,9 +649,10 @@ export function TechniciansDialog({ open, onOpenChange, onChanged }: { open: boo
   const [saving, setSaving] = useState(false);
   const [toRemove, setToRemove] = useState<{ tech: Technician; visits: number | null } | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [editing, setEditing] = useState<{ id: string; full_name: string; email: string; area: string } | null>(null);
 
   const load = () => fetchTechnicians(true).then(setList).catch(err => { setList([]); toast.error("Erro ao carregar técnicos", { description: errorMessage(err) }); });
-  useEffect(() => { if (open) { setList(null); load(); } }, [open]);
+  useEffect(() => { if (open) { setList(null); setEditing(null); load(); } }, [open]);
 
   const add = async () => {
     if (!name.trim()) return;
@@ -666,6 +667,16 @@ export function TechniciansDialog({ open, onOpenChange, onChanged }: { open: boo
   const toggleActive = async (t: Technician) => {
     try { await saveTechnician({ ...t, active: !t.active }); await load(); onChanged(); }
     catch (err) { toast.error("Não foi possível atualizar", { description: errorMessage(err) }); }
+  };
+  const saveEdit = async () => {
+    if (!editing || !editing.full_name.trim()) return;
+    setSaving(true);
+    try {
+      await saveTechnician({ id: editing.id, full_name: editing.full_name.trim(), email: editing.email.trim().toLowerCase() || null, area: editing.area.trim() || null });
+      toast.success(`${editing.full_name.trim()} atualizado(a).`);
+      setEditing(null); await load(); onChanged();
+    } catch (err) { toast.error("Não foi possível salvar", { description: errorMessage(err) }); }
+    finally { setSaving(false); }
   };
   const askRemove = (t: Technician) => {
     setToRemove({ tech: t, visits: null });
@@ -704,7 +715,21 @@ export function TechniciansDialog({ open, onOpenChange, onChanged }: { open: boo
           <p className="py-6 text-center text-sm text-muted-foreground">Nenhum técnico cadastrado ainda.</p>
         ) : (
           <ul className="divide-y rounded-lg border border-border/60">
-            {list.map(t => (
+            {list.map(t => editing?.id === t.id ? (
+              <li key={t.id} className="grid gap-2 bg-muted/30 px-3 py-2.5 sm:grid-cols-[1.4fr_1fr_1fr_auto]">
+                <Input aria-label="Nome" placeholder="Nome *" value={editing.full_name} onChange={e => setEditing({ ...editing, full_name: e.target.value })} />
+                <Input aria-label="E-mail" placeholder="E-mail" type="email" value={editing.email} onChange={e => setEditing({ ...editing, email: e.target.value })}
+                  onKeyDown={e => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditing(null); }} />
+                <Input aria-label="Área" placeholder="Área" value={editing.area} onChange={e => setEditing({ ...editing, area: e.target.value })} />
+                <div className="flex gap-1">
+                  <Button size="icon" onClick={saveEdit} disabled={!editing.full_name.trim() || saving} aria-label="Salvar" title="Salvar">
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  </Button>
+                  <Button size="icon" variant="ghost" onClick={() => setEditing(null)} aria-label="Cancelar edição" title="Cancelar"><X className="h-4 w-4" /></Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground sm:col-span-4">O e-mail liga o técnico à conta do portal: use o mesmo e-mail com que ele entra.</p>
+              </li>
+            ) : (
               <li key={t.id} className={`flex items-center gap-3 px-3 py-2.5 ${t.active ? "" : "opacity-50"}`}>
                 <TechAvatar tech={t} size="h-8 w-8 text-[10px]" />
                 <div className="min-w-0 flex-1">
@@ -713,7 +738,11 @@ export function TechniciansDialog({ open, onOpenChange, onChanged }: { open: boo
                 </div>
                 <span className="text-[11px] text-muted-foreground">{t.active ? "Ativo" : "Inativo"}</span>
                 <Switch checked={t.active} onCheckedChange={() => toggleActive(t)} aria-label={`Ativar ou desativar ${t.full_name}`} />
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-primary"
+                  onClick={() => setEditing({ id: t.id, full_name: t.full_name, email: t.email ?? "", area: t.area ?? "" })} aria-label={`Editar ${t.full_name}`} title="Editar técnico">
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="-ml-2 h-8 w-8 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                   onClick={() => askRemove(t)} aria-label={`Remover ${t.full_name}`} title="Remover técnico">
                   <Trash2 className="h-4 w-4" />
                 </Button>

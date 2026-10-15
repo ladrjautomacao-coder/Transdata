@@ -10,6 +10,8 @@ export interface PendingSignup {
   full_name: string;
   created_at: string;
   email_confirmed: boolean;
+  /** Técnico da agenda com o mesmo e-mail (o vínculo com as visitas é automático). */
+  technician_name: string | null;
 }
 
 export const getMyAccessStatus = () => rpc<string>("get_my_access_status");
