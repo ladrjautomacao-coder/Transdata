@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Constants } from "@/integrations/supabase/types";
 import {
   HOLIDAY_SCOPE_LABEL, deleteCustomHoliday, formatHolidayDate, holidaysForVisit, nationalHolidays, saveCustomHoliday,
@@ -131,6 +132,7 @@ export function HolidaysDialog({ open, onOpenChange, custom, canEdit, onChanged 
               <span className="w-12 shrink-0 font-semibold text-rose-700 dark:text-rose-300">{formatHolidayDate(h.date)}</span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate">{h.name}{h.optional && <span className="text-muted-foreground"> (ponto facultativo)</span>}</span>
+                {h.about && <span className="block text-[11px] text-muted-foreground">{h.about}</span>}
                 <span className="block text-[11px] text-muted-foreground">
                   {HOLIDAY_SCOPE_LABEL[h.scope]}{h.scope === "estadual" ? ` · ${h.state}` : h.scope === "municipal" ? ` · ${h.city}/${h.state}` : ""}
                 </span>
@@ -146,6 +148,27 @@ export function HolidaysDialog({ open, onOpenChange, custom, canEdit, onChanged 
         </ul>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Balão ao passar o mouse num feriado: tipo, nome, data e sobre o que é. */
+export function HolidayTooltip({ holidays, children }: { holidays: Holiday[]; children: React.ReactElement }) {
+  return (
+    <Tooltip delayDuration={100}>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="bottom" className="max-w-[300px] p-3">
+        {holidays.map((h, i) => (
+          <div key={h.id ?? `${h.date}-${i}`} className={i ? "mt-2 border-t border-border/60 pt-2" : ""}>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-600 dark:text-rose-300">
+              {HOLIDAY_SCOPE_LABEL[h.scope]}{h.optional ? " · ponto facultativo" : ""}
+              {h.scope === "estadual" ? ` · ${h.state}` : h.scope === "municipal" ? ` · ${h.city}/${h.state}` : ""}
+            </p>
+            <p className="text-sm font-semibold">{h.name} <span className="font-normal text-muted-foreground">· {formatHolidayDate(h.date)}</span></p>
+            {h.about && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{h.about}</p>}
+          </div>
+        ))}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

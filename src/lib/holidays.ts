@@ -11,6 +11,8 @@ export interface Holiday {
   scope: "nacional" | "empresa" | "estadual" | "municipal";
   /** Ponto facultativo (Carnaval, Corpus Christi): destacado, mas com aviso mais leve. */
   optional?: boolean;
+  /** Sobre o que é o feriado (exibido ao passar o mouse). */
+  about?: string;
   state?: string | null;
   city?: string | null;
   id?: string;
@@ -41,23 +43,27 @@ const plusDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(),
 /** Feriados nacionais (Lei 662/1949 e posteriores) + pontos facultativos usuais. */
 export function nationalHolidays(year: number): Holiday[] {
   const e = easter(year);
-  const fixed: [number, number, string][] = [
-    [1, 1, "Confraternização Universal"],
-    [4, 21, "Tiradentes"],
-    [5, 1, "Dia do Trabalho"],
-    [9, 7, "Independência do Brasil"],
-    [10, 12, "Nossa Senhora Aparecida"],
-    [11, 2, "Finados"],
-    [11, 15, "Proclamação da República"],
-    [11, 20, "Dia Nacional de Zumbi e da Consciência Negra"],
-    [12, 25, "Natal"],
+  const fixed: [number, number, string, string][] = [
+    [1, 1, "Confraternização Universal", "Primeiro dia do ano. Celebra a paz e a fraternidade entre os povos."],
+    [4, 21, "Tiradentes", "Homenagem a Joaquim José da Silva Xavier, líder da Inconfidência Mineira, executado em 1792."],
+    [5, 1, "Dia do Trabalho", "Homenagem aos trabalhadores e às conquistas trabalhistas."],
+    [9, 7, "Independência do Brasil", "Lembra a declaração de independência de Portugal, feita por D. Pedro I em 1822."],
+    [10, 12, "Nossa Senhora Aparecida", "Dia da padroeira do Brasil. Na mesma data se comemora o Dia das Crianças."],
+    [11, 2, "Finados", "Dia de lembrar e homenagear as pessoas que já faleceram."],
+    [11, 15, "Proclamação da República", "Marca o fim do Império e o início da República no Brasil, em 1889."],
+    [11, 20, "Dia Nacional de Zumbi e da Consciência Negra", "Homenagem a Zumbi dos Palmares e à luta contra o racismo. Feriado nacional desde 2024 (Lei 14.759/2023)."],
+    [12, 25, "Natal", "Celebração cristã do nascimento de Jesus."],
   ];
   return [
-    ...fixed.map(([m, d, name]) => ({ date: `${year}-${p2(m)}-${p2(d)}`, name, scope: "nacional" as const })),
-    { date: dateKey(plusDays(e, -48)), name: "Carnaval", scope: "nacional", optional: true },
-    { date: dateKey(plusDays(e, -47)), name: "Carnaval", scope: "nacional", optional: true },
-    { date: dateKey(plusDays(e, -2)), name: "Sexta-feira Santa", scope: "nacional" },
-    { date: dateKey(plusDays(e, 60)), name: "Corpus Christi", scope: "nacional", optional: true },
+    ...fixed.map(([m, d, name, about]) => ({ date: `${year}-${p2(m)}-${p2(d)}`, name, about, scope: "nacional" as const })),
+    { date: dateKey(plusDays(e, -48)), name: "Carnaval", scope: "nacional", optional: true,
+      about: "Festa popular que antecede a Quaresma. É ponto facultativo nacional; muitas cidades e estados decretam feriado." },
+    { date: dateKey(plusDays(e, -47)), name: "Carnaval", scope: "nacional", optional: true,
+      about: "Festa popular que antecede a Quaresma. É ponto facultativo nacional; muitas cidades e estados decretam feriado." },
+    { date: dateKey(plusDays(e, -2)), name: "Sexta-feira Santa", scope: "nacional",
+      about: "Paixão de Cristo: lembra a crucificação de Jesus, na sexta-feira anterior à Páscoa." },
+    { date: dateKey(plusDays(e, 60)), name: "Corpus Christi", scope: "nacional", optional: true,
+      about: "Festa católica da Eucaristia, 60 dias após a Páscoa. É ponto facultativo nacional e feriado em muitas cidades." },
   ];
 }
 

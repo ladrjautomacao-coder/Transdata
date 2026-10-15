@@ -17,7 +17,7 @@ import { formatLocation } from "@/lib/location";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePermissions } from "@/hooks/usePermissions";
 import { RequestDetailSheet } from "@/components/agendamento/AgendaDialogs";
-import { HolidaysDialog } from "@/components/agendamento/HolidaysDialog";
+import { HolidayTooltip, HolidaysDialog } from "@/components/agendamento/HolidaysDialog";
 import { useCustomHolidays } from "@/hooks/useCustomHolidays";
 import { HOLIDAY_SCOPE_LABEL, dateKey, holidaysByDay, type Holiday } from "@/lib/holidays";
 
@@ -256,14 +256,15 @@ function Timeline({ start, techs, list, onOpen, highlightId, holidays }: { start
           {days.map((d, i) => {
             const isT = d.getTime() === today, we = d.getDay() === 0 || d.getDay() === 6;
             const hol = holidays.get(dateKey(d));
-            return (
-              <div key={+d} title={hol ? holidayTitle(hol) : undefined}
-                className={`shrink-0 ${i === 7 ? "border-l-2" : "border-l"} py-1.5 text-center ${hol ? "border-b-2 border-b-rose-500 bg-rose-500/10 text-rose-700 dark:text-rose-300" : we ? "opacity-60" : ""} ${isT ? "text-primary" : ""}`} style={{ width: COL }}>
+            const cell = (
+              <div key={+d}
+                className={`shrink-0 ${i === 7 ? "border-l-2" : "border-l"} py-1.5 text-center ${hol ? "cursor-help border-b-2 border-b-rose-500 bg-rose-500/10 text-rose-700 dark:text-rose-300" : we ? "opacity-60" : ""} ${isT ? "text-primary" : ""}`} style={{ width: COL }}>
                 {WD[d.getDay()]}
                 <div className={`text-base font-bold ${isT ? "mx-auto flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground" : hol ? "" : "text-foreground"}`}>{d.getDate()}</div>
                 {hol && <span className="mx-auto mt-0.5 block w-fit rounded-full bg-rose-600 px-1.5 text-[8.5px] font-bold uppercase tracking-wide text-white">feriado</span>}
               </div>
             );
+            return hol ? <HolidayTooltip key={+d} holidays={hol}>{cell}</HolidayTooltip> : cell;
           })}
         </div>
         {techs.map(t => {
@@ -306,7 +307,7 @@ function Timeline({ start, techs, list, onOpen, highlightId, holidays }: { start
         })}
       </div>
       <div className="sticky left-0 flex items-center gap-1.5 border-t border-border/60 px-4 py-2 text-[11px] text-muted-foreground">
-        <span className="h-2.5 w-[18px] rounded-sm border-b-2 border-rose-500" style={HOLIDAY_BG} />Feriado — passe o mouse no dia para ver qual
+        <span className="h-2.5 w-[18px] rounded-sm border-b-2 border-rose-500" style={HOLIDAY_BG} />Feriado — passe o mouse no dia para saber qual é
       </div>
     </div>
   );
@@ -339,7 +340,6 @@ function MonthGrid({ month, list, onOpen, highlightId, selected, onSelect, holid
     return (
       <div
         key={+d}
-        title={hol ? holidayTitle(hol) : undefined}
         style={hol ? { ...HOLIDAY_BG, boxShadow: "inset 3px 0 0 rgb(225 29 72)" } : undefined}
         role="button"
         tabIndex={0}
@@ -352,10 +352,12 @@ function MonthGrid({ month, list, onOpen, highlightId, selected, onSelect, holid
         <div className={`flex items-center ${compact ? "justify-center pt-1.5" : "justify-between px-2.5 pt-2"}`}>
           <span className={`text-xs ${isToday ? "flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1 font-bold text-primary-foreground" : hol ? "font-bold text-rose-600 dark:text-rose-300" : inM ? "font-semibold text-foreground" : "text-muted-foreground/60"}`}>{d.getDate()}</span>
           {!compact && hol && (
-            <span className="ml-1.5 mr-auto flex min-w-0 items-center gap-1 text-[10px] font-semibold text-rose-700 dark:text-rose-300">
-              <span className="shrink-0 rounded-full bg-rose-600 px-1.5 text-[9px] uppercase tracking-wide text-white">feriado</span>
-              <span className="truncate">{hol[0].name}{hol.length > 1 ? ` +${hol.length - 1}` : ""}</span>
-            </span>
+            <HolidayTooltip holidays={hol}>
+              <span className="ml-1.5 mr-auto flex min-w-0 cursor-help items-center gap-1 text-[10px] font-semibold text-rose-700 dark:text-rose-300">
+                <span className="shrink-0 rounded-full bg-rose-600 px-1.5 text-[9px] uppercase tracking-wide text-white">feriado</span>
+                <span className="truncate underline decoration-dotted underline-offset-2">{hol[0].name}{hol.length > 1 ? ` +${hol.length - 1}` : ""}</span>
+              </span>
+            </HolidayTooltip>
           )}
           {!compact && (isToday
             ? <span className="text-[10px] font-semibold text-primary">Hoje</span>
@@ -532,6 +534,7 @@ function MonthSidePanel({ month, list, techTotal, pendingCount, selected, onOpen
                   <span className="block truncate text-[11px] text-muted-foreground">
                     {HOLIDAY_SCOPE_LABEL[h.scope]}{h.scope === "estadual" ? ` · ${h.state}` : h.scope === "municipal" ? ` · ${h.city}/${h.state}` : ""}
                   </span>
+                  {h.about && <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground/90">{h.about}</span>}
                 </span>
               </li>
             )))}
