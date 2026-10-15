@@ -26,6 +26,8 @@ import {
 } from "@/lib/implantationScheduling";
 import { ProjectBox, StatusPill, TechAvatar } from "./AgendaShared";
 import { AvailabilityPreview } from "./AvailabilityPreview";
+import { HolidayWarning } from "./HolidaysDialog";
+import { useCustomHolidays } from "@/hooks/useCustomHolidays";
 
 const OTHER = "__outro";
 const fmtDT = (iso: string | Date) => {
@@ -50,6 +52,7 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
   const [end, setEnd] = useState("");
   const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
+  const { custom: customHolidays } = useCustomHolidays(open);
   const [errors, setErrors] = useState<{ purpose?: string; dates?: string }>({});
   const [saving, setSaving] = useState(false);
 
@@ -166,6 +169,8 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
             <div><Label className="text-xs">Fim desejado *</Label><Input className="mt-1.5" type="datetime-local" value={end} onChange={e => setEnd(e.target.value)} /></div>
           </div>
           <FieldError msg={errors.dates} />
+          <HolidayWarning start={start ? new Date(start) : null} end={end ? new Date(end) : null} custom={customHolidays}
+            place={{ city: project?.city, state: project?.state }} />
           <div><Label className="text-xs">Local</Label><Input className="mt-1.5" value={location} onChange={e => setLocation(e.target.value)} /></div>
           <div><Label className="text-xs">Observações</Label><Textarea className="mt-1.5" rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Informações úteis para o Aprovador e os técnicos..." /></div>
           <div className="flex items-start gap-2.5 rounded-lg bg-sky-500/10 px-3.5 py-3 text-xs text-sky-800 dark:text-sky-200">
@@ -228,6 +233,7 @@ export function ApproveDialog({ request, technicians, allRequests, open, onOpenC
   };
 
   const s = new Date(start), e = new Date(end);
+  const { custom: customHolidays } = useCustomHolidays(open);
   const validDates = !isNaN(+s) && !isNaN(+e) && e > s;
   const conflictMap = useMemo(() => {
     const m: Record<string, ImplantationRequest[]> = {};
@@ -273,6 +279,8 @@ export function ApproveDialog({ request, technicians, allRequests, open, onOpenC
               <p className="mt-1 text-[11px] text-muted-foreground">Pedido: {fmtDT(request.requested_end)}</p></div>
           </div>
           {!validDates && <FieldError msg="O fim deve ser depois do início." />}
+          <HolidayWarning start={start ? s : null} end={end ? e : null} custom={customHolidays}
+            place={{ city: request.project?.city, state: request.project?.state }} />
           <div className="rounded-xl border border-primary/30 bg-primary/[0.03] p-3.5">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <Label className="text-sm font-semibold">Quem vai atuar nesta demanda? *</Label>

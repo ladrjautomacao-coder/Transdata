@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  ArrowRight, CalendarDays, CalendarX, ChevronLeft, ChevronRight, ChevronRight as Chevron, Clock, Hourglass, Inbox, List, MapPin, RefreshCw,
+  ArrowRight, CalendarDays, CalendarOff, CalendarX, ChevronLeft, ChevronRight, ChevronRight as Chevron, Clock, Hourglass, Inbox, List, MapPin, RefreshCw,
   Search, SearchX, ShieldCheck, UsersRound, WifiOff, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,9 @@ import { formatLocation } from "@/lib/location";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePermissions } from "@/hooks/usePermissions";
 import { RequestDetailSheet } from "@/components/agendamento/AgendaDialogs";
+import { HolidaysDialog } from "@/components/agendamento/HolidaysDialog";
+import { useCustomHolidays } from "@/hooks/useCustomHolidays";
+import { HOLIDAY_SCOPE_LABEL, dateKey, holidaysByDay, type Holiday } from "@/lib/holidays";
 
 type View = "tecnico" | "mes" | "lista";
 const DAY = 864e5;
@@ -29,6 +32,9 @@ const p2 = (n: number) => String(n).padStart(2, "0");
 const fD = (d: Date) => `${p2(d.getDate())}/${p2(d.getMonth() + 1)}`;
 const fDT = (d: Date) => `${fD(d)} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
 const VIEW_KEY = "transdata:implantacao-calendario-view";
+/** Fundo listrado dos dias de feriado. */
+const HOLIDAY_BG = { backgroundImage: "repeating-linear-gradient(135deg, rgb(225 29 72 / 0.10) 0 6px, rgb(225 29 72 / 0.03) 6px 12px)" };
+const holidayTitle = (hs: Holiday[]) => hs.map(h => `${HOLIDAY_SCOPE_LABEL[h.scope]} · ${h.name}${h.optional ? " (ponto facultativo)" : ""}${h.scope === "municipal" ? ` (${h.city}/${h.state})` : h.scope === "estadual" ? ` (${h.state})` : ""}`).join("\n");
 /** Destaque da visita aberta via "Ver no calendário". */
 const HIGHLIGHT = "z-10 ring-4 ring-amber-400 ring-offset-2 ring-offset-background animate-pulse";
 
@@ -57,6 +63,14 @@ export default function CalendarioImplantacao() {
   const [techFilter, setTechFilter] = useState("");
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState<ImplantationRequest | null>(null);
+  // Feriados: nacionais calculados + cadastrados (Técnicos da agenda → Editar cadastra)
+  const canManageHolidays = can("agenda_tecnicos", "edit");
+  const { custom: customHolidays, reload: reloadHolidays } = useCustomHolidays();
+  const [holidaysOpen, setHolidaysOpen] = useState(false);
+  const holidayMap = useMemo(() => {
+    const y = anchor.getFullYear();
+    return holidaysByDay([y - 1, y, y + 1], customHolidays);
+  }, [anchor, customHolidays]);
   const [pickedDay, setPickedDay] = useState<Date | null>(null);
 
   // Rola até a visita destacada, tira o destaque depois de alguns segundos e limpa a URL
@@ -131,6 +145,7 @@ export default function CalendarioImplantacao() {
             </button>
           ))}
         </div>
+        <Button variant="outline" className="h-10" onClick={() => setHolidaysOpen(true)}><CalendarOff className="mr-1.5 h-4 w-4" />Feriados</Button>
         <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => { setLoading(true); load(); }} aria-label="Atualizar"><RefreshCw className="h-4 w-4" /></Button>
       </div>
     </div>
@@ -176,15 +191,15 @@ export default function CalendarioImplantacao() {
       </div>
     );
   } else if (view === "tecnico") {
-    body = <Timeline start={anchor} techs={rowTechs} list={filtered} onOpen={setDetail} highlightId={highlightId} />;
+    body = <Timeline start={anchor} techs={rowTechs} list={filtered} onOpen={setDetail} highlightId={highlightId} holidays={holidayMap} />;
   } else if (view === "mes") {
     // Dia do painel: o clicado (se for deste mês), senão hoje (se for deste mês), senão o dia 1
     const now = new Date();
     const selectedDay = pickedDay && sameMonth(pickedDay, anchor) ? pickedDay : sameMonth(now, anchor) ? startOfDay(now) : anchor;
     body = (
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-        <MonthGrid month={anchor} list={filtered} onOpen={setDetail} highlightId={highlightId} selected={selectedDay} onSelect={setPickedDay} />
-        <MonthSidePanel month={anchor} list={filtered} techTotal={technicians.length} pendingCount={pendingCount} selected={selectedDay}
+        <MonthGrid month={anchor} list={filtered} onOpen={setDetail} highlightId={highlightId} selected={selectedDay} onSelect={setPickedDay} holidays={holidayMap} />
+        <MonthSidePanel month={anchor} list={filtered} techTotal={technicians.length} pendingCount={pendingCount} selected={selectedDay} holidays={holidayMap}
           onOpen={setDetail} onPending={canApprove ? () => navigate("/implantacao/aprovacao") : undefined} />
       </div>
     );
@@ -198,12 +213,13 @@ export default function CalendarioImplantacao() {
       {toolbar}
       {body}
       <RequestDetailSheet request={detail} open={!!detail} onOpenChange={o => { if (!o) setDetail(null); }} mode="cal" />
+      <HolidaysDialog open={holidaysOpen} onOpenChange={setHolidaysOpen} custom={customHolidays} canEdit={canManageHolidays} onChanged={reloadHolidays} />
     </div>
   );
 }
 
 /* ─── Linha do tempo por técnico (14 dias) ─── */
-function Timeline({ start, techs, list, onOpen, highlightId }: { start: Date; techs: Technician[]; list: ImplantationRequest[]; onOpen: (r: ImplantationRequest) => void; highlightId: string | null }) {
+function Timeline({ start, techs, list, onOpen, highlightId, holidays }: { start: Date; techs: Technician[]; list: ImplantationRequest[]; onOpen: (r: ImplantationRequest) => void; highlightId: string | null; holidays: Map<string, Holiday[]> }) {
   // No celular a coluna de técnicos encolhe para caberem ~3 dias na tela
   const isMobile = useIsMobile();
   const N = 14, COL = 76, NAME = isMobile ? 128 : 220;
@@ -239,10 +255,13 @@ function Timeline({ start, techs, list, onOpen, highlightId }: { start: Date; te
           <div className="shrink-0 px-2.5 py-2.5 sm:px-4" style={{ width: NAME }}>Técnico</div>
           {days.map((d, i) => {
             const isT = d.getTime() === today, we = d.getDay() === 0 || d.getDay() === 6;
+            const hol = holidays.get(dateKey(d));
             return (
-              <div key={+d} className={`shrink-0 ${i === 7 ? "border-l-2" : "border-l"} py-1.5 text-center ${we ? "opacity-60" : ""} ${isT ? "text-primary" : ""}`} style={{ width: COL }}>
+              <div key={+d} title={hol ? holidayTitle(hol) : undefined}
+                className={`shrink-0 ${i === 7 ? "border-l-2" : "border-l"} py-1.5 text-center ${hol ? "border-b-2 border-b-rose-500 bg-rose-500/10 text-rose-700 dark:text-rose-300" : we ? "opacity-60" : ""} ${isT ? "text-primary" : ""}`} style={{ width: COL }}>
                 {WD[d.getDay()]}
-                <div className={`text-base font-bold ${isT ? "mx-auto flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground" : "text-foreground"}`}>{d.getDate()}</div>
+                <div className={`text-base font-bold ${isT ? "mx-auto flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground" : hol ? "" : "text-foreground"}`}>{d.getDate()}</div>
+                {hol && <span className="mx-auto mt-0.5 block w-fit rounded-full bg-rose-600 px-1.5 text-[8.5px] font-bold uppercase tracking-wide text-white">feriado</span>}
               </div>
             );
           })}
@@ -264,7 +283,7 @@ function Timeline({ start, techs, list, onOpen, highlightId }: { start: Date; te
                 </div>
               </div>
               {days.map((d, i) => (
-                <div key={+d} className={`shrink-0 ${i === 7 ? "border-l-2" : "border-l"} ${d.getDay() === 0 || d.getDay() === 6 ? "bg-muted/40" : ""} ${d.getTime() === today ? "bg-primary/[0.06]" : ""}`} style={{ width: COL }} />
+                <div key={+d} style={holidays.has(dateKey(d)) ? { ...HOLIDAY_BG, width: COL } : { width: COL }} title={holidays.has(dateKey(d)) ? holidayTitle(holidays.get(dateKey(d))!) : undefined} className={`shrink-0 ${i === 7 ? "border-l-2" : "border-l"} ${d.getDay() === 0 || d.getDay() === 6 ? "bg-muted/40" : ""} ${d.getTime() === today ? "bg-primary/[0.06]" : ""}`} />
               ))}
               {mine.map(r => {
                 const { start: rs, end: re } = periodOf(r);
@@ -286,6 +305,9 @@ function Timeline({ start, techs, list, onOpen, highlightId }: { start: Date; te
           );
         })}
       </div>
+      <div className="sticky left-0 flex items-center gap-1.5 border-t border-border/60 px-4 py-2 text-[11px] text-muted-foreground">
+        <span className="h-2.5 w-[18px] rounded-sm border-b-2 border-rose-500" style={HOLIDAY_BG} />Feriado — passe o mouse no dia para ver qual
+      </div>
     </div>
   );
 }
@@ -298,9 +320,9 @@ const lastDayOf = (r: ImplantationRequest) => startOfDay(new Date(+periodOf(r).e
 const coversDay = (r: ImplantationRequest, d: Date) => periodOf(r).start < addDays(d, 1) && d < periodOf(r).end;
 const dayTitle = (d: Date) => `${WD[d.getDay()]}, ${d.getDate()} de ${MONTHS[d.getMonth()]}`;
 
-function MonthGrid({ month, list, onOpen, highlightId, selected, onSelect }: {
+function MonthGrid({ month, list, onOpen, highlightId, selected, onSelect, holidays }: {
   month: Date; list: ImplantationRequest[]; onOpen: (r: ImplantationRequest) => void; highlightId: string | null;
-  selected: Date; onSelect: (d: Date) => void;
+  selected: Date; onSelect: (d: Date) => void; holidays: Map<string, Holiday[]>;
 }) {
   const isMobile = useIsMobile();
   const m0 = new Date(month.getFullYear(), month.getMonth(), 1);
@@ -313,19 +335,28 @@ function MonthGrid({ month, list, onOpen, highlightId, selected, onSelect }: {
     const inM = d.getMonth() === m0.getMonth();
     const isToday = d.getTime() === today, isSel = d.getTime() === sel;
     const count = list.filter(r => coversDay(r, d)).length;
+    const hol = holidays.get(dateKey(d));
     return (
       <div
         key={+d}
+        title={hol ? holidayTitle(hol) : undefined}
+        style={hol ? { ...HOLIDAY_BG, boxShadow: "inset 3px 0 0 rgb(225 29 72)" } : undefined}
         role="button"
         tabIndex={0}
-        aria-label={`${dayTitle(d)}${count ? ` · ${count} visita${count > 1 ? "s" : ""}` : ""}`}
+        aria-label={`${dayTitle(d)}${hol ? ` · feriado: ${hol.map(h => h.name).join(", ")}` : ""}${count ? ` · ${count} visita${count > 1 ? "s" : ""}` : ""}`}
         aria-pressed={isSel}
         onClick={() => onSelect(d)}
         onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(d); } }}
         className={`relative cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${i ? "border-l border-border/60" : ""} ${isSel ? "bg-primary/[0.07] ring-2 ring-inset ring-primary/55" : i >= 5 ? "bg-muted/30 hover:bg-muted/50" : "hover:bg-muted/40"}`}
       >
         <div className={`flex items-center ${compact ? "justify-center pt-1.5" : "justify-between px-2.5 pt-2"}`}>
-          <span className={`text-xs ${isToday ? "flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1 font-bold text-primary-foreground" : inM ? "font-semibold text-foreground" : "text-muted-foreground/60"}`}>{d.getDate()}</span>
+          <span className={`text-xs ${isToday ? "flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1 font-bold text-primary-foreground" : hol ? "font-bold text-rose-600 dark:text-rose-300" : inM ? "font-semibold text-foreground" : "text-muted-foreground/60"}`}>{d.getDate()}</span>
+          {!compact && hol && (
+            <span className="ml-1.5 mr-auto flex min-w-0 items-center gap-1 text-[10px] font-semibold text-rose-700 dark:text-rose-300">
+              <span className="shrink-0 rounded-full bg-rose-600 px-1.5 text-[9px] uppercase tracking-wide text-white">feriado</span>
+              <span className="truncate">{hol[0].name}{hol.length > 1 ? ` +${hol.length - 1}` : ""}</span>
+            </span>
+          )}
           {!compact && (isToday
             ? <span className="text-[10px] font-semibold text-primary">Hoje</span>
             : count > 1 && <span className="text-[10px] text-muted-foreground">{count} visitas</span>)}
@@ -408,6 +439,7 @@ function MonthGrid({ month, list, onOpen, highlightId, selected, onSelect }: {
       })}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/60 px-3.5 py-2.5 text-[11px] text-muted-foreground">
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-[18px] rounded-sm border-l-[3px] border-primary bg-primary/20" />Visita (cor por projeto)</span>
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-[18px] rounded-sm border-l-[3px] border-rose-500" style={HOLIDAY_BG} />Feriado</span>
         {!isMobile && <span>‹ › continua na semana anterior/seguinte</span>}
         <span className="sm:ml-auto">{isMobile ? "Toque num dia para ver a agenda dele" : "Clique numa visita para ver os detalhes · clique num dia para ver a agenda dele"}</span>
       </div>
@@ -415,8 +447,8 @@ function MonthGrid({ month, list, onOpen, highlightId, selected, onSelect }: {
   );
 }
 
-function MonthSidePanel({ month, list, techTotal, pendingCount, selected, onOpen, onPending }: {
-  month: Date; list: ImplantationRequest[]; techTotal: number; pendingCount: number; selected: Date;
+function MonthSidePanel({ month, list, techTotal, pendingCount, selected, onOpen, onPending, holidays }: {
+  month: Date; list: ImplantationRequest[]; techTotal: number; pendingCount: number; selected: Date; holidays: Map<string, Holiday[]>;
   onOpen: (r: ImplantationRequest) => void; onPending?: () => void;
 }) {
   const m0 = new Date(month.getFullYear(), month.getMonth(), 1), m1 = new Date(month.getFullYear(), month.getMonth() + 1, 1);
@@ -430,6 +462,9 @@ function MonthSidePanel({ month, list, techTotal, pendingCount, selected, onOpen
   const ofDay = list.filter(r => coversDay(r, selected)).sort((a, b) => +periodOf(a).start - +periodOf(b).start);
   const today = startOfDay(new Date());
   const upcoming = list.filter(r => periodOf(r).start >= today).sort((a, b) => +periodOf(a).start - +periodOf(b).start).slice(0, 4);
+  const monthKey = dateKey(m0).slice(0, 7);
+  const monthHolidays = [...holidays.entries()].filter(([k]) => k.startsWith(monthKey)).sort(([a], [b]) => a.localeCompare(b));
+  const selectedHolidays = holidays.get(dateKey(selected));
   const monthName = MONTHS[month.getMonth()];
 
   return (
@@ -451,6 +486,11 @@ function MonthSidePanel({ month, list, techTotal, pendingCount, selected, onOpen
           <h2 className="text-sm font-semibold">{dayTitle(selected)}</h2>
           <span className="ml-auto text-[11px] text-muted-foreground">{ofDay.length ? `${ofDay.length} visita${ofDay.length > 1 ? "s" : ""}` : ""}</span>
         </div>
+        {selectedHolidays && (
+          <p className="flex items-center gap-1.5 border-b border-border/60 px-4 py-2 text-[11px] font-medium text-rose-700 dark:text-rose-300" style={HOLIDAY_BG}>
+            <CalendarOff className="h-3.5 w-3.5 shrink-0" />{holidayTitle(selectedHolidays).split("\n").join(" · ")}
+          </p>
+        )}
         {ofDay.length === 0 ? (
           <p className="px-4 py-6 text-center text-sm text-muted-foreground">Nenhuma visita neste dia.</p>
         ) : (
@@ -476,6 +516,28 @@ function MonthSidePanel({ month, list, techTotal, pendingCount, selected, onOpen
           </ul>
         )}
       </section>
+
+      {monthHolidays.length > 0 && (
+        <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+          <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
+            <CalendarOff className="h-4 w-4 text-rose-600 dark:text-rose-300" />
+            <h2 className="text-sm font-semibold">Feriados em {monthName}</h2>
+          </div>
+          <ul>
+            {monthHolidays.flatMap(([k, hs]) => hs.map((h, i) => (
+              <li key={`${k}-${i}`} className="flex items-center gap-3 border-t border-border/60 px-4 py-2 first:border-t-0">
+                <span className="w-9 shrink-0 text-center text-sm font-bold text-rose-700 dark:text-rose-300">{k.slice(8, 10)}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-semibold">{h.name}{h.optional ? " (ponto facultativo)" : ""}</span>
+                  <span className="block truncate text-[11px] text-muted-foreground">
+                    {HOLIDAY_SCOPE_LABEL[h.scope]}{h.scope === "estadual" ? ` · ${h.state}` : h.scope === "municipal" ? ` · ${h.city}/${h.state}` : ""}
+                  </span>
+                </span>
+              </li>
+            )))}
+          </ul>
+        </section>
+      )}
 
       <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
         <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
