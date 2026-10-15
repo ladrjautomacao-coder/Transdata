@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  ArrowRight, CalendarDays, CalendarOff, CalendarX, ChevronLeft, ChevronRight, ChevronRight as Chevron, Clock, Hourglass, Inbox, List, MapPin, RefreshCw,
+  ArrowRight, CalendarDays, CalendarOff, CalendarX, ChevronLeft, ChevronRight, ChevronRight as Chevron, Clock, Inbox, List, MapPin, RefreshCw,
   Search, SearchX, ShieldCheck, UsersRound, WifiOff, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   colorFor, errorMessage, fetchRequests, fetchTechnicians, formatPeriod, initials, periodOf, techniciansOf,
   type ImplantationRequest, type Technician,
 } from "@/lib/implantationScheduling";
-import { EmptyBlock, Kpi, TechAvatar } from "@/components/agendamento/AgendaShared";
+import { EmptyBlock, TechAvatar } from "@/components/agendamento/AgendaShared";
 import { formatLocation } from "@/lib/location";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -72,6 +73,8 @@ export default function CalendarioImplantacao() {
     return holidaysByDay([y - 1, y, y + 1], customHolidays);
   }, [anchor, customHolidays]);
   const [pickedDay, setPickedDay] = useState<Date | null>(null);
+  const [dayOpen, setDayOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   // Rola até a visita destacada, tira o destaque depois de alguns segundos e limpa a URL
   useEffect(() => {
@@ -197,10 +200,16 @@ export default function CalendarioImplantacao() {
     const now = new Date();
     const selectedDay = pickedDay && sameMonth(pickedDay, anchor) ? pickedDay : sameMonth(now, anchor) ? startOfDay(now) : anchor;
     body = (
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-        <MonthGrid month={anchor} list={filtered} onOpen={setDetail} highlightId={highlightId} selected={selectedDay} onSelect={setPickedDay} holidays={holidayMap} />
-        <MonthSidePanel month={anchor} list={filtered} techTotal={technicians.length} pendingCount={pendingCount} selected={selectedDay} holidays={holidayMap}
-          onOpen={setDetail} onPending={canApprove ? () => navigate("/implantacao/aprovacao") : undefined} />
+      <div className="flex flex-col gap-4">
+        <MonthGrid month={anchor} list={filtered} onOpen={setDetail} highlightId={highlightId} selected={selectedDay} holidays={holidayMap}
+          onSelect={d => { setPickedDay(d); if (!isMobile && filtered.some(r => coversDay(r, d))) setDayOpen(true); }} />
+        {isMobile && <DayVisits list={filtered} selected={selectedDay} holidays={holidayMap} onOpen={setDetail} />}
+        <Dialog open={dayOpen && !isMobile} onOpenChange={setDayOpen}>
+          <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md [&>button]:top-3.5">
+            <DialogTitle className="sr-only">Visitas de {dayTitle(selectedDay)}</DialogTitle>
+            <DayVisits inDialog list={filtered} selected={selectedDay} holidays={holidayMap} onOpen={r => { setDayOpen(false); setDetail(r); }} />
+          </DialogContent>
+        </Dialog>
       </div>
     );
   } else {
@@ -451,41 +460,15 @@ export function MonthGrid({ month, list, onOpen, highlightId, selected, onSelect
   );
 }
 
-function MonthSidePanel({ month, list, techTotal, pendingCount, selected, onOpen, onPending, holidays }: {
-  month: Date; list: ImplantationRequest[]; techTotal: number; pendingCount: number; selected: Date; holidays: Map<string, Holiday[]>;
-  onOpen: (r: ImplantationRequest) => void; onPending?: () => void;
+/** Visitas de um dia do mês (janela no computador, lista abaixo do calendário no celular). */
+function DayVisits({ list, selected, holidays, onOpen, inDialog = false }: {
+  list: ImplantationRequest[]; selected: Date; holidays: Map<string, Holiday[]>; onOpen: (r: ImplantationRequest) => void; inDialog?: boolean;
 }) {
-  const m0 = new Date(month.getFullYear(), month.getMonth(), 1), m1 = new Date(month.getFullYear(), month.getMonth() + 1, 1);
-  const inMonth = list.filter(r => periodOf(r).start < m1 && periodOf(r).end > m0);
-  // dias de campo: dias de cada visita dentro do mês × técnicos alocados
-  const fieldDays = inMonth.reduce((acc, r) => {
-    const a = Math.max(+startOfDay(periodOf(r).start), +m0), b = Math.min(+lastDayOf(r), +addDays(m1, -1));
-    return acc + (Math.round((b - a) / DAY) + 1) * Math.max(1, techniciansOf(r).length);
-  }, 0);
-  const techsInMonth = new Set(inMonth.flatMap(r => techniciansOf(r).map(t => t.id))).size;
   const ofDay = list.filter(r => coversDay(r, selected)).sort((a, b) => +periodOf(a).start - +periodOf(b).start);
-  const today = startOfDay(new Date());
-  const upcoming = list.filter(r => periodOf(r).start >= today).sort((a, b) => +periodOf(a).start - +periodOf(b).start).slice(0, 4);
-  const monthKey = dateKey(m0).slice(0, 7);
-  const monthHolidays = [...holidays.entries()].filter(([k]) => k.startsWith(monthKey)).sort(([a], [b]) => a.localeCompare(b));
   const selectedHolidays = holidays.get(dateKey(selected));
-  const monthName = MONTHS[month.getMonth()];
-
   return (
-    <aside className="flex w-full flex-col gap-3 xl:w-[320px] xl:shrink-0">
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-2">
-        <Kpi stacked icon={CalendarDays} label="Visitas no mês" value={inMonth.length} caption="aprovadas" tone="bg-primary/10 text-primary"
-          info={`Visitas aprovadas com pelo menos um dia em ${monthName}, respeitando os filtros acima.`} />
-        <Kpi stacked icon={Clock} label="Dias de campo" value={fieldDays} caption="somando técnicos" tone="bg-sky-500/15 text-sky-600 dark:text-sky-300"
-          info={`Soma dos dias de visita dentro de ${monthName}, multiplicada pelo número de técnicos de cada visita.`} />
-        <Kpi stacked icon={UsersRound} label="Técnicos" value={`${techsInMonth}/${techTotal}`} caption="alocados no mês" tone="bg-emerald-500/15 text-emerald-600 dark:text-emerald-300"
-          info={`Técnicos com pelo menos uma visita em ${monthName}, do total de técnicos ativos.`} />
-        <Kpi stacked icon={Hourglass} label="Pendentes" value={pendingCount} caption="aguardando aprovação" tone="bg-amber-500/15 text-amber-600 dark:text-amber-300"
-          info="Solicitações ainda não avaliadas pelo Aprovador. Elas não aparecem no calendário até serem aprovadas." onClick={pendingCount > 0 ? onPending : undefined} />
-      </div>
-
-      <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-        <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
+      <section className={inDialog ? "" : "overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm"}>
+        <div className={`flex items-center gap-2 border-b border-border/60 py-3 pl-4 ${inDialog ? "pr-12" : "pr-4"}`}>
           <CalendarDays className="h-4 w-4 text-primary" />
           <h2 className="text-sm font-semibold">{dayTitle(selected)}</h2>
           <span className="ml-auto text-[11px] text-muted-foreground">{ofDay.length ? `${ofDay.length} visita${ofDay.length > 1 ? "s" : ""}` : ""}</span>
@@ -520,61 +503,6 @@ function MonthSidePanel({ month, list, techTotal, pendingCount, selected, onOpen
           </ul>
         )}
       </section>
-
-      {monthHolidays.length > 0 && (
-        <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-          <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
-            <CalendarOff className="h-4 w-4 text-rose-600 dark:text-rose-300" />
-            <h2 className="text-sm font-semibold">Feriados em {monthName}</h2>
-          </div>
-          <ul>
-            {monthHolidays.flatMap(([k, hs]) => hs.map((h, i) => (
-              <li key={`${k}-${i}`} className="flex items-center gap-3 border-t border-border/60 px-4 py-2 first:border-t-0">
-                <span className="w-9 shrink-0 text-center text-sm font-bold text-rose-700 dark:text-rose-300">{k.slice(8, 10)}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-semibold">{h.name}{h.optional ? " (ponto facultativo)" : ""}</span>
-                  <span className="block truncate text-[11px] text-muted-foreground">
-                    {HOLIDAY_SCOPE_LABEL[h.scope]}{h.scope === "estadual" ? ` · ${h.state}` : h.scope === "municipal" ? ` · ${h.city}/${h.state}` : ""}
-                  </span>
-                  {h.about && <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground/90">{h.about}</span>}
-                </span>
-              </li>
-            )))}
-          </ul>
-        </section>
-      )}
-
-      <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-        <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
-          <ArrowRight className="h-4 w-4 text-primary" />
-          <h2 className="text-sm font-semibold">Próximas visitas</h2>
-        </div>
-        {upcoming.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-muted-foreground">Nenhuma visita aprovada daqui para frente.</p>
-        ) : (
-          <ul>
-            {upcoming.map(r => {
-              const { start } = periodOf(r);
-              return (
-                <li key={r.id} role="button" tabIndex={0} onClick={() => onOpen(r)} onKeyDown={e => { if (e.key === "Enter") onOpen(r); }}
-                  className="flex cursor-pointer items-center gap-3 border-t border-border/60 px-4 py-2.5 transition-colors first:border-t-0 hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none">
-                  <span className="w-9 shrink-0 text-center">
-                    <span className="block text-base font-bold leading-none">{start.getDate()}</span>
-                    <span className="text-[10px] uppercase text-muted-foreground">{MONTHS[start.getMonth()].slice(0, 3)}</span>
-                  </span>
-                  <span className="w-[3px] self-stretch rounded-full" style={{ background: colorFor(r.project_id) }} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs font-semibold">{r.project?.company_name ?? "Projeto removido"}</span>
-                    <span className="block truncate text-[11px] text-muted-foreground">{r.visit_purpose}</span>
-                  </span>
-                  <span className="flex shrink-0 -space-x-1">{techniciansOf(r).map(t => <TechAvatar key={t.id} tech={t} size="h-5 w-5 text-[8px]" />)}</span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-    </aside>
   );
 }
 
