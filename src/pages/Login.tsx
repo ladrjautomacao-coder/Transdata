@@ -11,6 +11,7 @@ import { Mail, Lock } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Pause, Play } from "lucide-react";
 import LogoAnimation from "@/components/LogoAnimation";
+import { InstallAppButton } from "@/pwa/InstallAppButton";
 
 type Branding = ReturnType<typeof useTenantBranding>;
 
@@ -146,6 +147,10 @@ function TransdataLogin({ branding, email, setEmail, password, setPassword, subm
             </CardContent>
           </Card>
         </motion.div>
+      </div>
+      {/* Instalar o portal como aplicativo — só aparece quando ainda não está instalado */}
+      <div className="mt-4 w-full max-w-md">
+        <InstallAppButton variant="login" />
       </div>
     </div>
   );

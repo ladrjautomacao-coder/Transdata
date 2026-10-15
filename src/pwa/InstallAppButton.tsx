@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, PlusSquare, Share } from "lucide-react";
+import { Download, PlusSquare, Share, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -50,7 +50,7 @@ export function useInstallApp() {
 }
 
 /** Botão "Instalar app" — some quando o portal já está instalado. */
-export function InstallAppButton({ variant = "header" }: { variant?: "header" | "inline" }) {
+export function InstallAppButton({ variant = "header" }: { variant?: "header" | "inline" | "login" }) {
   const { canInstall, ios, install } = useInstallApp();
   const [iosHelp, setIosHelp] = useState(false);
   if (!canInstall) return null;
@@ -59,7 +59,13 @@ export function InstallAppButton({ variant = "header" }: { variant?: "header" | 
 
   return (
     <>
-      {variant === "header" ? (
+      {variant === "login" ? (
+        <div className="flex items-center gap-3 rounded-xl border border-primary/20 bg-card/80 px-4 py-3 shadow-sm">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Smartphone className="h-4 w-4" /></span>
+          <span className="min-w-0 flex-1 text-xs text-muted-foreground"><b className="block text-sm text-foreground">Use como aplicativo</b>Instale o portal no celular ou no computador.</span>
+          <Button size="sm" variant="outline" onClick={onClick} className="shrink-0"><Download className="mr-1.5 h-4 w-4" />Instalar</Button>
+        </div>
+      ) : variant === "header" ? (
         <Button variant="ghost" size="sm" onClick={onClick} title="Instalar o portal como aplicativo"
           className="h-8 gap-1.5 px-2 text-white hover:bg-white/15 hover:text-white">
           <Download className="h-4 w-4" /><span className="hidden text-xs sm:inline">Instalar app</span>
@@ -75,11 +81,11 @@ export function InstallAppButton({ variant = "header" }: { variant?: "header" | 
           </DialogHeader>
           <ol className="space-y-3 text-sm">
             <li className="flex items-start gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Share className="h-4 w-4" /></span>
-              Toque em <b>Compartilhar</b> (o quadrado com a seta, na barra do Safari).</li>
+              <span>Toque em <b>Compartilhar</b> (o quadrado com a seta, na barra do Safari).</span></li>
             <li className="flex items-start gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><PlusSquare className="h-4 w-4" /></span>
-              Escolha <b>Adicionar à Tela de Início</b>.</li>
+              <span>Escolha <b>Adicionar à Tela de Início</b>.</span></li>
             <li className="flex items-start gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Download className="h-4 w-4" /></span>
-              Toque em <b>Adicionar</b>. O ícone da Transdata aparece na tela inicial — entre por ele.</li>
+              <span>Toque em <b>Adicionar</b>. O ícone da Transdata aparece na tela inicial — entre por ele.</span></li>
           </ol>
           <p className="text-[11px] text-muted-foreground">No app instalado o login é separado do Safari: entre uma vez com seu usuário.</p>
         </DialogContent>
