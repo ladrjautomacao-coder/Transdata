@@ -8,6 +8,7 @@ import { AlertsBell } from "@/components/AlertsBell";
 import { CommandPalette } from "@/components/CommandPalette";
 import { AssistantWidget } from "@/components/assistant/AssistantWidget";
 import { useTenantBranding } from "@/contexts/TenantBrandingContext";
+import { InstallAppButton } from "@/pwa/InstallAppButton";
 
 export function AppLayout() {
   const { portalName } = useTenantBranding();
@@ -26,6 +27,7 @@ export function AppLayout() {
               <span className="truncate text-sm font-semibold tracking-wide text-white md:text-base">{portalName}</span>
             </div>
             <div className="flex items-center gap-1.5 md:gap-3">
+              <InstallAppButton />
               <AlertsBell />
               <ThemeToggle />
               <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground">

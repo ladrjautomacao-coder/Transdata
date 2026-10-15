@@ -129,6 +129,7 @@ export function RequestRow({ request: r, showRequester, actions, onOpen }: {
       </div>
       {techs.length > 0 && <div className="hidden -space-x-1.5 sm:flex">{techs.map(t => <TechAvatar key={t.id} tech={t} />)}</div>}
       <StatusPill status={r.status} />
+      {r.attendance && <span className="hidden rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 sm:inline">{r.attendance === "presencial" ? "Presencial" : "Remoto"}</span>}
       {actions && <div className="flex shrink-0 gap-1.5" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>{actions}</div>}
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
     </li>

@@ -1,5 +1,5 @@
 -- Fase 4: status comercial do cliente (trial/ativo/inadimplente/bloqueado/
--- cancelado), gerenciado pelo Portal HopeXT (app separado, ainda a construir).
+-- cancelado), gerenciado pelo Super Admin.
 ALTER TABLE public.tenants
   ADD COLUMN status text NOT NULL DEFAULT 'trial'
     CHECK (status IN ('trial', 'active', 'past_due', 'blocked', 'canceled')),

@@ -13,22 +13,9 @@ interface TenantBranding {
   accentColor: string | null;
   status: string | null;
   loading: boolean;
-  /** false = domínio não bate com nenhum cliente (ex: raiz hopextnocode.com) -> mostra cadastro público. */
-  isKnownTenant: boolean;
 }
 
-const DEFAULT_BRANDING = {
-  slug: null,
-  portalName: "HopeXT",
-  logoUrl: "https://emzqlctomlsjwmgthbkv.supabase.co/storage/v1/object/public/tenant-logos/hopext-default.png",
-  primaryColor: null,
-  sidebarColor: null,
-  accentColor: null,
-  status: null,
-} as const;
-
-// Endereços deste projeto continuam sendo a Transdata; o domínio HopeXT e
-// seus subdomínios são destinados à apresentação e aos novos clientes.
+// O portal é da Transdata: qualquer endereço sem cliente próprio usa a marca Transdata.
 const FALLBACK_TENANT_SLUG = "transdata";
 const TRANSDATA_BRANDING: TenantBranding = {
   slug: FALLBACK_TENANT_SLUG,
@@ -39,29 +26,20 @@ const TRANSDATA_BRANDING: TenantBranding = {
   accentColor: "17 89% 54%",
   status: null,
   loading: false,
-  isKnownTenant: true,
 };
 
-const TenantBrandingContext = createContext<TenantBranding>({
-  ...DEFAULT_BRANDING,
-  loading: true,
-  isKnownTenant: false,
-});
+const TenantBrandingContext = createContext<TenantBranding>({ ...TRANSDATA_BRANDING, loading: true });
 
 export const useTenantBranding = () => useContext(TenantBrandingContext);
 
-function extractSlug(hostname: string): string | null {
-  if (hostname === "localhost" || /^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
-    return import.meta.env.DEV ? FALLBACK_TENANT_SLUG : null;
-  }
+function extractSlug(hostname: string): string {
+  if (hostname === "localhost" || /^\d+\.\d+\.\d+\.\d+$/.test(hostname)) return FALLBACK_TENANT_SLUG;
   if (hostname.endsWith(".vercel.app")) return FALLBACK_TENANT_SLUG;
   if (hostname === "projetostransdata.lovable.app" || hostname.endsWith(".lovableproject.com") || hostname.includes("--dc435e83-1e07-424d-952c-a66e45a342c7.lovable.app")) return FALLBACK_TENANT_SLUG;
   const parts = hostname.split(".");
-  // "hopextnocode.com" (raiz, 2 partes) e "www.hopextnocode.com" (redireciona
-  // pra raiz) -> sem tenant, cadastro público. "empresax.hopextnocode.com"
-  // (3+ partes, não-www) -> primeira parte é o slug.
-  if (parts.length <= 2) return null;
-  if (parts[0] === "www") return null;
+  // Domínio raiz ou "www" -> Transdata. Subdomínio ("cliente.dominio.com") -> slug do
+  // cliente; se não existir cadastro para ele, também cai na Transdata.
+  if (parts.length <= 2 || parts[0] === "www") return FALLBACK_TENANT_SLUG;
   return parts[0];
 }
 
@@ -94,19 +72,16 @@ export function apexHostname(hostname: string): string {
 }
 
 export function TenantBrandingProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<TenantBranding>({
-    ...DEFAULT_BRANDING,
-    loading: true,
-    isKnownTenant: false,
-  });
+  const [state, setState] = useState<TenantBranding>({ ...TRANSDATA_BRANDING, loading: true });
 
   useEffect(() => {
     const slug = extractSlug(window.location.hostname);
-    document.documentElement.dataset.tenant = slug || "default";
-    if (!slug) {
-      setState({ ...DEFAULT_BRANDING, loading: false, isKnownTenant: false });
-      return;
-    }
+    document.documentElement.dataset.tenant = slug;
+    // cliente sem cadastro (ou falha de leitura) -> marca e cores da Transdata
+    const fallbackToTransdata = () => {
+      document.documentElement.dataset.tenant = FALLBACK_TENANT_SLUG;
+      setState(TRANSDATA_BRANDING);
+    };
 
     if (slug === FALLBACK_TENANT_SLUG) {
       setState(TRANSDATA_BRANDING);
@@ -116,7 +91,7 @@ export function TenantBrandingProvider({ children }: { children: ReactNode }) {
     (supabase.rpc as any)("get_public_tenant_branding", { _slug: slug }).then(({ data }: { data: unknown }) => {
       const row = Array.isArray(data) ? data[0] : (data as any);
       if (!row) {
-        setState(slug === FALLBACK_TENANT_SLUG ? TRANSDATA_BRANDING : { ...DEFAULT_BRANDING, loading: false, isKnownTenant: false });
+        fallbackToTransdata();
         applyStatusLabelOverrides(null);
         applyTeamRoleLabelOverrides(null);
         return;
@@ -126,14 +101,13 @@ export function TenantBrandingProvider({ children }: { children: ReactNode }) {
 
       const branding: TenantBranding = {
         slug: row.slug,
-        portalName: slug === FALLBACK_TENANT_SLUG ? TRANSDATA_BRANDING.portalName : row.portal_name || DEFAULT_BRANDING.portalName,
-        logoUrl: slug === FALLBACK_TENANT_SLUG ? TRANSDATA_BRANDING.logoUrl : row.logo_url || DEFAULT_BRANDING.logoUrl,
+        portalName: slug === FALLBACK_TENANT_SLUG ? TRANSDATA_BRANDING.portalName : row.portal_name || TRANSDATA_BRANDING.portalName,
+        logoUrl: slug === FALLBACK_TENANT_SLUG ? TRANSDATA_BRANDING.logoUrl : row.logo_url || TRANSDATA_BRANDING.logoUrl,
         primaryColor: row.primary_color || null,
         sidebarColor: row.sidebar_color || null,
         accentColor: row.accent_color || null,
         status: row.status,
         loading: false,
-        isKnownTenant: true,
       };
       setState(branding);
       document.title = branding.slug === "transdata"
@@ -150,16 +124,12 @@ export function TenantBrandingProvider({ children }: { children: ReactNode }) {
         root.style.setProperty("--sidebar-ring", branding.accentColor);
       }
 
-      // Ícone da aba/PWA também segue o tenant — a Transdata (e qualquer
-      // cliente com logo próprio) mantém o dela; só quem ainda não tem
-      // logo cai no padrão da HopeXT.
+      // Ícone da aba segue o cliente (o ícone do app instalado fica sempre o quadrado do manifesto).
       if (branding.logoUrl) {
-        document.querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="apple-touch-icon"]')
+        document.querySelectorAll<HTMLLinkElement>('link[rel="icon"]')
           .forEach((link) => { link.href = branding.logoUrl!; });
       }
-    }).catch(() => {
-      setState(slug === FALLBACK_TENANT_SLUG ? TRANSDATA_BRANDING : { ...DEFAULT_BRANDING, loading: false, isKnownTenant: false });
-    });
+    }).catch(fallbackToTransdata);
   }, []);
 
   return <TenantBrandingContext.Provider value={state}>{children}</TenantBrandingContext.Provider>;

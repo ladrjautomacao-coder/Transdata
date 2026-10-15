@@ -1,1 +1,1 @@
-Preserve the original Transdata presentation on localhost, this project's Lovable preview and published domains, and legacy Vercel domains; reserve HopeXT's default presentation for new-client domains, because existing users must not see a rebrand.
+This portal is 100% Transdata: every domain (localhost, Lovable preview/published, Vercel and any custom domain) uses the Transdata presentation. The former HopeXT brand was discontinued — never reintroduce its name, logos, colors, login screen or public signup anywhere in the project.

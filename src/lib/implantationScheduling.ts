@@ -76,21 +76,31 @@ export interface ImplantationRequest {
   reviewer_name: string | null;
   reviewed_at: string | null;
   rejection_reason: string | null;
+  /** Como a visita foi realizada (registrado pelo Aprovador). */
+  attendance: Attendance | null;
+  attendance_note: string | null;
+  attended_by_name: string | null;
+  attended_at: string | null;
+  /** Motivo quando uma visita aprovada é cancelada. */
+  cancel_reason: string | null;
   created_at: string;
   project: { id: string; company_name: string; project_code: string | null; city: string; state: string | null; country_code: string | null; manager: { full_name: string } | null } | null;
   members: { technician: Technician | null }[];
 }
 
+export type Attendance = "presencial" | "remoto";
+export const ATTENDANCE_LABEL: Record<Attendance, string> = { presencial: "Atendida presencial", remoto: "Atendida remota" };
+
 export interface HistoryEntry {
   id: string;
-  action: "criada" | "aprovada" | "reprovada" | "cancelada" | "periodo_alterado";
+  action: "criada" | "aprovada" | "reprovada" | "cancelada" | "periodo_alterado" | "atendida";
   actor_name: string | null;
   details: Record<string, unknown>;
   created_at: string;
 }
 
 const REQUEST_COLS =
-  "id, project_id, requested_by, requester_name, visit_purpose, visit_purpose_is_custom, requested_start, requested_end, location, notes, status, approved_start, approved_end, reviewer_name, reviewed_at, rejection_reason, created_at, " +
+  "id, project_id, requested_by, requester_name, visit_purpose, visit_purpose_is_custom, requested_start, requested_end, location, notes, status, approved_start, approved_end, reviewer_name, reviewed_at, rejection_reason, attendance, attendance_note, attended_by_name, attended_at, cancel_reason, created_at, " +
   "project:projects(id, company_name, project_code, city, state, country_code, manager:team_members!projects_manager_id_fkey(full_name)), " +
   "members:implantation_request_members(technician:implantation_technicians(id, full_name, email, area, active))";
 
@@ -154,6 +164,49 @@ export async function rejectRequest(id: string, reason: string) {
 export async function cancelRequest(id: string) {
   const { error } = await db.rpc("cancel_implantation_request", { _request_id: id });
   if (error) throw error;
+}
+
+/** Aprovador registra como a visita foi realizada. */
+export async function registerAttendance(id: string, mode: Attendance, note: string) {
+  const { error } = await db.rpc("register_implantation_attendance", { _request_id: id, _mode: mode, _note: note || null });
+  if (error) throw error;
+}
+
+/** Aprovador cancela uma visita já aprovada (motivo obrigatório). */
+export async function cancelApprovedRequest(id: string, reason: string) {
+  const { error } = await db.rpc("cancel_approved_implantation_request", { _request_id: id, _reason: reason });
+  if (error) throw error;
+}
+
+/* ─── Área do Implantador ─── */
+export interface AgendaVisit {
+  id: string;
+  status: "aprovada" | "cancelada";
+  start: string;
+  end: string;
+  visit_purpose: string;
+  location: string | null;
+  notes: string | null;
+  requester_name: string | null;
+  reviewer_name: string | null;
+  attendance: Attendance | null;
+  attendance_note: string | null;
+  attended_by_name: string | null;
+  attended_at: string | null;
+  cancel_reason: string | null;
+  project: { id: string; company_name: string; project_code: string | null; city: string; state: string | null; country_code: string | null; status: string; manager_name: string | null };
+  colleagues: { id: string; full_name: string }[];
+}
+export interface TechnicianAgenda {
+  technician: { id: string; full_name: string; area: string | null; email: string | null } | null;
+  visits: AgendaVisit[];
+}
+
+/** Agenda do técnico logado (sem id) ou de outro técnico (aprovador/admin). */
+export async function fetchTechnicianAgenda(technicianId?: string | null): Promise<TechnicianAgenda> {
+  const { data, error } = await db.rpc("get_implantation_agenda", { _technician_id: technicianId ?? null });
+  if (error) throw error;
+  return (data ?? { technician: null, visits: [] }) as TechnicianAgenda;
 }
 
 export async function saveTechnician(input: { id?: string; full_name: string; email: string | null; area: string | null; active?: boolean }): Promise<Technician> {

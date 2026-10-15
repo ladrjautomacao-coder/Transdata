@@ -58,6 +58,7 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
         { title: "Solicitação de agenda", url: "/implantacao/solicitacoes", icon: CalendarPlus, module: "agenda_solicitacao" },
         { title: "Aprovação de agenda", url: "/implantacao/aprovacao", icon: ClipboardCheck, module: "agenda_solicitacao", action: "approve" },
         { title: "Calendário", url: "/implantacao/calendario", icon: CalendarRange, module: "agenda_calendario" },
+        { title: "Área do Implantador", url: "/implantacao/implantador", icon: HardHat, module: "area_implantador" },
       ],
     },
     {

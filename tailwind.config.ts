@@ -57,18 +57,6 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
-        /* Paleta só da página pública de cadastro/planos (fora do sistema
-           de design usado no resto do app, propositalmente — é a "vitrine"
-           da HopeXT, não uma tela do produto). */
-        hopeDark: "#070710",
-        hopeSurface: "#0f0f1c",
-        hopeCard: "rgba(18, 18, 34, 0.78)",
-        hopeCyan: "#00E5FF",
-        hopePurple: "#9d4edd",
-        hopeMagenta: "#e056fd",
-      },
-      fontFamily: {
-        brand: ["Outfit", "sans-serif"],
       },
       borderRadius: {
         lg: "var(--radius)",

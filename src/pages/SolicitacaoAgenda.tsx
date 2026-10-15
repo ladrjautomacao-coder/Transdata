@@ -410,7 +410,8 @@ export default function SolicitacaoAgenda({ view = "gp" }: { view?: Mode }) {
         onReject={() => { setRejecting(detail); setDetail(null); }}
         onCancel={() => { setCancelling(detail); setDetail(null); }}
         onNewRequest={canRequest ? () => { const p = projects.find(x => x.id === detail?.project_id); setDetail(null); if (p) setReqProject(p); } : undefined}
-        onGoCalendar={() => { if (detail) navigate(calendarLinkFor(detail)); }} />
+        onGoCalendar={() => { if (detail) navigate(calendarLinkFor(detail)); }}
+        onResultChanged={mode === "ap" ? refreshDetail : undefined} />
     </div>
   );
 }

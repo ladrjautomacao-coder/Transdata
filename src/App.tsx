@@ -1,5 +1,6 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
+import { PwaUpdatePrompt } from "@/pwa/PwaUpdatePrompt";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
@@ -11,7 +12,6 @@ import { AdminRoute } from "@/components/AdminRoute";
 import { PermissionRoute } from "@/components/PermissionRoute";
 import { AppLayout } from "@/components/AppLayout";
 import Login from "./pages/Login";
-import PublicSignup from "./pages/PublicSignup";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
@@ -30,6 +30,7 @@ import CalendarioImplantacao from "./pages/CalendarioImplantacao";
 import Suporte from "./pages/Suporte";
 import Financeiro from "./pages/Financeiro";
 import AcervoTecnico from "./pages/AcervoTecnico";
+import AreaImplantador from "./pages/AreaImplantador";
 
 import UserManagement from "./pages/UserManagement";
 import PermissionsAdmin from "./pages/PermissionsAdmin";
@@ -40,9 +41,6 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-// Domínio raiz (ex: hopextnocode.com) ou um subdomínio que não bate com
-// nenhum cliente cadastrado -> não tem "produto" pra logar, só o cadastro
-// público de teste gratuito.
 function AppRoutes() {
   const branding = useTenantBranding();
 
@@ -51,14 +49,6 @@ function AppRoutes() {
       <div className="flex min-h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
-    );
-  }
-
-  if (!branding.isKnownTenant) {
-    return (
-      <Routes>
-        <Route path="*" element={<PublicSignup />} />
-      </Routes>
     );
   }
 
@@ -84,6 +74,7 @@ function AppRoutes() {
           <Route path="/implantacao/solicitacoes" element={<PermissionRoute module="agenda_solicitacao"><SolicitacaoAgenda key="gp" /></PermissionRoute>} />
           <Route path="/implantacao/aprovacao" element={<PermissionRoute module="agenda_solicitacao" action="approve"><SolicitacaoAgenda key="ap" view="ap" /></PermissionRoute>} />
           <Route path="/implantacao/calendario" element={<PermissionRoute module="agenda_calendario"><CalendarioImplantacao /></PermissionRoute>} />
+          <Route path="/implantacao/implantador" element={<PermissionRoute module="area_implantador"><AreaImplantador /></PermissionRoute>} />
 
           <Route path="/suporte" element={<Suporte />} />
           <Route path="/financeiro" element={<Financeiro />} />
@@ -107,6 +98,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <PwaUpdatePrompt />
       <BrowserRouter>
         <AuthProvider>
           <TenantBrandingProvider>

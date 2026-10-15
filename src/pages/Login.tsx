@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenantBranding } from "@/contexts/TenantBrandingContext";
-import { Mail, Lock, Building2 } from "lucide-react";
+import { Mail, Lock } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Pause, Play } from "lucide-react";
 import LogoAnimation from "@/components/LogoAnimation";
@@ -151,72 +151,6 @@ function TransdataLogin({ branding, email, setEmail, password, setPassword, subm
   );
 }
 
-// Tela de acesso padrão HopeXT — todo cliente novo entra com a marca da
-// HopeXT (logo/cores padrão vindos do branding context), no mesmo padrão
-// visual do site público e do Portal HopeXT. Só passa a ficar diferente
-// quando o cliente personaliza a própria marca (depois de fechar negócio).
-function HopeXTLogin({ branding, email, setEmail, password, setPassword, submitting, onSubmit }: LoginFormProps) {
-  return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-hopeDark px-4 font-['Plus_Jakarta_Sans',sans-serif] text-gray-100">
-      {/* Iluminação ambiente — mesmo padrão do site público e do Portal HopeXT */}
-      <div className="pointer-events-none absolute -left-[10%] -top-[10%] h-[500px] w-[500px] rounded-full blur-[100px]"
-        style={{ background: "radial-gradient(circle, rgba(157,78,221,0.20) 0%, rgba(0,0,0,0) 70%)" }} />
-      <div className="pointer-events-none absolute -right-[10%] bottom-[-10%] h-[500px] w-[500px] rounded-full blur-[100px]"
-        style={{ background: "radial-gradient(circle, rgba(0,229,255,0.16) 0%, rgba(0,0,0,0) 70%)" }} />
-      <div className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundSize: "40px 40px",
-          backgroundImage:
-            "linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px)",
-        }} />
-
-      <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-hopeCard p-8 shadow-2xl backdrop-blur-xl">
-        <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent" />
-        <div className="mb-6 flex flex-col items-center text-center">
-          {branding.logoUrl ? (
-            <img src={branding.logoUrl} alt={branding.portalName} className="mb-3 h-16 w-16 rounded-full object-cover"
-              style={{ filter: "drop-shadow(0 0 25px rgba(0,229,255,0.28)) drop-shadow(0 0 40px rgba(157,78,221,0.22))" }} />
-          ) : (
-            <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-white/5 text-cyan-300">
-              <Building2 className="h-8 w-8" />
-            </div>
-          )}
-          <span className="font-brand text-2xl font-black tracking-tight"
-            style={{ background: "linear-gradient(135deg,#00E5FF 0%,#a855f7 50%,#ec4899 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-            {branding.portalName}
-          </span>
-          <p className="mt-1 text-sm text-gray-400">Acessar Sistema</p>
-        </div>
-
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-300">E-mail</label>
-            <input
-              id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-[#0d0d1a]/80 px-4 py-3 text-sm text-white placeholder-gray-500 transition-all focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
-            />
-          </div>
-          <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <label htmlFor="password" className="text-xs font-semibold uppercase tracking-wider text-gray-300">Senha</label>
-              <Link to="/forgot-password" className="text-xs text-cyan-400 transition-colors hover:text-cyan-300">Esqueceu?</Link>
-            </div>
-            <input
-              id="password" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-[#0d0d1a]/80 px-4 py-3 text-sm text-white placeholder-gray-500 transition-all focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
-            />
-          </div>
-          <button type="submit" disabled={submitting}
-            className="w-full rounded-xl px-4 py-3.5 text-sm font-semibold uppercase tracking-wider text-white shadow-lg shadow-purple-600/30 transition-all hover:brightness-110 disabled:opacity-60"
-            style={{ background: "linear-gradient(90deg,#00b4d8 0%,#8338ec 50%,#d946ef 100%)" }}>
-            {submitting ? "Aguarde..." : "Entrar"}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
 export default function Login() {
   const { session, loading } = useAuth();
   const branding = useTenantBranding();
@@ -249,8 +183,5 @@ export default function Login() {
 
   const formProps: LoginFormProps = { branding, email, setEmail, password, setPassword, submitting, onSubmit: handleSubmit };
 
-  if (branding.slug === "transdata") {
-    return <TransdataLogin {...formProps} />;
-  }
-  return <HopeXTLogin {...formProps} />;
+  return <TransdataLogin {...formProps} />;
 }

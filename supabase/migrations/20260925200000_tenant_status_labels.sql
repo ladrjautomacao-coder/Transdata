@@ -5,7 +5,7 @@
 ALTER TABLE public.tenant_branding ADD COLUMN IF NOT EXISTS status_labels jsonb;
 
 -- O próprio admin do tenant pode editar as ETAPAS (só essa coluna — logo,
--- cores e nome do portal continuam exclusivos do operador HopeXT via
+-- cores e nome do portal continuam exclusivos do Super Admin via
 -- Portal, combinando com a regra de "personalização só depois de fechar
 -- negócio"). GRANT por coluna garante isso independente da política de RLS.
 CREATE POLICY "tenant admin can update own status labels" ON public.tenant_branding

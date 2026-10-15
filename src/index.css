@@ -3,12 +3,8 @@
 @tailwind utilities;
 
 @layer base {
-  /* Paleta padrão da HopeXT — usada por qualquer cliente sem marca própria
-     configurada em tenant_branding. A Transdata (e qualquer cliente já
-     personalizado) sobrescreve isso em tempo de execução via
-     TenantBrandingContext, não editando estes valores diretamente.
-     Índigo "brand" (confiança) + um único destaque quente "hope" — ver
-     plano de identidade visual (artefato "Identidade Visual HopeXT"). */
+  /* Paleta base dos tokens. A marca Transdata vem de :root[data-tenant="transdata"]
+     (abaixo) e das cores aplicadas pelo TenantBrandingContext. */
   :root {
     --background: 225 30% 97%;
     --foreground: 222 45% 12%;

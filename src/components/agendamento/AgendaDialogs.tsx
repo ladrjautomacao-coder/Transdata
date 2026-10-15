@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle, Ban, CalendarCheck, CalendarRange, Check, CheckCircle2, Circle, History, Info, Loader2,
-  MessageSquareWarning, Plus, RotateCcw, Send, UserRoundCog, X,
+  MapPin, MessageSquareWarning, Monitor, Plus, RotateCcw, Send, UserRoundCog, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,8 @@ import { formatLocation } from "@/lib/location";
 import { statusLabels, subPhasesByStatus } from "@/pages/ProjectManagement";
 import {
   HIDDEN_BY_DEFAULT_STATUSES, VISIT_PURPOSE_GROUPS, VISIT_PURPOSE_PRESETS, approveRequest, cancelRequest, conflictsFor, createRequest,
-  errorMessage, fetchHistory, fetchTechnicians, formatPeriod, periodOf, rejectRequest, saveTechnician,
+  ATTENDANCE_LABEL, cancelApprovedRequest, errorMessage, fetchHistory, fetchTechnicians, formatPeriod, periodOf, registerAttendance,
+  rejectRequest, saveTechnician, type Attendance,
   techniciansOf, toLocalInput,
   type EligibleProject, type HistoryEntry, type ImplantationRequest, type Technician,
 } from "@/lib/implantationScheduling";
@@ -454,10 +455,92 @@ export function CancelDialog({ request, open, onOpenChange, onDone }: {
 /* ─── Detalhe (painel lateral) ──────────────────────────────────────────── */
 const ACTION_TEXT: Record<HistoryEntry["action"], string> = {
   criada: "Solicitada", aprovada: "Aprovada", reprovada: "Reprovada", cancelada: "Cancelada", periodo_alterado: "Período ajustado",
+  atendida: "Atendimento registrado",
 };
-export function RequestDetailSheet({ request, open, onOpenChange, mode, onApprove, onReject, onCancel, onNewRequest, onGoCalendar }: {
+
+/** Aprovador: registra como a visita foi realizada ou cancela uma visita já aprovada. */
+function VisitResultBox({ request, onChanged }: { request: ImplantationRequest; onChanged: () => void }) {
+  const [mode, setMode] = useState<Attendance | null>(request.attendance);
+  const [note, setNote] = useState(request.attendance_note ?? "");
+  const [cancelling, setCancelling] = useState(false);
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { setMode(request.attendance); setNote(request.attendance_note ?? ""); setCancelling(false); setReason(""); }, [request]);
+  const started = periodOf(request).start <= new Date();
+  const unchanged = mode === request.attendance && note.trim() === (request.attendance_note ?? "");
+
+  const save = async () => {
+    if (!mode) return;
+    setSaving(true);
+    try {
+      await registerAttendance(request.id, mode, note.trim());
+      toast.success("Atendimento registrado", { description: ATTENDANCE_LABEL[mode] });
+      onChanged();
+    } catch (e) { toast.error("Não foi possível registrar", { description: errorMessage(e) }); }
+    finally { setSaving(false); }
+  };
+  const cancel = async () => {
+    setSaving(true);
+    try {
+      await cancelApprovedRequest(request.id, reason.trim());
+      toast.success("Visita cancelada", { description: "Saiu do calendário e conta como cancelada na Área do Implantador." });
+      onChanged();
+    } catch (e) { toast.error("Não foi possível cancelar", { description: errorMessage(e) }); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="rounded-xl border border-primary/30 bg-primary/[0.03] p-3.5">
+      <p className="mb-2 text-xs font-semibold">Resultado da visita</p>
+      {started ? (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            {([["presencial", "Presencial", MapPin], ["remoto", "Remoto", Monitor]] as const).map(([k, l, Icon]) => (
+              <button key={k} type="button" onClick={() => setMode(k)} aria-pressed={mode === k}
+                className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${mode === k ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-muted"}`}>
+                <Icon className="h-3.5 w-3.5" />{l}
+              </button>
+            ))}
+          </div>
+          <Textarea className="mt-2" rows={2} value={note} onChange={e => setNote(e.target.value)} placeholder="Observação (opcional)" />
+          <div className="mt-2 flex justify-end">
+            <Button size="sm" onClick={save} disabled={!mode || saving || unchanged}>
+              {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Check className="mr-1.5 h-4 w-4" />}
+              {request.attendance ? "Atualizar atendimento" : "Registrar atendimento"}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <p className="text-[11px] text-muted-foreground">O atendimento pode ser registrado a partir do início da visita.</p>
+      )}
+      {!request.attendance && (
+        <div className="mt-3 border-t border-border/60 pt-3">
+          {cancelling ? (
+            <>
+              <Label className="text-xs">Motivo do cancelamento *</Label>
+              <Textarea className="mt-1.5" rows={2} value={reason} onChange={e => setReason(e.target.value)} placeholder="Ex.: cliente desmarcou a visita" />
+              <div className="mt-2 flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setCancelling(false)} disabled={saving}>Voltar</Button>
+                <Button size="sm" variant="destructive" onClick={cancel} disabled={reason.trim().length < 5 || saving}>
+                  {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Ban className="mr-1.5 h-4 w-4" />}Cancelar visita
+                </Button>
+              </div>
+            </>
+          ) : (
+            <Button size="sm" variant="outline" className="border-destructive/40 text-destructive hover:bg-destructive/10" onClick={() => setCancelling(true)}>
+              <Ban className="mr-1.5 h-4 w-4" />Cancelar esta visita
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+export function RequestDetailSheet({ request, open, onOpenChange, mode, onApprove, onReject, onCancel, onNewRequest, onGoCalendar, onResultChanged }: {
   request: ImplantationRequest | null; open: boolean; onOpenChange: (o: boolean) => void; mode: "gp" | "ap" | "cal";
   onApprove?: () => void; onReject?: () => void; onCancel?: () => void; onNewRequest?: () => void; onGoCalendar?: () => void;
+  /** Presente = quem abre pode registrar atendimento ou cancelar visita aprovada (Aprovador). */
+  onResultChanged?: () => void;
 }) {
   const [history, setHistory] = useState<HistoryEntry[] | null>(null);
   useEffect(() => {
@@ -472,6 +555,8 @@ export function RequestDetailSheet({ request, open, onOpenChange, mode, onApprov
     const d = h.details as Record<string, string | string[]>;
     if (h.action === "aprovada" && Array.isArray(d.technicians)) return `Aprovada · técnicos: ${d.technicians.join(", ")}`;
     if (h.action === "periodo_alterado" && d.start) return `Período ajustado para ${formatPeriod(new Date(d.start as string), new Date(d.end as string))}`;
+    if (h.action === "atendida" && d.mode) return `${ATTENDANCE_LABEL[d.mode as Attendance]}${d.note ? ` · "${d.note}"` : ""}`;
+    if (h.action === "cancelada" && d.reason) return `Cancelada após aprovação · "${d.reason}"`;
     return ACTION_TEXT[h.action];
   };
 
@@ -504,6 +589,20 @@ export function RequestDetailSheet({ request, open, onOpenChange, mode, onApprov
             ) : <span className="text-muted-foreground">Definidos pelo Aprovador na aprovação</span>}</dd>
             {request.notes && <><dt className="text-muted-foreground">Observações</dt><dd className="whitespace-pre-line text-muted-foreground">{request.notes}</dd></>}
           </dl>
+          {request.attendance && (
+            <div className="rounded-lg bg-emerald-500/10 p-3.5 text-xs text-emerald-800 dark:text-emerald-200">
+              <p className="font-semibold"><CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />{ATTENDANCE_LABEL[request.attendance]}</p>
+              {request.attendance_note && <p className="mt-1">{request.attendance_note}</p>}
+              {request.attended_by_name && <p className="mt-1 text-[11px] opacity-80">Registrado por {request.attended_by_name}{request.attended_at ? ` em ${fmtDT(request.attended_at)}` : ""}</p>}
+            </div>
+          )}
+          {request.status === "cancelada" && request.cancel_reason && (
+            <div className="rounded-lg bg-muted p-3.5 text-xs text-muted-foreground">
+              <p className="mb-1 font-semibold text-foreground"><Ban className="mr-1 inline h-3.5 w-3.5" />Cancelada após aprovação</p>
+              {request.cancel_reason}
+            </div>
+          )}
+          {request.status === "aprovada" && onResultChanged && <VisitResultBox request={request} onChanged={onResultChanged} />}
           {request.status === "reprovada" && request.rejection_reason && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3.5 text-xs text-destructive">
               <p className="mb-1 font-semibold"><MessageSquareWarning className="mr-1 inline h-3.5 w-3.5" />Justificativa da reprovação</p>

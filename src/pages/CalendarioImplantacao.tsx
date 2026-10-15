@@ -212,7 +212,8 @@ export default function CalendarioImplantacao() {
       {header}
       {toolbar}
       {body}
-      <RequestDetailSheet request={detail} open={!!detail} onOpenChange={o => { if (!o) setDetail(null); }} mode="cal" />
+      <RequestDetailSheet request={detail} open={!!detail} onOpenChange={o => { if (!o) setDetail(null); }} mode="cal"
+        onResultChanged={canApprove ? () => { setDetail(null); load(); } : undefined} />
       <HolidaysDialog open={holidaysOpen} onOpenChange={setHolidaysOpen} custom={customHolidays} canEdit={canManageHolidays} onChanged={reloadHolidays} />
     </div>
   );
@@ -321,7 +322,8 @@ const lastDayOf = (r: ImplantationRequest) => startOfDay(new Date(+periodOf(r).e
 const coversDay = (r: ImplantationRequest, d: Date) => periodOf(r).start < addDays(d, 1) && d < periodOf(r).end;
 const dayTitle = (d: Date) => `${WD[d.getDay()]}, ${d.getDate()} de ${MONTHS[d.getMonth()]}`;
 
-function MonthGrid({ month, list, onOpen, highlightId, selected, onSelect, holidays }: {
+/** Grade do mês (também usada na Área do Implantador, só com as visitas do técnico). */
+export function MonthGrid({ month, list, onOpen, highlightId, selected, onSelect, holidays }: {
   month: Date; list: ImplantationRequest[]; onOpen: (r: ImplantationRequest) => void; highlightId: string | null;
   selected: Date; onSelect: (d: Date) => void; holidays: Map<string, Holiday[]>;
 }) {
