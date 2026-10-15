@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle, Ban, CalendarCheck, CalendarRange, Check, CheckCircle2, Circle, History, Info, Loader2,
-  MapPin, MessageSquareWarning, Monitor, Plus, RotateCcw, Send, UserRoundCog, X,
+  MapPin, MessageSquareWarning, Monitor, Plus, RotateCcw, Send, Trash2, UserRoundCog, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,7 @@ import { statusLabels, subPhasesByStatus } from "@/pages/ProjectManagement";
 import {
   HIDDEN_BY_DEFAULT_STATUSES, VISIT_PURPOSE_GROUPS, VISIT_PURPOSE_PRESETS, approveRequest, cancelRequest, conflictsFor, createRequest,
   ATTENDANCE_LABEL, cancelApprovedRequest, errorMessage, fetchHistory, fetchTechnicians, formatPeriod, periodOf, registerAttendance,
-  rejectRequest, saveTechnician, type Attendance,
+  countTechnicianVisits, rejectRequest, removeTechnician, saveTechnician, type Attendance,
   techniciansOf, toLocalInput,
   type EligibleProject, type HistoryEntry, type ImplantationRequest, type Technician,
 } from "@/lib/implantationScheduling";
@@ -647,6 +647,8 @@ export function TechniciansDialog({ open, onOpenChange, onChanged }: { open: boo
   const [email, setEmail] = useState("");
   const [area, setArea] = useState("");
   const [saving, setSaving] = useState(false);
+  const [toRemove, setToRemove] = useState<{ tech: Technician; visits: number | null } | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   const load = () => fetchTechnicians(true).then(setList).catch(err => { setList([]); toast.error("Erro ao carregar técnicos", { description: errorMessage(err) }); });
   useEffect(() => { if (open) { setList(null); load(); } }, [open]);
@@ -665,8 +667,25 @@ export function TechniciansDialog({ open, onOpenChange, onChanged }: { open: boo
     try { await saveTechnician({ ...t, active: !t.active }); await load(); onChanged(); }
     catch (err) { toast.error("Não foi possível atualizar", { description: errorMessage(err) }); }
   };
+  const askRemove = (t: Technician) => {
+    setToRemove({ tech: t, visits: null });
+    countTechnicianVisits(t.id)
+      .then(n => setToRemove(cur => cur?.tech.id === t.id ? { tech: t, visits: n } : cur))
+      .catch(err => { setToRemove(null); toast.error("Não foi possível verificar as visitas", { description: errorMessage(err) }); });
+  };
+  const confirmRemove = async () => {
+    if (!toRemove) return;
+    setRemoving(true);
+    try {
+      await removeTechnician(toRemove.tech.id);
+      toast.success(`${toRemove.tech.full_name} removido(a) da agenda.`);
+      setToRemove(null); await load(); onChanged();
+    } catch (err) { toast.error("Não foi possível remover", { description: errorMessage(err) }); }
+    finally { setRemoving(false); }
+  };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
@@ -694,6 +713,10 @@ export function TechniciansDialog({ open, onOpenChange, onChanged }: { open: boo
                 </div>
                 <span className="text-[11px] text-muted-foreground">{t.active ? "Ativo" : "Inativo"}</span>
                 <Switch checked={t.active} onCheckedChange={() => toggleActive(t)} aria-label={`Ativar ou desativar ${t.full_name}`} />
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => askRemove(t)} aria-label={`Remover ${t.full_name}`} title="Remover técnico">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </li>
             ))}
           </ul>
@@ -701,5 +724,29 @@ export function TechniciansDialog({ open, onOpenChange, onChanged }: { open: boo
         <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button></DialogFooter>
       </DialogContent>
     </Dialog>
+    <Dialog open={!!toRemove} onOpenChange={o => { if (!o && !removing) setToRemove(null); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Remover {toRemove?.tech.full_name}?</DialogTitle>
+          <DialogDescription>O técnico deixa de aparecer no cadastro, na solicitação, na aprovação e no calendário.</DialogDescription>
+        </DialogHeader>
+        {toRemove?.visits === null ? (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Verificando visitas…</p>
+        ) : toRemove && toRemove.visits! > 0 ? (
+          <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+            Ele está em <b>{toRemove.visits} {toRemove.visits === 1 ? "visita" : "visitas"}</b>. O nome continua no histórico dessas visitas — só sai das listas.
+          </p>
+        ) : (
+          <p className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">Ele não tem visitas registradas: o cadastro é excluído.</p>
+        )}
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={() => setToRemove(null)} disabled={removing}>Cancelar</Button>
+          <Button variant="destructive" onClick={confirmRemove} disabled={removing || toRemove?.visits === null}>
+            {removing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Trash2 className="mr-1.5 h-4 w-4" />}Remover
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

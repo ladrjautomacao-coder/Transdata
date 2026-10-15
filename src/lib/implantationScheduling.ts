@@ -127,7 +127,7 @@ export async function fetchRequests(): Promise<ImplantationRequest[]> {
 }
 
 export async function fetchTechnicians(includeInactive = false): Promise<Technician[]> {
-  let q = db.from("implantation_technicians").select("id, full_name, email, area, active").order("full_name");
+  let q = db.from("implantation_technicians").select("id, full_name, email, area, active").is("removed_at", null).order("full_name");
   if (!includeInactive) q = q.eq("active", true);
   const { data, error } = await q;
   if (error) throw error;
@@ -216,6 +216,28 @@ export async function saveTechnician(input: { id?: string; full_name: string; em
     : await db.from("implantation_technicians").insert(rest).select("id, full_name, email, area, active").single();
   if (error) throw error;
   return data as Technician;
+}
+
+/** Quantas visitas (solicitações) têm o técnico alocado — define se ele pode ser apagado de vez. */
+export async function countTechnicianVisits(id: string): Promise<number> {
+  const { count, error } = await db.from("implantation_request_members").select("technician_id", { count: "exact", head: true }).eq("technician_id", id);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+/**
+ * Remove o técnico do cadastro. Sem visitas: exclui. Com visitas: marca como removido
+ * (some do cadastro e das listas, mas o nome continua no histórico das visitas).
+ */
+export async function removeTechnician(id: string): Promise<"excluido" | "arquivado"> {
+  if (await countTechnicianVisits(id) === 0) {
+    const { error } = await db.from("implantation_technicians").delete().eq("id", id);
+    if (error) throw error;
+    return "excluido";
+  }
+  const { error } = await db.from("implantation_technicians").update({ active: false, removed_at: new Date().toISOString() }).eq("id", id);
+  if (error) throw error;
+  return "arquivado";
 }
 
 /** Conflitos de um técnico com agendamentos aprovados (exceto a própria solicitação). */
