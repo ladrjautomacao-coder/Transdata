@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, ReactNode } fro
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { getMyAccessStatus } from "@/lib/accessRpc";
 
 interface AuthContextType {
   session: Session | null;
@@ -10,6 +11,8 @@ interface AuthContextType {
   loading: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  /** Autocadastro aguardando liberação de um administrador. */
+  accessPending: boolean;
   signOut: () => Promise<void>;
 }
 
@@ -24,21 +27,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [accessPending, setAccessPending] = useState(false);
   const requestIdRef = useRef(0);
 
   const resetUserData = () => {
     setProfile(null);
     setIsAdmin(false);
     setIsSuperAdmin(false);
+    setAccessPending(false);
   };
 
   const loadUserData = async (userId: string) => {
     const requestId = ++requestIdRef.current;
     resetUserData();
 
-    const [{ data: profileData }, { data: rolesData }] = await Promise.all([
+    const [{ data: profileData }, { data: rolesData }, { data: accessStatus }] = await Promise.all([
       supabase.from("profiles").select("full_name, avatar_url, tenant_id").eq("user_id", userId).maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
+      getMyAccessStatus(),
     ]);
 
     if (requestId !== requestIdRef.current) return;
@@ -47,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile((profileData as unknown as { full_name: string; avatar_url: string | null; tenant_id: string } | null) ?? null);
     setIsAdmin(roles.includes("admin") || roles.includes("super_admin"));
     setIsSuperAdmin(roles.includes("super_admin"));
+    setAccessPending(accessStatus === "pendente");
   };
 
   useEffect(() => {
@@ -95,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, isAdmin, isSuperAdmin, signOut }}>
+    <AuthContext.Provider value={{ session, user, profile, loading, isAdmin, isSuperAdmin, accessPending, signOut }}>
       {children}
     </AuthContext.Provider>
   );

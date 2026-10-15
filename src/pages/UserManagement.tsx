@@ -13,11 +13,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   CheckCircle, XCircle, Trash2, KeyRound, Search, Shield, ShieldAlert,
-  UserCheck, UserX, Mail, Clock, RefreshCw, Users, Sparkles,
+  UserCheck, UserX, Mail, Clock, RefreshCw, Users, Sparkles, Hourglass,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AVAILABLE_ROLES, ROLE_LABELS } from "@/lib/permissions";
+import { AVAILABLE_ROLES, ROLE_LABELS, USER_AREAS } from "@/lib/permissions";
 import { format, parseISO } from "date-fns";
+import { approveSignup as approveSignupRpc, listPendingSignups, type PendingSignup } from "@/lib/accessRpc";
+
+/** Papéis que podem ser escolhidos ao liberar um autocadastro. */
+const SIGNUP_ROLES = ["user", ...USER_AREAS, "admin"] as const;
 
 interface ManagedUser {
   id: string;
@@ -38,6 +42,8 @@ export default function UserManagement() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [pending, setPending] = useState<PendingSignup[]>([]);
+  const [pendingRole, setPendingRole] = useState<Record<string, string>>({});
   const [confirmAction, setConfirmAction] = useState<{
     type: "delete" | "reset" | "approve" | "ban" | "toggle_role" | "toggle_super";
     user: ManagedUser;
@@ -51,6 +57,8 @@ export default function UserManagement() {
     } else {
       setUsers(data || []);
     }
+    const { data: pendingData } = await listPendingSignups();
+    setPending(pendingData ?? []);
     setLoading(false);
   }, [toast]);
 
@@ -107,7 +115,22 @@ export default function UserManagement() {
     }
   };
 
-  const filtered = users.filter(u =>
+  const approveSignup = async (p: PendingSignup) => {
+    const role = pendingRole[p.user_id];
+    if (!role) return;
+    setActionLoading(p.user_id);
+    const { error } = await approveSignupRpc(p.user_id, role);
+    setActionLoading(null);
+    if (error) {
+      toast({ title: "Erro ao liberar acesso", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Acesso liberado", description: `${p.full_name} entra como ${ROLE_LABELS[role] ?? role}.` });
+    loadUsers();
+  };
+
+  const pendingIds = new Set(pending.map(p => p.user_id));
+  const filtered = users.filter(u => !pendingIds.has(u.id)).filter(u =>
     u.full_name.toLowerCase().includes(search.toLowerCase()) ||
     u.email.toLowerCase().includes(search.toLowerCase())
   );
@@ -155,6 +178,57 @@ export default function UserManagement() {
           </Card>
         ))}
       </div>
+
+      {/* Autocadastros aguardando liberação */}
+      {pending.length > 0 && (
+        <Card className="border-amber-500/40 bg-amber-500/5">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Hourglass className="h-4 w-4 text-amber-600" />
+              <h2 className="text-sm font-semibold">Cadastros aguardando liberação ({pending.length})</h2>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Pessoas que criaram a conta pela tela de login. Escolha o perfil e libere o acesso — até lá elas não veem nada no portal.
+            </p>
+            {pending.map(p => (
+              <div key={p.user_id} className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-sm font-semibold">{p.full_name}</span>
+                    {!p.email_confirmed && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500 text-amber-600">E-mail não confirmado</Badge>
+                    )}
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {p.email}</span>
+                    <span>Cadastro: {format(parseISO(p.created_at), "dd/MM/yyyy HH:mm")}</span>
+                  </div>
+                </div>
+                <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                  <Select value={pendingRole[p.user_id] ?? ""} onValueChange={v => setPendingRole(r => ({ ...r, [p.user_id]: v }))}>
+                    <SelectTrigger className="h-8 w-[170px] text-xs"><SelectValue placeholder="Escolher perfil" /></SelectTrigger>
+                    <SelectContent>
+                      {SIGNUP_ROLES.map(r => <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" className="h-8 text-xs" disabled={!pendingRole[p.user_id] || actionLoading === p.user_id}
+                    onClick={() => approveSignup(p)}>
+                    <CheckCircle className="h-3.5 w-3.5 mr-1" /> Liberar acesso
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:bg-destructive/10"
+                    disabled={actionLoading === p.user_id}
+                    onClick={() => {
+                      const u = users.find(x => x.id === p.user_id);
+                      if (u) setConfirmAction({ type: "delete", user: u });
+                    }}>
+                    <XCircle className="h-3.5 w-3.5 mr-1" /> Recusar
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Search */}
       <div className="relative">

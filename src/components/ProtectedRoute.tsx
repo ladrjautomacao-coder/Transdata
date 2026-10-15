@@ -1,8 +1,9 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
+import { PendingAccess } from "@/components/PendingAccess";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading } = useAuth();
+  const { session, loading, accessPending } = useAuth();
 
   if (loading) {
     return (
@@ -13,5 +14,6 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!session) return <Navigate to="/login" replace />;
+  if (accessPending) return <PendingAccess />;
   return <>{children}</>;
 }

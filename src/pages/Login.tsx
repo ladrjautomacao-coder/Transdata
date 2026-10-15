@@ -143,6 +143,10 @@ function TransdataLogin({ branding, email, setEmail, password, setPassword, subm
               </form>
               <div className="mt-4 text-center text-sm space-y-2">
                 <Link to="/forgot-password" className="text-muted-foreground hover:text-primary transition-colors">Esqueci minha senha</Link>
+                <p className="text-muted-foreground">
+                  Ainda não tem acesso?{" "}
+                  <Link to="/cadastro" className="font-semibold text-primary hover:underline">Criar conta</Link>
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -174,7 +178,7 @@ export default function Login() {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         if (error.message === "Email not confirmed") {
-          toast({ title: "Acesso pendente", description: "Seu cadastro ainda não foi aprovado por um administrador. Aguarde a liberação do acesso.", variant: "destructive" });
+          toast({ title: "Confirme seu e-mail", description: "Abra o link que enviamos para o seu e-mail para confirmar o cadastro (veja também o spam).", variant: "destructive" });
           return;
         }
         throw error;

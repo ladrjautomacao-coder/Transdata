@@ -13,6 +13,7 @@ import { PermissionRoute } from "@/components/PermissionRoute";
 import { AppLayout } from "@/components/AppLayout";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
+import Signup from "./pages/Signup";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Projects from "./pages/Projects";
@@ -56,6 +57,7 @@ function AppRoutes() {
     <SettingsProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/cadastro" element={<Signup />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
