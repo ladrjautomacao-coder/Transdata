@@ -28,7 +28,7 @@ import { HolidaysDialog } from "@/components/agendamento/HolidaysDialog";
 import { TechnicianTimeline } from "@/components/agendamento/TechnicianTimeline";
 import { DayVisits, MonthGrid } from "@/components/agendamento/MonthGrid";
 import { MonthGantt } from "@/components/agendamento/MonthGantt";
-import { AgendaLegend, AlertsPanel, PendingPanel } from "@/components/agendamento/AgendaPanels";
+import { AgendaLegend } from "@/components/agendamento/AgendaPanels";
 import { AssignSheet } from "@/components/agendamento/AssignSheet";
 import { NewVisitDialog } from "@/components/agendamento/NewVisitDialog";
 import { KindChip, VisitHover, VisitStatePill } from "@/components/agendamento/VisitHoverCard";
@@ -321,15 +321,6 @@ export default function CalendarioImplantacao() {
     </div>
   );
 
-  const sidePanels = (
-    <aside className="flex flex-col gap-4">
-      <PendingPanel pending={pendingF} techs={technicians} requests={requests} holidays={holidayMap} today={today}
-        canApprove={canApprove} onAssign={r => openAssign(r)} onOpen={setDetail} />
-      <AlertsPanel alerts={alerts} conflicts={conflicts} onPick={pickAlert}
-        onSuggestion={id => { const r = requests.find(x => x.id === id); if (r) setDetail(r); }} />
-    </aside>
-  );
-
   let body;
   if (active.length === 0 && technicians.length === 0) {
     body = (
@@ -340,38 +331,28 @@ export default function CalendarioImplantacao() {
     );
   } else if (view === "tecnico") {
     body = (
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <section aria-label={`Linha do tempo por técnico, ${spanLabel}`} className="min-w-0 overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-          <TechnicianTimeline start={rangeStart} weeks={weeks} techs={rowTechs} approved={approvedF}
-            loads={loads} loadUntil={loadUntil} holidays={holidayMap} alertsByRequest={alertsByRequest}
-            highlightId={highlightId} onOpen={setDetail} onAssign={canApprove ? openAssign : undefined} />
-          <AgendaLegend kinds={kindsInView} hint={filtersOn ? "Filtros ativos: algumas visitas estão ocultas" : undefined} />
-        </section>
-        {sidePanels}
-      </div>
+      <section aria-label={`Linha do tempo por técnico, ${spanLabel}`} className="min-w-0 overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+        <TechnicianTimeline start={rangeStart} weeks={weeks} techs={rowTechs} approved={approvedF}
+          loads={loads} loadUntil={loadUntil} holidays={holidayMap} alertsByRequest={alertsByRequest}
+          highlightId={highlightId} onOpen={setDetail} onAssign={canApprove ? openAssign : undefined} />
+        <AgendaLegend kinds={kindsInView} hint={filtersOn ? "Filtros ativos: algumas visitas estão ocultas" : undefined} />
+      </section>
     );
   } else if (view === "mes") {
     const nowD = new Date();
     const selectedDay = pickedDay && pickedDay.getMonth() === anchor.getMonth() && pickedDay.getFullYear() === anchor.getFullYear()
       ? pickedDay : nowD.getMonth() === anchor.getMonth() && nowD.getFullYear() === anchor.getFullYear() ? today : anchor;
-    body = (
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="min-w-0 flex flex-col gap-4">
-          {isMobile ? (
-            <>
-              <MonthGrid month={anchor} list={filtered} onOpen={setDetail} onAssign={canApprove ? r => openAssign(r) : undefined}
-                highlightId={highlightId} selected={selectedDay} holidays={holidayMap} custom={customHolidays} alertsByRequest={alertsByRequest}
-                onSelect={d => { setPickedDay(d); }} />
-              <DayVisits list={filtered} selected={selectedDay} holidays={holidayMap} onOpen={setDetail} onAssign={canApprove ? r => openAssign(r) : undefined} />
-            </>
-          ) : (
-            <MonthGantt month={anchor} techs={rowTechs} approved={approvedF}
-              loads={loads} loadUntil={loadUntil} holidays={holidayMap}
-              alertsByRequest={alertsByRequest} highlightId={highlightId} onOpen={setDetail} />
-          )}
-        </div>
-        {sidePanels}
+    body = isMobile ? (
+      <div className="flex flex-col gap-4">
+        <MonthGrid month={anchor} list={filtered} onOpen={setDetail} onAssign={canApprove ? r => openAssign(r) : undefined}
+          highlightId={highlightId} selected={selectedDay} holidays={holidayMap} custom={customHolidays} alertsByRequest={alertsByRequest}
+          onSelect={d => { setPickedDay(d); }} />
+        <DayVisits list={filtered} selected={selectedDay} holidays={holidayMap} onOpen={setDetail} onAssign={canApprove ? r => openAssign(r) : undefined} />
       </div>
+    ) : (
+      <MonthGantt month={anchor} techs={rowTechs} approved={approvedF}
+        loads={loads} loadUntil={loadUntil} holidays={holidayMap}
+        alertsByRequest={alertsByRequest} highlightId={highlightId} onOpen={setDetail} />
     );
   } else {
     body = <ListView list={filtered.filter(inRange)} onOpen={setDetail} onAssign={canApprove ? r => openAssign(r) : undefined}
