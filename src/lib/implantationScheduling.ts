@@ -112,6 +112,22 @@ export function formatAddress(a: AddressParts) {
   return [a.address_street?.trim(), a.address_district?.trim(), cityUf].filter(Boolean).join(", ");
 }
 
+/** O que define para onde o técnico vai (serve para solicitação e para visita da Área do Implantador). */
+export type DestinationParts = AddressParts & {
+  visit_format?: VisitFormat | null;
+  meeting_url?: string | null;
+  location: string | null;
+  project: { city: string; state: string | null; country_code: string | null } | null;
+};
+
+/** Google Maps do local da visita: endereço informado, senão o local livre, senão a cidade do projeto. */
+export function mapsUrlFor(v: DestinationParts) {
+  const q = (v.visit_format === "presencial" && formatAddress(v))
+    || v.location?.trim()
+    || (v.project ? [v.project.city, v.project.state].filter(Boolean).join("/") : "");
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
+
 /** Link da reunião normalizado ("meet.google.com/x" vira "https://meet.google.com/x"); null se não for um link válido. */
 export function normalizeMeetingUrl(raw: string): string | null {
   const v = raw.trim();

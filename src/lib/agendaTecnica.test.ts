@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { holidaysByDay } from "@/lib/holidays";
 import type { ImplantationRequest, Technician } from "@/lib/implantationScheduling";
 import {
-  candidatesFor, computeAlerts, distanceKm, fmtDayRange, fmtWeekRange, loadCityIndex, visitKindOf, visitOrdinal, workdaysIn,
+  candidatesFor, computeAlerts, distanceKm, fmtDayRange, fmtWeekRange, loadCityIndex, placeLabel, placeOf, visitKindOf, visitOrdinal, workdaysIn,
 } from "@/lib/agendaTecnica";
 
 const tech = (id: string, full_name: string): Technician => ({ id, full_name, email: null, area: null, active: true });
@@ -24,6 +24,18 @@ function visit(company: string, city: string, state: string, purpose: string, st
 const AP = tech("ap", "Ana Prado"), MA = tech("ma", "Marcos Almeida"), FG = tech("fg", "Felipe Gomes"), LA = tech("la", "Lucas Araújo");
 const holidays = holidaysByDay([2026], []);
 const today = new Date(2026, 9, 15);
+
+describe("cidade da visita", () => {
+  const base = () => visit("Viação A", "Tubarão", "SC", "1ª Visita - Bilhetagem", at(20, 10), at(21, 10, 18), [AP]);
+  it("presencial com endereço usa a cidade do treinamento", () => {
+    const r = { ...base(), visit_format: "presencial" as const, address_street: "Rua das Flores, 120", address_district: "Centro", address_city: "Laguna", address_state: "SC" };
+    expect(placeLabel(placeOf(r))).toBe("Laguna/SC");
+  });
+  it("remoto e solicitação antiga usam a cidade do projeto", () => {
+    expect(placeLabel(placeOf({ ...base(), visit_format: "remoto" as const, meeting_url: "https://meet.google.com/x" }))).toBe("Tubarão/SC");
+    expect(placeLabel(placeOf(base()))).toBe("Tubarão/SC");
+  });
+});
 
 describe("tipo e número da visita", () => {
   it("reconhece o tipo pelo objetivo", () => {

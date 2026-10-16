@@ -1,15 +1,18 @@
 import { CalendarCheck, ChevronRight, FileText, MapPin, Navigation, Route, Video } from "lucide-react";
-import { periodOf, type ImplantationRequest, type Technician } from "@/lib/implantationScheduling";
+import { mapsUrlFor, periodOf, type ImplantationRequest, type Technician } from "@/lib/implantationScheduling";
 import type { Holiday } from "@/lib/holidays";
 import {
   MONTH_SHORT, VISIT_KIND, coversDay, dayDiff, dayTitle, distanceKm, fmtDM, fmtDayRange, fmtHM, fmtKm, fmtWdDM, isTeamWorkday,
   p2, placeLabel, placeOf, plusDays, startOfDay, visitDays, visitKindOf, visitOrdinal, type CityIndex,
 } from "@/lib/agendaTecnica";
-import { TechAvatar } from "./AgendaShared";
+import { TechAvatar, VisitDestination } from "./AgendaShared";
 import { KindChip } from "./VisitHoverCard";
 
-const mapsUrl = (r: ImplantationRequest) =>
-  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.location?.trim() || placeLabel(placeOf(r)))}`;
+/** Destino curto para listas: "Rua X, 10 · Tubarão/SC", "Remoto" ou a cidade. */
+const destinationShort = (r: ImplantationRequest) =>
+  r.visit_format === "remoto" ? "Remoto · videochamada"
+    : r.visit_format === "presencial" && r.address_street?.trim() ? `${r.address_street.trim()} · ${placeLabel(placeOf(r))}`
+      : placeLabel(placeOf(r));
 
 /** Cabeçalho do "app do técnico" (celular). */
 export function MinhaAgendaHeader({ tech, today, title = "Minha agenda" }: { tech: Technician; today: Date; title?: string }) {
@@ -65,7 +68,7 @@ export function MinhaAgenda({ visits, today, holidays, index, onOpen, compactLis
         </div>
       )}
 
-      {from && to && from !== to && <NextTrip from={from} to={to} holidays={holidays} index={index} />}
+      {from && to && from !== to && to.visit_format !== "remoto" && <NextTrip from={from} to={to} holidays={holidays} index={index} />}
 
       {compactList && (rest.length > 0 || freeFrom) && (
         <section aria-label="Próximas visitas">
@@ -84,7 +87,11 @@ export function MinhaAgenda({ visits, today, holidays, index, onOpen, compactLis
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold">{r.project?.company_name ?? "Projeto removido"}</span>
-                      <span className="block truncate text-xs text-muted-foreground">{r.visit_format === "remoto" ? "Remoto" : placeLabel(placeOf(r))}, {ord ? `${ord} visita` : r.visit_purpose}, {fmtHM(periodOf(r).start)}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{ord ? `${ord} visita` : r.visit_purpose}, {fmtHM(periodOf(r).start)}</span>
+                      <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-foreground/80">
+                        {r.visit_format === "remoto" ? <Video className="h-3 w-3 shrink-0 text-sky-600 dark:text-sky-300" /> : <MapPin className="h-3 w-3 shrink-0 text-primary" />}
+                        <span className="truncate">{destinationShort(r)}</span>
+                      </span>
                     </span>
                     <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </button>
@@ -127,13 +134,10 @@ function FeaturedVisit({ r, current, today, onOpen }: { r: ImplantationRequest; 
         <KindChip purpose={r.visit_purpose} />
         <span>{ord ? `${ord} visita` : r.visit_purpose}, {count > 1 ? `de ${fmtDayRange(first, last)}` : `em ${fmtWdDM(first)}`}</span>
       </p>
-      <p className="mt-3 flex items-center gap-2 text-sm">
-        {remote ? <Video className="h-4 w-4 shrink-0 text-primary" /> : <MapPin className="h-4 w-4 shrink-0 text-primary" />}
-        <span className="font-semibold">{remote ? "Remoto" : placeLabel(placeOf(r))}</span>
-        <span className="text-muted-foreground">início às {fmtHM(start)}</span>
-      </p>
-      {!remote && r.location?.trim() && r.location.trim() !== placeLabel(placeOf(r)) && <p className="ml-6 mt-0.5 text-xs text-muted-foreground">{r.location}</p>}
-      <div className="mt-4 grid grid-cols-2 gap-2">
+      <div className="mt-3 rounded-xl bg-muted/40 p-3">
+        <VisitDestination visit={r} extra={<> · início às {fmtHM(start)}</>} />
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
         {remote ? (
           meetingHref ? (
             <a href={meetingHref} target="_blank" rel="noopener noreferrer"
@@ -146,7 +150,7 @@ function FeaturedVisit({ r, current, today, onOpen }: { r: ImplantationRequest; 
             </span>
           )
         ) : (
-          <a href={mapsUrl(r)} target="_blank" rel="noreferrer"
+          <a href={mapsUrlFor(r)} target="_blank" rel="noreferrer"
             className="flex h-14 flex-col items-center justify-center gap-0.5 rounded-xl border border-border text-[13px] font-medium transition-colors hover:bg-muted/60">
             <Navigation className="h-4 w-4 text-primary" />Rota
           </a>

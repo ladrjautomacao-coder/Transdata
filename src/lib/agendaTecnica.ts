@@ -215,7 +215,11 @@ export function visitState(r: ImplantationRequest, now: Date): VisitState {
 
 /* ─── Local e deslocamento ───────────────────────────────────────────────── */
 export interface Place { city: string | null; state: string | null; country_code: string | null }
-export const placeOf = (r: ImplantationRequest): Place | null => r.project ? { city: r.project.city, state: r.project.state, country_code: r.project.country_code } : null;
+/** Cidade da visita: a do endereço do treinamento (presencial), senão a do projeto. */
+export const placeOf = (r: ImplantationRequest): Place | null =>
+  r.visit_format === "presencial" && r.address_city?.trim()
+    ? { city: r.address_city.trim(), state: r.address_state?.trim() || null, country_code: r.project?.country_code ?? null }
+    : r.project ? { city: r.project.city, state: r.project.state, country_code: r.project.country_code } : null;
 export const placeLabel = (p: Place | null) => (p ? formatLocation(p.city, p.state, p.country_code) : "—");
 const samePlace = (a: Place | null, b: Place | null) =>
   !!a && !!b && norm(a.city) === norm(b.city) && norm(a.state) === norm(b.state) && (a.country_code ?? "BR") === (b.country_code ?? "BR");

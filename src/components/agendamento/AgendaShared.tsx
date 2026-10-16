@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Bus, CalendarClock, ChevronRight, Info, MessageSquareWarning, Video } from "lucide-react";
+import { Bus, CalendarClock, ChevronRight, Info, MapPin, MessageSquareWarning, Navigation, Video } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatLocation } from "@/lib/location";
 import {
-  REQUEST_STATUS, colorFor, formatPeriod, initials, periodOf, techniciansOf,
-  type ImplantationRequest, type RequestStatus, type Technician,
+  REQUEST_STATUS, colorFor, formatPeriod, initials, mapsUrlFor, periodOf, techniciansOf,
+  type DestinationParts, type ImplantationRequest, type RequestStatus, type Technician,
 } from "@/lib/implantationScheduling";
 
 export function StatusPill({ status }: { status: RequestStatus }) {
@@ -69,6 +70,54 @@ export function TechAvatar({ tech, size = "h-7 w-7 text-[10px]" }: { tech: Techn
         ? <img src={photo} alt={tech.full_name} loading="lazy" draggable={false} className="h-full w-full object-cover" onError={() => setFailed(photo)} />
         : initials(tech.full_name)}
     </span>
+  );
+}
+
+const meetingHref = (url: string | null | undefined) => (url && /^https?:\/\//i.test(url) ? url : null);
+const hostOf = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; } };
+
+/**
+ * Para onde o técnico vai: endereço do treinamento (rua em destaque, bairro e cidade
+ * abaixo) ou reunião remota. `action` mostra o botão Rota / Entrar ao lado.
+ */
+export function VisitDestination({ visit, action = false, extra }: { visit: DestinationParts; action?: boolean; extra?: ReactNode }) {
+  const remote = visit.visit_format === "remoto";
+  const projectCity = visit.project ? formatLocation(visit.project.city, visit.project.state, visit.project.country_code) : "";
+  let title: string, subtitle: string;
+  if (remote) {
+    const link = meetingHref(visit.meeting_url);
+    title = "Remoto · videochamada";
+    subtitle = link ? hostOf(link) : "Link não informado";
+  } else if (visit.visit_format === "presencial" && visit.address_street?.trim()) {
+    title = visit.address_street.trim();
+    const cityUf = visit.address_city?.trim() ? [visit.address_city.trim(), visit.address_state?.trim()].filter(Boolean).join("/") : projectCity;
+    subtitle = [visit.address_district?.trim(), cityUf].filter(Boolean).join(" · ");
+  } else {
+    // solicitação antiga: só o "Local" livre (às vezes só a cidade)
+    const loc = visit.location?.trim() ?? "";
+    const onlyCity = !loc || loc.toLowerCase() === projectCity.toLowerCase();
+    title = onlyCity ? projectCity || "Local não informado" : loc;
+    subtitle = onlyCity ? "Endereço não informado na solicitação" : projectCity;
+  }
+  const Icon = remote ? Video : MapPin;
+  const href = remote ? meetingHref(visit.meeting_url) : mapsUrlFor(visit);
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${remote ? "bg-sky-500/15 text-sky-700 dark:text-sky-300" : "bg-primary/10 text-primary"}`}>
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold leading-snug">{title}</p>
+        {(subtitle || extra) && <p className="text-xs text-muted-foreground">{subtitle}{extra}</p>}
+      </div>
+      {action && href && (
+        <Button asChild size="sm" variant={remote ? "default" : "outline"} className="h-8 shrink-0 text-xs">
+          <a href={href} target="_blank" rel="noopener noreferrer">
+            {remote ? <Video className="mr-1.5 h-3.5 w-3.5" /> : <Navigation className="mr-1.5 h-3.5 w-3.5" />}{remote ? "Entrar" : "Rota"}
+          </a>
+        </Button>
+      )}
+    </div>
   );
 }
 

@@ -10,7 +10,7 @@ import { useCustomHolidays } from "@/hooks/useCustomHolidays";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { EmptyBlock, Kpi, MeetingLink } from "@/components/agendamento/AgendaShared";
+import { EmptyBlock, Kpi, VisitDestination } from "@/components/agendamento/AgendaShared";
 import { HolidayWarning } from "@/components/agendamento/HolidaysDialog";
 import { InstallAppButton } from "@/pwa/InstallAppButton";
 import { RequestDetailSheet } from "@/components/agendamento/AgendaDialogs";
@@ -49,6 +49,13 @@ function toRequest(v: AgendaVisit, tech: NonNullable<TechnicianAgenda["technicia
     members: [t(tech.id, tech.full_name, tech.photo_url), ...v.colleagues.map(c => t(c.id, c.full_name, c.photo_url))],
   };
 }
+
+/** Visita presencial com endereço informado pelo GP. */
+const presencialAddress = (v: AgendaVisit) => v.visit_format === "presencial" && !!v.address_city?.trim();
+/** Cidade da visita: a do endereço do treinamento, senão a do projeto. */
+const cityOf = (v: AgendaVisit) => presencialAddress(v)
+  ? [v.address_city, v.address_state].filter(Boolean).join("/")
+  : formatLocation(v.project.city, v.project.state, v.project.country_code);
 
 /** Janela do filtro de período (histórico e KPIs de resultado). */
 function periodRange(p: Period) {
@@ -359,19 +366,17 @@ function VisitCard({ v, now, compact = false, customHolidays }: {
           <p className="text-xs text-muted-foreground">{v.visit_purpose}</p>
           <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
             <span className="flex items-center gap-1"><CalendarClock className="h-3 w-3" />{formatPeriod(start, end)}</span>
-            <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{formatLocation(v.project.city, v.project.state, v.project.country_code)}</span>
+            {compact && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{v.visit_format === "remoto" ? "Remoto" : cityOf(v)}</span>}
             <span className="flex items-center gap-1"><UserRound className="h-3 w-3" />GP: <b className="font-medium text-foreground/80">{v.project.manager_name ?? "—"}</b></span>
           </p>
           {!compact && (
             <>
-              {v.visit_format === "remoto"
-                ? <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1 text-[11px] text-muted-foreground"><b className="font-medium text-foreground/80">Remoto:</b> <MeetingLink url={v.meeting_url} /></p>
-                : v.location && <p className="mt-1 text-[11px] text-muted-foreground"><b className="font-medium text-foreground/80">{v.visit_format ? "Endereço:" : "Local:"}</b> {v.location}</p>}
-              {v.notes && <p className="mt-1 whitespace-pre-line text-[11px] text-muted-foreground">“{v.notes}”</p>}
+              <div className="mt-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2"><VisitDestination visit={v} action /></div>
+              {v.notes && <p className="mt-1.5 whitespace-pre-line text-[11px] text-muted-foreground">“{v.notes}”</p>}
               {v.colleagues.length > 0 && (
                 <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground"><UsersRound className="h-3 w-3" />Com {v.colleagues.map(c => c.full_name).join(", ")}</p>
               )}
-              <div className="mt-2"><HolidayWarning start={start} end={end} custom={customHolidays} place={{ city: v.project.city, state: v.project.state }} /></div>
+              <div className="mt-2"><HolidayWarning start={start} end={end} custom={customHolidays} place={presencialAddress(v) ? { city: v.address_city, state: v.address_state } : { city: v.project.city, state: v.project.state }} /></div>
             </>
           )}
           {v.status === "cancelada" && v.cancel_reason && <p className="mt-1 text-[11px] text-muted-foreground"><b className="font-medium">Motivo:</b> {v.cancel_reason}</p>}

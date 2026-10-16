@@ -27,7 +27,7 @@ import {
   VISIT_FORMAT_LABEL, formatAddress, normalizeMeetingUrl, type VisitFormat,
   type EligibleProject, type HistoryEntry, type ImplantationRequest, type Technician,
 } from "@/lib/implantationScheduling";
-import { MeetingLink, ProjectBox, StatusPill, TechAvatar } from "./AgendaShared";
+import { MeetingLink, ProjectBox, StatusPill, TechAvatar, VisitDestination } from "./AgendaShared";
 import { HolidayWarning } from "./HolidaysDialog";
 import { useCustomHolidays } from "@/hooks/useCustomHolidays";
 
@@ -489,9 +489,9 @@ export function RequestDetailSheet({ request, open, onOpenChange, mode, onApprov
               <><dt className="text-muted-foreground">Pedido original</dt><dd className="text-muted-foreground">{formatPeriod(new Date(request.requested_start), new Date(request.requested_end))}</dd></>
             )}
             {request.visit_format && <><dt className="text-muted-foreground">Formato</dt><dd>{VISIT_FORMAT_LABEL[request.visit_format]}</dd></>}
-            {request.visit_format === "remoto"
-              ? <><dt className="text-muted-foreground">Link da reunião</dt><dd className="min-w-0"><MeetingLink url={request.meeting_url} /></dd></>
-              : <><dt className="text-muted-foreground">{request.visit_format ? "Endereço" : "Local"}</dt><dd>{request.location || "—"}</dd></>}
+            <dt className="pt-1.5 text-muted-foreground">{request.visit_format === "remoto" ? "Reunião" : "Destino"}</dt>
+            <dd className="min-w-0"><VisitDestination visit={request} action /></dd>
+            {request.visit_format === "remoto" && <><dt className="text-muted-foreground">Link</dt><dd className="min-w-0 text-xs"><MeetingLink url={request.meeting_url} /></dd></>}
             <dt className="text-muted-foreground">Solicitante</dt><dd>{request.requester_name ?? "—"}</dd>
             <dt className="text-muted-foreground">GP do projeto</dt><dd>{request.project?.manager?.full_name ?? "—"}</dd>
             <dt className="text-muted-foreground">Técnicos</dt>
