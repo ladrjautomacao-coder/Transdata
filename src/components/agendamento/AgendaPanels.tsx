@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { conflictsFor, periodOf, type ImplantationRequest, type Technician } from "@/lib/implantationScheduling";
 import type { Holiday } from "@/lib/holidays";
 import {
-  HATCH, MONTH_SHORT, VISIT_KIND, dayDiff, fmtDayRange, fmtDM, fmtWdDM, p2, placeLabel, placeOf,
+  MONTH_SHORT, VISIT_KIND, dayDiff, fmtDayRange, fmtDM, fmtWdDM, p2, placeLabel, placeOf,
   visitDays, workdaysIn, type AgendaAlert, type VisitKind,
 } from "@/lib/agendaTecnica";
 
@@ -98,18 +98,20 @@ export function AgendaSummary({
 }
 
 /* ─── Legenda ────────────────────────────────────────────────────────────── */
-export function AgendaLegend({ kinds, pending = true, travel = false, hint }: { kinds: VisitKind[]; pending?: boolean; travel?: boolean; hint?: string }) {
+// Mostra só três tipos (ITS, Bilhetagem e Outros) para evitar poluição visual —
+// os demais tipos agora compartilham o visual neutro ("Outros").
+const SIMPLE_KINDS: VisitKind[] = ["its", "bilhetagem", "outro"];
+export function AgendaLegend({ kinds, pending: _pending = true, travel: _travel = false, hint }: { kinds: VisitKind[]; pending?: boolean; travel?: boolean; hint?: string }) {
+  const visible = SIMPLE_KINDS.filter(k => k === "outro"
+    ? kinds.some(x => x !== "its" && x !== "bilhetagem")
+    : kinds.includes(k));
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/60 px-4 py-2.5 text-xs text-muted-foreground">
-      {kinds.map(k => (
-        <span key={k} className="flex items-center gap-1.5"><span className={`h-2.5 w-4 rounded-[3px] border ${VISIT_KIND[k].swatch}`} />{VISIT_KIND[k].label}</span>
+      {visible.map(k => (
+        <span key={k} className="flex items-center gap-1.5"><span className={`h-2.5 w-4 rounded-[3px] border ${VISIT_KIND[k].swatch}`} />{k === "its" ? "ITS / Gestão de Frotas" : k === "bilhetagem" ? "Bilhetagem" : "Outros serviços"}</span>
       ))}
-      {kinds.length > 0 && <span aria-hidden className="hidden h-3.5 w-px bg-border sm:inline-block" />}
-      {pending && <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-[3px] border border-dashed border-amber-500" style={HATCH.pending} />Pendente de aprovação</span>}
-      <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-[3px] border border-rose-300 dark:border-rose-500/50" style={HATCH.holiday} />Feriado</span>
+      <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-[3px] border border-rose-400/60 bg-rose-500/10" />Feriado</span>
       <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-[3px] border border-border bg-muted" />Fim de semana</span>
-      <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-[3px] border border-lime-500/50" style={HATCH.special} />Visita em fim de semana ou feriado</span>
-      {travel && <span className="flex items-center gap-1.5"><span className="w-4 border-t border-dashed border-muted-foreground/70" />Deslocamento (km em linha reta)</span>}
       {hint && <span className="basis-full text-[11px] sm:ml-auto sm:basis-auto">{hint}</span>}
     </div>
   );

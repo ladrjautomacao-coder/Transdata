@@ -6,7 +6,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -15,20 +14,21 @@ import { useCustomHolidays } from "@/hooks/useCustomHolidays";
 import { useCityIndex } from "@/hooks/useCityIndex";
 import { holidaysByDay } from "@/lib/holidays";
 import {
-  errorMessage, fetchRequests, fetchTechnicians, initials, periodOf, techniciansOf,
+  errorMessage, fetchRequests, fetchTechnicians, periodOf, techniciansOf,
   type EligibleProject, type ImplantationRequest, type Technician,
 } from "@/lib/implantationScheduling";
 import {
-  MONTH_LONG, VISIT_KIND, VISIT_KIND_ORDER, VISIT_STATE, VISIT_STATE_FILTER, candidatesFor, computeAlerts, coversDay, fmtWeekRange,
+  MONTH_LONG, VISIT_KIND, VISIT_KIND_ORDER, VISIT_STATE, VISIT_STATE_FILTER, computeAlerts, coversDay, fmtWeekRange,
   lastWorkdayUntil, mondayOf, placeLabel, placeOf, plusDays, startOfDay, techLoad, visitDays, visitKindOf, visitState, visitSummary,
   type AgendaAlert, type VisitKind, type VisitState,
 } from "@/lib/agendaTecnica";
 import { EmptyBlock, TechAvatar } from "@/components/agendamento/AgendaShared";
 import { RejectDialog, RequestDetailSheet, RequestDialog, TechniciansDialog } from "@/components/agendamento/AgendaDialogs";
 import { HolidaysDialog } from "@/components/agendamento/HolidaysDialog";
-import { TechnicianTimeline, type TimelineSuggestion } from "@/components/agendamento/TechnicianTimeline";
+import { TechnicianTimeline } from "@/components/agendamento/TechnicianTimeline";
 import { DayVisits, MonthGrid } from "@/components/agendamento/MonthGrid";
-import { AgendaLegend, AgendaSummary, AlertsPanel, PendingPanel } from "@/components/agendamento/AgendaPanels";
+import { MonthGantt } from "@/components/agendamento/MonthGantt";
+import { AgendaLegend, AlertsPanel, PendingPanel } from "@/components/agendamento/AgendaPanels";
 import { AssignSheet } from "@/components/agendamento/AssignSheet";
 import { NewVisitDialog } from "@/components/agendamento/NewVisitDialog";
 import { KindChip, VisitHover, VisitStatePill } from "@/components/agendamento/VisitHoverCard";
@@ -80,7 +80,7 @@ export default function CalendarioImplantacao() {
       const n = Number(localStorage.getItem(WEEKS_KEY));
       if ((WEEK_OPTIONS as readonly number[]).includes(n)) return n;
     } catch { /* ignora */ }
-    return typeof window !== "undefined" && window.innerWidth < 768 ? 1 : 4;
+    return 1;
   });
 
   // ?data=AAAA-MM-DD&destaque=<id>: abre já na data da visita, com ela destacada
@@ -111,7 +111,6 @@ export default function CalendarioImplantacao() {
   const [reqProject, setReqProject] = useState<EligibleProject | null>(null);
   const [holidaysOpen, setHolidaysOpen] = useState(false);
   const [pickedDay, setPickedDay] = useState<Date | null>(null);
-  const [dayOpen, setDayOpen] = useState(false);
 
   const { custom: customHolidays, reload: reloadHolidays } = useCustomHolidays();
   const index = useCityIndex();
@@ -198,25 +197,13 @@ export default function CalendarioImplantacao() {
   const loadUntil = +winTo >= +winFrom ? winTo : null;
   const loads = useMemo(() => new Map(allTechs.map(t => [t.id, techLoad(t, approvedAll, winFrom, loadUntil ?? plusDays(winFrom, -1), holidayMap, today)])),
     [allTechs, approvedAll, +winFrom, +(loadUntil ?? 0), holidayMap, today]); // eslint-disable-line react-hooks/exhaustive-deps
-  const teamLoads = technicians.map(t => loads.get(t.id)).filter(Boolean) as NonNullable<ReturnType<typeof loads.get>>[];
   const todayList = approvedAll.filter(r => coversDay(r, today));
   const inField = new Set(todayList.flatMap(r => techniciansOf(r).map(t => t.id))).size;
 
-  // sugestão de técnico para cada pendente do período (só para quem aprova)
-  const suggestions = useMemo<TimelineSuggestion[]>(() => {
-    if (!canApprove) return [];
-    return pendingF.filter(inRange).flatMap(r => {
-      const { start, end } = periodOf(r);
-      const rec = candidatesFor({ request: r, start, end, techs: technicians, requests, holidays: holidayMap, index }).find(c => c.recommended);
-      return rec ? [{ techId: rec.tech.id, request: r }] : [];
-    });
-  }, [canApprove, pendingF, inRange, technicians, requests, holidayMap, index]);
-
   const alerts = useMemo(() => computeAlerts({
     techs: allTechs, approved: approvedAll, from: rangeStart, to: rangeEnd, today, holidays: holidayMap, custom: customHolidays, index,
-    reserved: suggestions.map(x => ({ techId: x.techId, ...periodOf(x.request) })),
   }).filter(a => !techFilter || a.techId === techFilter),
-  [allTechs, approvedAll, +rangeStart, +rangeEnd, today, holidayMap, customHolidays, index, techFilter, suggestions]); // eslint-disable-line react-hooks/exhaustive-deps
+  [allTechs, approvedAll, +rangeStart, +rangeEnd, today, holidayMap, customHolidays, index, techFilter]); // eslint-disable-line react-hooks/exhaustive-deps
   const conflicts = alerts.filter(a => a.kind === "conflito").length;
   const alertsByRequest = useMemo(() => {
     const m = new Map<string, AgendaAlert[]>();
@@ -242,12 +229,16 @@ export default function CalendarioImplantacao() {
     ? `${MONTH_LONG[anchor.getMonth()].replace(/^./, c => c.toUpperCase())} ${anchor.getFullYear()}`
     : `${fmtWeekRange(rangeStart, rangeEnd)} ${rangeEnd.getFullYear()}`;
 
+  const freeToday = technicians.filter(t => !todayList.some(r => techniciansOf(r).some(x => x.id === t.id))).length;
+  const summarySentence = technicians.length === 0
+    ? "Sem técnicos cadastrados."
+    : `Hoje: ${inField} em campo, ${freeToday} livre${freeToday === 1 ? "" : "s"}${pendingAll.length ? ` · ${pendingAll.length} pedido${pendingAll.length === 1 ? "" : "s"} aguardando técnico` : ""}.`;
   const header = (
     <div className="flex flex-wrap items-end gap-4">
       <div className="min-w-0 basis-[420px] flex-1">
         <span className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Implantação</span>
         <h1 className="text-2xl font-bold tracking-tight">Agenda técnica</h1>
-        <p className="text-sm text-muted-foreground">Onde cada técnico estará, com qual cliente, por quanto tempo e quem está livre para a próxima visita.</p>
+        <p className="text-sm text-muted-foreground">{summarySentence}</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" className="h-10" onClick={() => setHolidaysOpen(true)}><CalendarOff className="mr-1.5 h-4 w-4" />Feriados</Button>
@@ -330,22 +321,13 @@ export default function CalendarioImplantacao() {
     </div>
   );
 
-  const summary = (
-    <AgendaSummary today={today} todayVisits={todayList.length} techsInField={inField} techTotal={technicians.length}
-      freeTotal={loadUntil ? teamLoads.reduce((a, l) => a + l.free, 0) : null} freeUntil={loadUntil}
-      freeBreakdown={teamLoads.slice().sort((a, b) => b.free - a.free || a.tech.full_name.localeCompare(b.tech.full_name)).map(l => ({ name: initials(l.tech.full_name), free: l.free }))}
-      pending={pendingF}
-      onEvaluate={canApprove ? () => (pendingF.length === 1 ? openAssign(pendingF[0]) : document.getElementById("aguardando")?.scrollIntoView({ behavior: "smooth" })) : undefined}
-      alertsCount={alerts.length} conflicts={conflicts} onSeeAlerts={() => document.getElementById("alertas")?.scrollIntoView({ behavior: "smooth" })} />
-  );
-
-  const panels = (
-    <div className="grid items-start gap-4 lg:grid-cols-2">
+  const sidePanels = (
+    <aside className="flex flex-col gap-4">
       <PendingPanel pending={pendingF} techs={technicians} requests={requests} holidays={holidayMap} today={today}
         canApprove={canApprove} onAssign={r => openAssign(r)} onOpen={setDetail} />
       <AlertsPanel alerts={alerts} conflicts={conflicts} onPick={pickAlert}
         onSuggestion={id => { const r = requests.find(x => x.id === id); if (r) setDetail(r); }} />
-    </div>
+    </aside>
   );
 
   let body;
@@ -358,38 +340,38 @@ export default function CalendarioImplantacao() {
     );
   } else if (view === "tecnico") {
     body = (
-      <>
-        {summary}
-        <section aria-label={`Linha do tempo por técnico, ${spanLabel}`} className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-          <TechnicianTimeline start={rangeStart} weeks={weeks} techs={rowTechs} approved={approvedF} pending={techFilter ? [] : pendingF}
-            loads={loads} loadUntil={loadUntil} holidays={holidayMap} custom={customHolidays} index={index} alertsByRequest={alertsByRequest}
-            suggestions={suggestions.filter(x => rowTechs.some(t => t.id === x.techId))} highlightId={highlightId} showTravel onOpen={setDetail} onAssign={canApprove ? openAssign : undefined} />
-          <AgendaLegend kinds={kindsInView} pending={pendingF.some(inRange)} travel
-            hint={filtersOn ? "Filtros ativos: algumas visitas estão ocultas" : undefined} />
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <section aria-label={`Linha do tempo por técnico, ${spanLabel}`} className="min-w-0 overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+          <TechnicianTimeline start={rangeStart} weeks={weeks} techs={rowTechs} approved={approvedF}
+            loads={loads} loadUntil={loadUntil} holidays={holidayMap} alertsByRequest={alertsByRequest}
+            highlightId={highlightId} onOpen={setDetail} onAssign={canApprove ? openAssign : undefined} />
+          <AgendaLegend kinds={kindsInView} hint={filtersOn ? "Filtros ativos: algumas visitas estão ocultas" : undefined} />
         </section>
-        {panels}
-      </>
+        {sidePanels}
+      </div>
     );
   } else if (view === "mes") {
     const nowD = new Date();
     const selectedDay = pickedDay && pickedDay.getMonth() === anchor.getMonth() && pickedDay.getFullYear() === anchor.getFullYear()
       ? pickedDay : nowD.getMonth() === anchor.getMonth() && nowD.getFullYear() === anchor.getFullYear() ? today : anchor;
     body = (
-      <>
-        {summary}
-        <MonthGrid month={anchor} list={filtered} onOpen={setDetail} onAssign={canApprove ? r => openAssign(r) : undefined}
-          highlightId={highlightId} selected={selectedDay} holidays={holidayMap} custom={customHolidays} alertsByRequest={alertsByRequest}
-          onSelect={d => { setPickedDay(d); if (!isMobile && filtered.some(r => coversDay(r, d))) setDayOpen(true); }} />
-        {isMobile && <DayVisits list={filtered} selected={selectedDay} holidays={holidayMap} onOpen={setDetail} onAssign={canApprove ? r => openAssign(r) : undefined} />}
-        <Dialog open={dayOpen && !isMobile} onOpenChange={setDayOpen}>
-          <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md [&>button]:top-3.5">
-            <DialogTitle className="sr-only">Visitas do dia</DialogTitle>
-            <DayVisits inDialog list={filtered} selected={selectedDay} holidays={holidayMap}
-              onOpen={r => { setDayOpen(false); setDetail(r); }} onAssign={canApprove ? r => { setDayOpen(false); openAssign(r); } : undefined} />
-          </DialogContent>
-        </Dialog>
-        {panels}
-      </>
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0 flex flex-col gap-4">
+          {isMobile ? (
+            <>
+              <MonthGrid month={anchor} list={filtered} onOpen={setDetail} onAssign={canApprove ? r => openAssign(r) : undefined}
+                highlightId={highlightId} selected={selectedDay} holidays={holidayMap} custom={customHolidays} alertsByRequest={alertsByRequest}
+                onSelect={d => { setPickedDay(d); }} />
+              <DayVisits list={filtered} selected={selectedDay} holidays={holidayMap} onOpen={setDetail} onAssign={canApprove ? r => openAssign(r) : undefined} />
+            </>
+          ) : (
+            <MonthGantt month={anchor} techs={rowTechs} approved={approvedF}
+              loads={loads} loadUntil={loadUntil} holidays={holidayMap}
+              alertsByRequest={alertsByRequest} highlightId={highlightId} onOpen={setDetail} />
+          )}
+        </div>
+        {sidePanels}
+      </div>
     );
   } else {
     body = <ListView list={filtered.filter(inRange)} onOpen={setDetail} onAssign={canApprove ? r => openAssign(r) : undefined}
