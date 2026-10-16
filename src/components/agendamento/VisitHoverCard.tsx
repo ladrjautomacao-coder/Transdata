@@ -49,7 +49,7 @@ export function VisitHover({ request: r, alerts = [], onOpen, onAssign, children
     ["Técnico", techs.length
       ? <span className="flex flex-wrap items-center gap-1.5">{techs.map(t => <span key={t.id} className="inline-flex items-center gap-1.5"><TechAvatar tech={t} size="h-5 w-5 text-[8px]" />{t.full_name}</span>)}</span>
       : <span className="text-amber-700 dark:text-amber-300">A definir na aprovação</span>],
-    ["Local", r.location?.trim() || placeLabel(placeOf(r))],
+    r.visit_format === "remoto" ? ["Formato", "Remoto (videochamada)"] : ["Local", r.location?.trim() || placeLabel(placeOf(r))],
     ["Objetivo", r.visit_purpose],
     ["Projeto", r.project?.project_code ?? "—"],
     ["GP", r.project?.manager?.full_name ?? r.requester_name ?? "—"],

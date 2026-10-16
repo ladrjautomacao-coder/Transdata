@@ -73,6 +73,13 @@ export interface ImplantationRequest {
   requested_start: string;
   requested_end: string;
   location: string | null;
+  /** Formato do treinamento informado pelo GP (nulo em solicitações antigas). */
+  visit_format?: VisitFormat | null;
+  address_street?: string | null;
+  address_district?: string | null;
+  address_city?: string | null;
+  address_state?: string | null;
+  meeting_url?: string | null;
   notes: string | null;
   status: RequestStatus;
   approved_start: string | null;
@@ -95,6 +102,27 @@ export interface ImplantationRequest {
 export type Attendance = "presencial" | "remoto";
 export const ATTENDANCE_LABEL: Record<Attendance, string> = { presencial: "Atendida presencial", remoto: "Atendida remota" };
 
+export type VisitFormat = "presencial" | "remoto";
+export const VISIT_FORMAT_LABEL: Record<VisitFormat, string> = { presencial: "Presencial", remoto: "Remoto" };
+
+type AddressParts = { address_street?: string | null; address_district?: string | null; address_city?: string | null; address_state?: string | null };
+/** "Rua X, 100, Centro, Tubarão/SC" a partir do endereço informado na solicitação. */
+export function formatAddress(a: AddressParts) {
+  const cityUf = [a.address_city?.trim(), a.address_state?.trim()].filter(Boolean).join("/");
+  return [a.address_street?.trim(), a.address_district?.trim(), cityUf].filter(Boolean).join(", ");
+}
+
+/** Link da reunião normalizado ("meet.google.com/x" vira "https://meet.google.com/x"); null se não for um link válido. */
+export function normalizeMeetingUrl(raw: string): string | null {
+  const v = raw.trim();
+  if (!v || /\s/.test(v)) return null;
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(v) ? v : `https://${v}`;
+  try {
+    const u = new URL(withScheme);
+    return (u.protocol === "https:" || u.protocol === "http:") && u.hostname.includes(".") ? u.href : null;
+  } catch { return null; }
+}
+
 export interface HistoryEntry {
   id: string;
   action: "criada" | "aprovada" | "reprovada" | "cancelada" | "periodo_alterado" | "atendida";
@@ -104,7 +132,8 @@ export interface HistoryEntry {
 }
 
 const REQUEST_COLS =
-  "id, project_id, requested_by, requester_name, visit_purpose, visit_purpose_is_custom, requested_start, requested_end, location, notes, status, approved_start, approved_end, reviewer_name, reviewed_at, rejection_reason, attendance, attendance_note, attended_by_name, attended_at, cancel_reason, created_at, " +
+  "id, project_id, requested_by, requester_name, visit_purpose, visit_purpose_is_custom, requested_start, requested_end, location, " +
+  "visit_format, address_street, address_district, address_city, address_state, meeting_url, notes, status, approved_start, approved_end, reviewer_name, reviewed_at, rejection_reason, attendance, attendance_note, attended_by_name, attended_at, cancel_reason, created_at, " +
   "project:projects(id, company_name, project_code, city, state, country_code, manager:team_members!projects_manager_id_fkey(full_name)), " +
   "members:implantation_request_members(technician:implantation_technicians(id, full_name, email, area, active, photo_url, removed_at))";
 const TECH_COLS = "id, full_name, email, area, active, photo_url";
@@ -149,6 +178,8 @@ export async function fetchHistory(requestId: string): Promise<HistoryEntry[]> {
 export async function createRequest(input: {
   project_id: string; visit_purpose: string; visit_purpose_is_custom: boolean;
   requested_start: string; requested_end: string; location: string | null; notes: string | null;
+  visit_format: VisitFormat; address_street: string | null; address_district: string | null;
+  address_city: string | null; address_state: string | null; meeting_url: string | null;
 }) {
   const { error } = await db.from("implantation_requests").insert(input);
   if (error) throw error;
@@ -191,6 +222,12 @@ export interface AgendaVisit {
   end: string;
   visit_purpose: string;
   location: string | null;
+  visit_format?: VisitFormat | null;
+  address_street?: string | null;
+  address_district?: string | null;
+  address_city?: string | null;
+  address_state?: string | null;
+  meeting_url?: string | null;
   notes: string | null;
   requester_name: string | null;
   reviewer_name: string | null;

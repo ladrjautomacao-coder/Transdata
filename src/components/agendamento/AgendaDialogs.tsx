@@ -2,8 +2,9 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle, Ban, CalendarRange, Camera, Check, CheckCircle2, History, Info, Loader2,
-  MapPin, MessageSquareWarning, Monitor, Pencil, Plus, RotateCcw, Send, Trash2, X,
+  MapPin, MessageSquareWarning, Monitor, Pencil, Plus, RotateCcw, Send, Trash2, Video, X, type LucideIcon,
 } from "lucide-react";
+import { Constants } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,16 +18,16 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { formatLocation } from "@/lib/location";
 import { statusLabels, subPhasesByStatus } from "@/pages/ProjectManagement";
 import {
   HIDDEN_BY_DEFAULT_STATUSES, VISIT_PURPOSE_GROUPS, VISIT_PURPOSE_PRESETS, cancelRequest, createRequest,
   ATTENDANCE_LABEL, cancelApprovedRequest, errorMessage, fetchHistory, fetchTechnicians, formatPeriod, periodOf, registerAttendance,
   countTechnicianVisits, rejectRequest, removeTechnician, saveTechnician, type Attendance,
   photoFileProblem, removeTechnicianPhoto, techniciansOf, toLocalInput, uploadTechnicianPhoto,
+  VISIT_FORMAT_LABEL, formatAddress, normalizeMeetingUrl, type VisitFormat,
   type EligibleProject, type HistoryEntry, type ImplantationRequest, type Technician,
 } from "@/lib/implantationScheduling";
-import { ProjectBox, StatusPill, TechAvatar } from "./AgendaShared";
+import { MeetingLink, ProjectBox, StatusPill, TechAvatar } from "./AgendaShared";
 import { HolidayWarning } from "./HolidaysDialog";
 import { useCustomHolidays } from "@/hooks/useCustomHolidays";
 
@@ -41,6 +42,11 @@ const FieldError = ({ msg }: { msg?: string }) => msg ? <p className="mt-1 text-
 /* ─── Solicitar agenda (GP) ─────────────────────────────────────────────── */
 const DUPLICATE_PURPOSE_MSG = "Você já agendou este projeto justamente com este objetivo da visita, revise o Projeto.";
 const normPurpose = (s: string) => s.trim().toLowerCase();
+const FORMAT_OPTIONS: { value: VisitFormat; icon: LucideIcon; hint: string }[] = [
+  { value: "presencial", icon: MapPin, hint: "No endereço do cliente" },
+  { value: "remoto", icon: Video, hint: "Por videochamada" },
+];
+const joinPt = (xs: string[]) => xs.length > 1 ? `${xs.slice(0, -1).join(", ")} e ${xs[xs.length - 1]}` : xs[0] ?? "";
 
 export function RequestDialog({ project, open, onOpenChange, onCreated, existing = [] }: {
   project: EligibleProject | null; open: boolean; onOpenChange: (o: boolean) => void; onCreated: () => void;
@@ -51,10 +57,15 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
   const [custom, setCustom] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
-  const [location, setLocation] = useState("");
+  const [format, setFormat] = useState<VisitFormat | "">("");
+  const [street, setStreet] = useState("");
+  const [district, setDistrict] = useState("");
+  const [city, setCity] = useState("");
+  const [uf, setUf] = useState("");
+  const [meetingUrl, setMeetingUrl] = useState("");
   const [notes, setNotes] = useState("");
   const { custom: customHolidays } = useCustomHolidays(open);
-  const [errors, setErrors] = useState<{ purpose?: string; dates?: string }>({});
+  const [errors, setErrors] = useState<{ purpose?: string; dates?: string; format?: string; address?: string; meeting?: string }>({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -62,10 +73,13 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
     const s = new Date(); s.setDate(s.getDate() + 7); s.setHours(8, 0, 0, 0);
     const e = new Date(s); e.setDate(e.getDate() + 2); e.setHours(18, 0, 0, 0);
     setPurpose(""); setCustom(""); setStart(toLocalInput(s)); setEnd(toLocalInput(e));
-    setLocation(formatLocation(project.city, project.state, project.country_code)); setNotes(""); setErrors({});
+    // o formato é escolha obrigatória do GP; cidade e UF já vêm do projeto
+    setFormat(""); setStreet(""); setDistrict(""); setCity(project.city ?? ""); setUf(project.state ?? ""); setMeetingUrl("");
+    setNotes(""); setErrors({});
   }, [open, project]);
 
   if (!project) return null;
+  const isBR = (project.country_code ?? "BR") === "BR";
   const phase = project.sub_phase ? subPhasesByStatus[project.status as keyof typeof subPhasesByStatus]?.find(s => s.id === project.sub_phase)?.label : null;
 
   // Visitas ativas (pendente/aprovada) deste projeto: o mesmo objetivo não pode se repetir
@@ -79,19 +93,34 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
   const submit = async () => {
     const finalPurpose = purpose === OTHER ? custom.trim() : purpose;
     const s = new Date(start), e = new Date(end);
+    const presencial = format === "presencial";
+    const url = format === "remoto" ? normalizeMeetingUrl(meetingUrl) : null;
+    const missing = presencial
+      ? [!street.trim() && "rua e número", !district.trim() && "bairro", !city.trim() && "cidade", isBR && !uf && "estado"].filter((x): x is string => !!x)
+      : [];
     const next: typeof errors = {
       purpose: !purpose ? "Escolha o objetivo da visita." : purpose === OTHER && !custom.trim() ? "Digite o nome da visita." : duplicate ? DUPLICATE_PURPOSE_MSG : undefined,
       dates: isNaN(+s) || isNaN(+e) ? "Informe início e fim." : e <= s ? "O fim deve ser depois do início." : s < new Date() ? "O início não pode ser no passado." : undefined,
+      format: !format ? "Escolha se o treinamento é presencial ou remoto." : undefined,
+      address: missing.length ? `Informe ${joinPt(missing)}.` : undefined,
+      meeting: format === "remoto" && !url
+        ? meetingUrl.trim() ? "Link inválido. Cole o endereço completo da reunião (ex.: https://meet.google.com/...)." : "Cole o link da reunião."
+        : undefined,
     };
     setErrors(next);
-    if (next.purpose || next.dates) return;
+    if (Object.values(next).some(Boolean)) return;
+    const address = presencial
+      ? { address_street: street.trim(), address_district: district.trim(), address_city: city.trim(), address_state: uf.trim() || null }
+      : { address_street: null, address_district: null, address_city: null, address_state: null };
     setSaving(true);
     try {
       await createRequest({
         project_id: project.id, visit_purpose: finalPurpose,
         visit_purpose_is_custom: !(VISIT_PURPOSE_PRESETS as readonly string[]).includes(finalPurpose),
         requested_start: s.toISOString(), requested_end: e.toISOString(),
-        location: location.trim() || null, notes: notes.trim() || null,
+        visit_format: format as VisitFormat, ...address, meeting_url: url,
+        location: presencial ? formatAddress(address) : VISIT_FORMAT_LABEL.remoto,
+        notes: notes.trim() || null,
       });
       toast.success(`Solicitação enviada para ${project.company_name}. Aguardando o Aprovador.`);
       onOpenChange(false); onCreated();
@@ -172,7 +201,67 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
           <FieldError msg={errors.dates} />
           <HolidayWarning start={start ? new Date(start) : null} end={end ? new Date(end) : null} custom={customHolidays}
             place={{ city: project?.city, state: project?.state }} />
-          <div><Label className="text-xs">Local</Label><Input className="mt-1.5" value={location} onChange={e => setLocation(e.target.value)} /></div>
+          <div>
+            <Label className="text-xs" id="req-format-label">Formato do treinamento *</Label>
+            <div role="radiogroup" aria-labelledby="req-format-label" className="mt-1.5 grid grid-cols-2 gap-2">
+              {FORMAT_OPTIONS.map(o => {
+                const on = format === o.value;
+                const Icon = o.icon;
+                return (
+                  <button key={o.value} type="button" role="radio" aria-checked={on}
+                    onClick={() => { setFormat(o.value); setErrors(er => ({ ...er, format: undefined, address: undefined, meeting: undefined })); }}
+                    className={`flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${on ? "border-primary bg-primary/10 ring-1 ring-primary" : "border-border hover:bg-muted/50"}`}>
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}><Icon className="h-4 w-4" /></span>
+                    <span className="min-w-0">
+                      <span className={`block text-sm font-medium ${on ? "text-primary" : ""}`}>{VISIT_FORMAT_LABEL[o.value]}</span>
+                      <span className="block text-[11px] text-muted-foreground">{o.hint}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <FieldError msg={errors.format} />
+          </div>
+          {format === "presencial" && (
+            <div className="rounded-lg border border-border/60 p-3">
+              <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Endereço do treinamento</p>
+              <div className="grid gap-3 sm:grid-cols-[1fr_1fr_96px]">
+                <div className="sm:col-span-3">
+                  <Label className="text-xs" htmlFor="req-street">Rua e número *</Label>
+                  <Input id="req-street" className="mt-1.5" value={street} maxLength={160} onChange={e => setStreet(e.target.value)} placeholder="Ex.: Rua das Flores, 120" />
+                </div>
+                <div>
+                  <Label className="text-xs" htmlFor="req-district">Bairro *</Label>
+                  <Input id="req-district" className="mt-1.5" value={district} maxLength={80} onChange={e => setDistrict(e.target.value)} placeholder="Ex.: Centro" />
+                </div>
+                <div>
+                  <Label className="text-xs" htmlFor="req-city">Cidade *</Label>
+                  <Input id="req-city" className="mt-1.5" value={city} maxLength={100} onChange={e => setCity(e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs" htmlFor="req-uf">{isBR ? "Estado *" : "Estado"}</Label>
+                  {isBR ? (
+                    <Select value={uf || undefined} onValueChange={setUf}>
+                      <SelectTrigger id="req-uf" className="mt-1.5"><SelectValue placeholder="UF" /></SelectTrigger>
+                      <SelectContent className="max-h-60">{Constants.public.Enums.brazilian_state.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                    </Select>
+                  ) : (
+                    <Input id="req-uf" className="mt-1.5" value={uf} maxLength={60} onChange={e => setUf(e.target.value)} />
+                  )}
+                </div>
+              </div>
+              <FieldError msg={errors.address} />
+            </div>
+          )}
+          {format === "remoto" && (
+            <div>
+              <Label className="text-xs" htmlFor="req-meeting">Link da reunião *</Label>
+              <Input id="req-meeting" className="mt-1.5" type="url" inputMode="url" value={meetingUrl} maxLength={2000}
+                onChange={e => setMeetingUrl(e.target.value)} placeholder="https://meet.google.com/..." />
+              {errors.meeting ? <FieldError msg={errors.meeting} />
+                : <p className="mt-1 text-[11px] text-muted-foreground">Teams, Meet, Zoom ou outro. Os técnicos abrem o link pela Área do Implantador.</p>}
+            </div>
+          )}
           <div><Label className="text-xs">Observações</Label><Textarea className="mt-1.5" rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Informações úteis para o Aprovador e os técnicos..." /></div>
           <div className="flex items-start gap-2.5 rounded-lg bg-sky-500/10 px-3.5 py-3 text-xs text-sky-800 dark:text-sky-200">
             <Info className="mt-0.5 h-4 w-4 shrink-0" />
@@ -399,7 +488,10 @@ export function RequestDetailSheet({ request, open, onOpenChange, mode, onApprov
             {request.status === "aprovada" && request.approved_start && (+new Date(request.approved_start) !== +new Date(request.requested_start) || +new Date(request.approved_end!) !== +new Date(request.requested_end)) && (
               <><dt className="text-muted-foreground">Pedido original</dt><dd className="text-muted-foreground">{formatPeriod(new Date(request.requested_start), new Date(request.requested_end))}</dd></>
             )}
-            <dt className="text-muted-foreground">Local</dt><dd>{request.location || "—"}</dd>
+            {request.visit_format && <><dt className="text-muted-foreground">Formato</dt><dd>{VISIT_FORMAT_LABEL[request.visit_format]}</dd></>}
+            {request.visit_format === "remoto"
+              ? <><dt className="text-muted-foreground">Link da reunião</dt><dd className="min-w-0"><MeetingLink url={request.meeting_url} /></dd></>
+              : <><dt className="text-muted-foreground">{request.visit_format ? "Endereço" : "Local"}</dt><dd>{request.location || "—"}</dd></>}
             <dt className="text-muted-foreground">Solicitante</dt><dd>{request.requester_name ?? "—"}</dd>
             <dt className="text-muted-foreground">GP do projeto</dt><dd>{request.project?.manager?.full_name ?? "—"}</dd>
             <dt className="text-muted-foreground">Técnicos</dt>

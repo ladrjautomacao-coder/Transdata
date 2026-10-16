@@ -10,7 +10,7 @@ import { useCustomHolidays } from "@/hooks/useCustomHolidays";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { EmptyBlock, Kpi } from "@/components/agendamento/AgendaShared";
+import { EmptyBlock, Kpi, MeetingLink } from "@/components/agendamento/AgendaShared";
 import { HolidayWarning } from "@/components/agendamento/HolidaysDialog";
 import { InstallAppButton } from "@/pwa/InstallAppButton";
 import { RequestDetailSheet } from "@/components/agendamento/AgendaDialogs";
@@ -39,6 +39,8 @@ function toRequest(v: AgendaVisit, tech: NonNullable<TechnicianAgenda["technicia
     id: v.id, project_id: v.project.id, requested_by: null, requester_name: v.requester_name,
     visit_purpose: v.visit_purpose, visit_purpose_is_custom: false,
     requested_start: v.start, requested_end: v.end, location: v.location, notes: v.notes, status: v.status,
+    visit_format: v.visit_format, address_street: v.address_street, address_district: v.address_district,
+    address_city: v.address_city, address_state: v.address_state, meeting_url: v.meeting_url,
     approved_start: v.start, approved_end: v.end, reviewer_name: v.reviewer_name, reviewed_at: null, rejection_reason: null,
     attendance: v.attendance, attendance_note: v.attendance_note, attended_by_name: v.attended_by_name, attended_at: v.attended_at,
     cancel_reason: v.cancel_reason, created_at: v.start,
@@ -362,7 +364,9 @@ function VisitCard({ v, now, compact = false, customHolidays }: {
           </p>
           {!compact && (
             <>
-              {v.location && <p className="mt-1 text-[11px] text-muted-foreground"><b className="font-medium text-foreground/80">Local:</b> {v.location}</p>}
+              {v.visit_format === "remoto"
+                ? <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1 text-[11px] text-muted-foreground"><b className="font-medium text-foreground/80">Remoto:</b> <MeetingLink url={v.meeting_url} /></p>
+                : v.location && <p className="mt-1 text-[11px] text-muted-foreground"><b className="font-medium text-foreground/80">{v.visit_format ? "Endereço:" : "Local:"}</b> {v.location}</p>}
               {v.notes && <p className="mt-1 whitespace-pre-line text-[11px] text-muted-foreground">“{v.notes}”</p>}
               {v.colleagues.length > 0 && (
                 <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground"><UsersRound className="h-3 w-3" />Com {v.colleagues.map(c => c.full_name).join(", ")}</p>

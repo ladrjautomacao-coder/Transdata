@@ -1,4 +1,4 @@
-import { CalendarCheck, ChevronRight, FileText, MapPin, Navigation, Route } from "lucide-react";
+import { CalendarCheck, ChevronRight, FileText, MapPin, Navigation, Route, Video } from "lucide-react";
 import { periodOf, type ImplantationRequest, type Technician } from "@/lib/implantationScheduling";
 import type { Holiday } from "@/lib/holidays";
 import {
@@ -84,7 +84,7 @@ export function MinhaAgenda({ visits, today, holidays, index, onOpen, compactLis
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold">{r.project?.company_name ?? "Projeto removido"}</span>
-                      <span className="block truncate text-xs text-muted-foreground">{placeLabel(placeOf(r))}, {ord ? `${ord} visita` : r.visit_purpose}, {fmtHM(periodOf(r).start)}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{r.visit_format === "remoto" ? "Remoto" : placeLabel(placeOf(r))}, {ord ? `${ord} visita` : r.visit_purpose}, {fmtHM(periodOf(r).start)}</span>
                     </span>
                     <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </button>
@@ -112,6 +112,8 @@ function FeaturedVisit({ r, current, today, onOpen }: { r: ImplantationRequest; 
   const { start } = periodOf(r);
   const ord = visitOrdinal(r.visit_purpose);
   const inDays = dayDiff(today, first);
+  const remote = r.visit_format === "remoto";
+  const meetingHref = r.meeting_url && /^https?:\/\//i.test(r.meeting_url) ? r.meeting_url : null;
   return (
     <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm sm:p-5">
       <div className="flex items-center justify-between gap-2 text-[13px]">
@@ -126,16 +128,29 @@ function FeaturedVisit({ r, current, today, onOpen }: { r: ImplantationRequest; 
         <span>{ord ? `${ord} visita` : r.visit_purpose}, {count > 1 ? `de ${fmtDayRange(first, last)}` : `em ${fmtWdDM(first)}`}</span>
       </p>
       <p className="mt-3 flex items-center gap-2 text-sm">
-        <MapPin className="h-4 w-4 shrink-0 text-primary" />
-        <span className="font-semibold">{placeLabel(placeOf(r))}</span>
+        {remote ? <Video className="h-4 w-4 shrink-0 text-primary" /> : <MapPin className="h-4 w-4 shrink-0 text-primary" />}
+        <span className="font-semibold">{remote ? "Remoto" : placeLabel(placeOf(r))}</span>
         <span className="text-muted-foreground">início às {fmtHM(start)}</span>
       </p>
-      {r.location?.trim() && r.location.trim() !== placeLabel(placeOf(r)) && <p className="ml-6 mt-0.5 text-xs text-muted-foreground">{r.location}</p>}
+      {!remote && r.location?.trim() && r.location.trim() !== placeLabel(placeOf(r)) && <p className="ml-6 mt-0.5 text-xs text-muted-foreground">{r.location}</p>}
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <a href={mapsUrl(r)} target="_blank" rel="noreferrer"
-          className="flex h-14 flex-col items-center justify-center gap-0.5 rounded-xl border border-border text-[13px] font-medium transition-colors hover:bg-muted/60">
-          <Navigation className="h-4 w-4 text-primary" />Rota
-        </a>
+        {remote ? (
+          meetingHref ? (
+            <a href={meetingHref} target="_blank" rel="noopener noreferrer"
+              className="flex h-14 flex-col items-center justify-center gap-0.5 rounded-xl border border-border text-[13px] font-medium transition-colors hover:bg-muted/60">
+              <Video className="h-4 w-4 text-primary" />Entrar na reunião
+            </a>
+          ) : (
+            <span className="flex h-14 flex-col items-center justify-center gap-0.5 rounded-xl border border-dashed border-border text-[13px] text-muted-foreground">
+              <Video className="h-4 w-4" />Sem link
+            </span>
+          )
+        ) : (
+          <a href={mapsUrl(r)} target="_blank" rel="noreferrer"
+            className="flex h-14 flex-col items-center justify-center gap-0.5 rounded-xl border border-border text-[13px] font-medium transition-colors hover:bg-muted/60">
+            <Navigation className="h-4 w-4 text-primary" />Rota
+          </a>
+        )}
         <button type="button" onClick={() => onOpen(r)}
           className="flex h-14 flex-col items-center justify-center gap-0.5 rounded-xl border border-border text-[13px] font-medium transition-colors hover:bg-muted/60">
           <FileText className="h-4 w-4 text-primary" />Detalhes

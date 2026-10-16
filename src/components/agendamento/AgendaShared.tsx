@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Bus, CalendarClock, ChevronRight, Info, MessageSquareWarning } from "lucide-react";
+import { Bus, CalendarClock, ChevronRight, Info, MessageSquareWarning, Video } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatLocation } from "@/lib/location";
 import {
@@ -69,6 +69,17 @@ export function TechAvatar({ tech, size = "h-7 w-7 text-[10px]" }: { tech: Techn
         ? <img src={photo} alt={tech.full_name} loading="lazy" draggable={false} className="h-full w-full object-cover" onError={() => setFailed(photo)} />
         : initials(tech.full_name)}
     </span>
+  );
+}
+
+/** Link da reunião de uma visita remota (só abre http/https). */
+export function MeetingLink({ url }: { url: string | null | undefined }) {
+  if (!url) return <span className="text-muted-foreground">Link não informado</span>;
+  if (!/^https?:\/\//i.test(url)) return <span className="break-all">{url}</span>;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-start gap-1 break-all font-medium text-primary hover:underline">
+      <Video className="mt-0.5 h-3.5 w-3.5 shrink-0" />{url}
+    </a>
   );
 }
 

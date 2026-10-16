@@ -9,14 +9,14 @@ import { useCustomHolidays } from "@/hooks/useCustomHolidays";
 import { useCityIndex } from "@/hooks/useCityIndex";
 import { holidaysByDay } from "@/lib/holidays";
 import {
-  approveRequest, errorMessage, saveTechnician, toLocalInput,
+  VISIT_FORMAT_LABEL, approveRequest, errorMessage, saveTechnician, toLocalInput,
   type ImplantationRequest, type Technician,
 } from "@/lib/implantationScheduling";
 import {
   MONTH_LONG, candidatesFor, checksFor, fmtDM, fmtDayRange, fmtHM, fmtKm, fmtWdDM, placeLabel, placeOf, startOfDay,
   visitDays, visitKindOf, workdaysIn, VISIT_KIND, type Candidate,
 } from "@/lib/agendaTecnica";
-import { StatusPill, TechAvatar } from "./AgendaShared";
+import { MeetingLink, StatusPill, TechAvatar } from "./AgendaShared";
 
 const firstName = (t: Technician) => t.full_name.trim().split(/\s+/)[0] || t.full_name;
 const joinPt = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} e ${xs[xs.length - 1]}`);
@@ -168,8 +168,15 @@ export function AssignSheet({ request, open, onOpenChange, technicians, allReque
               <dd>{validDates ? `${fmtHM(s)}${days === 1 ? ` às ${fmtHM(e)}` : `, término ${fmtDM(lastDay)} às ${fmtHM(e)}`}` : "—"}</dd>
               <dt className="text-muted-foreground">Tipo</dt>
               <dd><span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-semibold ${kind.chip}`}>{kind.label}</span>{kind.label !== request.visit_purpose && <span className="ml-2 text-muted-foreground">{request.visit_purpose}</span>}</dd>
-              <dt className="text-muted-foreground">Local</dt>
-              <dd>{request.location?.trim() || <span className="font-medium text-amber-700 dark:text-amber-300">Não informado <span className="font-normal text-muted-foreground">· projeto em {placeLabel(placeOf(request))}</span></span>}</dd>
+              {request.visit_format && <><dt className="text-muted-foreground">Formato</dt><dd>{VISIT_FORMAT_LABEL[request.visit_format]}</dd></>}
+              {request.visit_format === "remoto" ? (
+                <><dt className="text-muted-foreground">Reunião</dt><dd className="min-w-0"><MeetingLink url={request.meeting_url} /></dd></>
+              ) : (
+                <>
+                  <dt className="text-muted-foreground">{request.visit_format ? "Endereço" : "Local"}</dt>
+                  <dd>{request.location?.trim() || <span className="font-medium text-amber-700 dark:text-amber-300">Não informado <span className="font-normal text-muted-foreground">· projeto em {placeLabel(placeOf(request))}</span></span>}</dd>
+                </>
+              )}
               <dt className="text-muted-foreground">Solicitante</dt>
               <dd>{request.requester_name ?? "—"}</dd>
               <dt className="text-muted-foreground">GP do projeto</dt>
