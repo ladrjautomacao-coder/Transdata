@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Bus, CalendarClock, ChevronRight, Info, MessageSquareWarning } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -56,13 +56,18 @@ export function Kpi({ icon: Icon, label, value, caption, tone, info, onClick, st
 }
 
 export function TechAvatar({ tech, size = "h-7 w-7 text-[10px]" }: { tech: Technician; size?: string }) {
+  // foto que não carregou (arquivo apagado, sem rede) volta para as iniciais
+  const [failed, setFailed] = useState<string | null>(null);
+  const photo = tech.photo_url && tech.photo_url !== failed ? tech.photo_url : null;
   return (
     <span
       title={tech.full_name}
-      className={`inline-flex shrink-0 items-center justify-center rounded-full font-bold text-white ring-2 ring-card ${size}`}
+      className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold text-white ring-2 ring-card ${size}`}
       style={{ background: colorFor(tech.id) }}
     >
-      {initials(tech.full_name)}
+      {photo
+        ? <img src={photo} alt={tech.full_name} loading="lazy" draggable={false} className="h-full w-full object-cover" onError={() => setFailed(photo)} />
+        : initials(tech.full_name)}
     </span>
   );
 }

@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import {
-  AlertTriangle, Ban, CalendarRange, Check, CheckCircle2, History, Info, Loader2,
+  AlertTriangle, Ban, CalendarRange, Camera, Check, CheckCircle2, History, Info, Loader2,
   MapPin, MessageSquareWarning, Monitor, Pencil, Plus, RotateCcw, Send, Trash2, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,13 +16,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { formatLocation } from "@/lib/location";
 import { statusLabels, subPhasesByStatus } from "@/pages/ProjectManagement";
 import {
   HIDDEN_BY_DEFAULT_STATUSES, VISIT_PURPOSE_GROUPS, VISIT_PURPOSE_PRESETS, cancelRequest, createRequest,
   ATTENDANCE_LABEL, cancelApprovedRequest, errorMessage, fetchHistory, fetchTechnicians, formatPeriod, periodOf, registerAttendance,
   countTechnicianVisits, rejectRequest, removeTechnician, saveTechnician, type Attendance,
-  techniciansOf, toLocalInput,
+  photoFileProblem, removeTechnicianPhoto, techniciansOf, toLocalInput, uploadTechnicianPhoto,
   type EligibleProject, type HistoryEntry, type ImplantationRequest, type Technician,
 } from "@/lib/implantationScheduling";
 import { ProjectBox, StatusPill, TechAvatar } from "./AgendaShared";
@@ -461,6 +462,35 @@ export function RequestDetailSheet({ request, open, onOpenChange, mode, onApprov
 }
 
 /* ─── Técnicos (cadastro do módulo) ─────────────────────────────────────── */
+/** Avatar clicável do cadastro: sem foto, abre o seletor de arquivo; com foto, menu Trocar/Remover. */
+function TechPhotoButton({ tech, busy, onPick, onRemove }: { tech: Technician; busy: boolean; onPick: () => void; onRemove: () => void }) {
+  const face = (
+    <button type="button" disabled={busy} onClick={tech.photo_url ? undefined : onPick}
+      className="group relative shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-wait"
+      aria-label={tech.photo_url ? `Trocar ou remover a foto de ${tech.full_name}` : `Enviar foto de ${tech.full_name}`}>
+      <TechAvatar tech={tech} size="h-10 w-10 text-xs" />
+      <span className={`absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-white transition-opacity ${busy ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"}`}>
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+      </span>
+      {!tech.photo_url && !busy && (
+        <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground ring-2 ring-card">
+          <Camera className="h-2.5 w-2.5" />
+        </span>
+      )}
+    </button>
+  );
+  if (!tech.photo_url) return face;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>{face}</DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuItem onSelect={onPick}><Camera className="mr-2 h-4 w-4" />Trocar foto</DropdownMenuItem>
+        <DropdownMenuItem onSelect={onRemove} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" />Remover foto</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function TechniciansDialog({ open, onOpenChange, onChanged }: { open: boolean; onOpenChange: (o: boolean) => void; onChanged: () => void }) {
   const [list, setList] = useState<Technician[] | null>(null);
   const [name, setName] = useState("");
@@ -470,17 +500,63 @@ export function TechniciansDialog({ open, onOpenChange, onChanged }: { open: boo
   const [toRemove, setToRemove] = useState<{ tech: Technician; visits: number | null } | null>(null);
   const [removing, setRemoving] = useState(false);
   const [editing, setEditing] = useState<{ id: string; full_name: string; email: string; area: string } | null>(null);
+  const [photoBusy, setPhotoBusy] = useState<string | null>(null);
+  const [newPhoto, setNewPhoto] = useState<File | null>(null);
+  const [newPhotoUrl, setNewPhotoUrl] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const pickFor = useRef<Technician | "novo" | null>(null);
 
   const load = () => fetchTechnicians(true).then(setList).catch(err => { setList([]); toast.error("Erro ao carregar técnicos", { description: errorMessage(err) }); });
   useEffect(() => { if (open) { setList(null); setEditing(null); load(); } }, [open]);
+  useEffect(() => {
+    if (!newPhoto) { setNewPhotoUrl(null); return; }
+    const url = URL.createObjectURL(newPhoto);
+    setNewPhotoUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [newPhoto]);
+
+  const firstName = (n: string) => n.trim().split(/\s+/)[0];
+  const replaceInList = (t: Technician) => setList(l => l?.map(x => x.id === t.id ? t : x) ?? l);
+  const pickPhoto = (target: Technician | "novo") => { pickFor.current = target; fileRef.current?.click(); };
+  const onPhotoPicked = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // permite escolher o mesmo arquivo de novo
+    const target = pickFor.current;
+    if (!file || !target) return;
+    const problem = photoFileProblem(file);
+    if (problem) { toast.error(problem); return; }
+    if (target === "novo") { setNewPhoto(file); return; }
+    setPhotoBusy(target.id);
+    try {
+      replaceInList(await uploadTechnicianPhoto(target, file));
+      toast.success(`Foto de ${firstName(target.full_name)} atualizada.`);
+      onChanged();
+    } catch (err) { toast.error("Não foi possível enviar a foto", { description: errorMessage(err) }); }
+    finally { setPhotoBusy(null); }
+  };
+  const clearPhoto = async (t: Technician) => {
+    setPhotoBusy(t.id);
+    try {
+      replaceInList(await removeTechnicianPhoto(t));
+      toast.success(`Foto de ${firstName(t.full_name)} removida.`);
+      onChanged();
+    } catch (err) { toast.error("Não foi possível remover a foto", { description: errorMessage(err) }); }
+    finally { setPhotoBusy(null); }
+  };
 
   const add = async () => {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      await saveTechnician({ full_name: name.trim(), email: email.trim() || null, area: area.trim() || null });
-      toast.success(`${name.trim()} cadastrado(a).`);
-      setName(""); setEmail(""); setArea(""); await load(); onChanged();
+      const created = await saveTechnician({ full_name: name.trim(), email: email.trim() || null, area: area.trim() || null });
+      let photoError: string | null = null;
+      if (newPhoto) {
+        try { await uploadTechnicianPhoto(created, newPhoto); }
+        catch (err) { photoError = errorMessage(err); }
+      }
+      if (photoError) toast.warning(`${name.trim()} cadastrado(a), mas a foto não foi enviada.`, { description: `${photoError} Clique no avatar na lista para tentar de novo.` });
+      else toast.success(`${name.trim()} cadastrado(a).`);
+      setName(""); setEmail(""); setArea(""); setNewPhoto(null); await load(); onChanged();
     } catch (err) { toast.error("Não foi possível cadastrar", { description: errorMessage(err) }); }
     finally { setSaving(false); }
   };
@@ -508,7 +584,7 @@ export function TechniciansDialog({ open, onOpenChange, onChanged }: { open: boo
     if (!toRemove) return;
     setRemoving(true);
     try {
-      await removeTechnician(toRemove.tech.id);
+      await removeTechnician(toRemove.tech.id, toRemove.tech.photo_url);
       toast.success(`${toRemove.tech.full_name} removido(a) da agenda.`);
       setToRemove(null); await load(); onChanged();
     } catch (err) { toast.error("Não foi possível remover", { description: errorMessage(err) }); }
@@ -523,7 +599,20 @@ export function TechniciansDialog({ open, onOpenChange, onChanged }: { open: boo
           <DialogTitle>Técnicos de implantação</DialogTitle>
           <DialogDescription>Cadastro usado na aprovação e no calendário. Visível só para Super Admin nesta fase.</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-2 rounded-lg border border-border/60 p-3 sm:grid-cols-[1.4fr_1fr_1fr_auto]">
+        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onPhotoPicked} />
+        <div className="grid gap-2 rounded-lg border border-border/60 p-3 sm:grid-cols-[auto_1.4fr_1fr_1fr_auto]">
+          <div className="relative h-10 w-10 shrink-0">
+            <button type="button" onClick={() => pickPhoto("novo")} title={newPhoto ? "Trocar a foto" : "Foto (opcional)"} aria-label={newPhoto ? "Trocar a foto do novo técnico" : "Escolher foto do novo técnico (opcional)"}
+              className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-dashed border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              {newPhotoUrl ? <img src={newPhotoUrl} alt="Foto escolhida" className="h-full w-full object-cover object-[50%_25%]" /> : <Camera className="h-4 w-4" />}
+            </button>
+            {newPhoto && (
+              <button type="button" onClick={() => setNewPhoto(null)} aria-label="Tirar a foto escolhida" title="Tirar a foto"
+                className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-muted text-muted-foreground ring-2 ring-card hover:bg-destructive hover:text-destructive-foreground">
+                <X className="h-2.5 w-2.5" />
+              </button>
+            )}
+          </div>
           <Input placeholder="Nome *" value={name} onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === "Enter") add(); }} />
           <Input placeholder="E-mail" type="email" value={email} onChange={e => setEmail(e.target.value)} />
           <Input placeholder="Área (ex.: Bilhetagem)" value={area} onChange={e => setArea(e.target.value)} />
@@ -551,7 +640,7 @@ export function TechniciansDialog({ open, onOpenChange, onChanged }: { open: boo
               </li>
             ) : (
               <li key={t.id} className={`flex items-center gap-3 px-3 py-2.5 ${t.active ? "" : "opacity-50"}`}>
-                <TechAvatar tech={t} size="h-8 w-8 text-[10px]" />
+                <TechPhotoButton tech={t} busy={photoBusy === t.id} onPick={() => pickPhoto(t)} onRemove={() => clearPhoto(t)} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{t.full_name}</p>
                   <p className="truncate text-[11px] text-muted-foreground">{[t.area, t.email].filter(Boolean).join(" · ") || "—"}</p>
@@ -570,6 +659,7 @@ export function TechniciansDialog({ open, onOpenChange, onChanged }: { open: boo
             ))}
           </ul>
         )}
+        {!!list?.length && <p className="-mt-2 text-[11px] text-muted-foreground">Clique no avatar para enviar, trocar ou remover a foto. A imagem é recortada em quadrado.</p>}
         <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button></DialogFooter>
       </DialogContent>
     </Dialog>

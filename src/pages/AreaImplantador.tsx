@@ -34,7 +34,7 @@ type View = "lista" | "calendario";
 
 /** Visita da Área no formato usado pela grade do mês e pelo detalhe. */
 function toRequest(v: AgendaVisit, tech: NonNullable<TechnicianAgenda["technician"]>): ImplantationRequest {
-  const t = (id: string, full_name: string) => ({ technician: { id, full_name, email: null, area: null, active: true } });
+  const t = (id: string, full_name: string, photo_url?: string | null) => ({ technician: { id, full_name, email: null, area: null, active: true, photo_url } });
   return {
     id: v.id, project_id: v.project.id, requested_by: null, requester_name: v.requester_name,
     visit_purpose: v.visit_purpose, visit_purpose_is_custom: false,
@@ -44,7 +44,7 @@ function toRequest(v: AgendaVisit, tech: NonNullable<TechnicianAgenda["technicia
     cancel_reason: v.cancel_reason, created_at: v.start,
     project: { id: v.project.id, company_name: v.project.company_name, project_code: v.project.project_code, city: v.project.city,
       state: v.project.state, country_code: v.project.country_code, manager: v.project.manager_name ? { full_name: v.project.manager_name } : null },
-    members: [t(tech.id, tech.full_name), ...v.colleagues.map(c => t(c.id, c.full_name))],
+    members: [t(tech.id, tech.full_name, tech.photo_url), ...v.colleagues.map(c => t(c.id, c.full_name, c.photo_url))],
   };
 }
 

@@ -44,6 +44,8 @@ export interface Technician {
   email: string | null;
   area: string | null;
   active: boolean;
+  /** URL pública da foto (bucket technician-photos); sem foto, o avatar mostra as iniciais. */
+  photo_url?: string | null;
 }
 
 export interface EligibleProject {
@@ -102,7 +104,8 @@ export interface HistoryEntry {
 const REQUEST_COLS =
   "id, project_id, requested_by, requester_name, visit_purpose, visit_purpose_is_custom, requested_start, requested_end, location, notes, status, approved_start, approved_end, reviewer_name, reviewed_at, rejection_reason, attendance, attendance_note, attended_by_name, attended_at, cancel_reason, created_at, " +
   "project:projects(id, company_name, project_code, city, state, country_code, manager:team_members!projects_manager_id_fkey(full_name)), " +
-  "members:implantation_request_members(technician:implantation_technicians(id, full_name, email, area, active))";
+  "members:implantation_request_members(technician:implantation_technicians(id, full_name, email, area, active, photo_url))";
+const TECH_COLS = "id, full_name, email, area, active, photo_url";
 
 /** Período efetivo: o aprovado, se houver; senão o solicitado. */
 export const periodOf = (r: ImplantationRequest) => ({
@@ -127,7 +130,7 @@ export async function fetchRequests(): Promise<ImplantationRequest[]> {
 }
 
 export async function fetchTechnicians(includeInactive = false): Promise<Technician[]> {
-  let q = db.from("implantation_technicians").select("id, full_name, email, area, active").is("removed_at", null).order("full_name");
+  let q = db.from("implantation_technicians").select(TECH_COLS).is("removed_at", null).order("full_name");
   if (!includeInactive) q = q.eq("active", true);
   const { data, error } = await q;
   if (error) throw error;
@@ -195,10 +198,10 @@ export interface AgendaVisit {
   attended_at: string | null;
   cancel_reason: string | null;
   project: { id: string; company_name: string; project_code: string | null; city: string; state: string | null; country_code: string | null; status: string; manager_name: string | null };
-  colleagues: { id: string; full_name: string }[];
+  colleagues: { id: string; full_name: string; photo_url?: string | null }[];
 }
 export interface TechnicianAgenda {
-  technician: { id: string; full_name: string; area: string | null; email: string | null } | null;
+  technician: { id: string; full_name: string; area: string | null; email: string | null; photo_url?: string | null } | null;
   visits: AgendaVisit[];
 }
 
@@ -209,12 +212,73 @@ export async function fetchTechnicianAgenda(technicianId?: string | null): Promi
   return (data ?? { technician: null, visits: [] }) as TechnicianAgenda;
 }
 
-export async function saveTechnician(input: { id?: string; full_name: string; email: string | null; area: string | null; active?: boolean }): Promise<Technician> {
+export async function saveTechnician(input: { id?: string; full_name: string; email: string | null; area: string | null; active?: boolean; photo_url?: string | null }): Promise<Technician> {
   const { id, ...rest } = input;
   const { data, error } = id
-    ? await db.from("implantation_technicians").update(rest).eq("id", id).select("id, full_name, email, area, active").single()
-    : await db.from("implantation_technicians").insert(rest).select("id, full_name, email, area, active").single();
+    ? await db.from("implantation_technicians").update(rest).eq("id", id).select(TECH_COLS).single()
+    : await db.from("implantation_technicians").insert(rest).select(TECH_COLS).single();
   if (error) throw error;
+  return data as Technician;
+}
+
+/* ─── Foto do técnico ─── */
+const PHOTO_BUCKET = "technician-photos";
+const PHOTO_SIZE = 400;
+const PHOTO_MAX_BYTES = 15 * 1024 * 1024;
+
+/** Recorta em quadrado (no retrato, puxando para cima, onde fica o rosto) e reduz para 400×400 JPEG. */
+async function squarePhoto(file: File): Promise<Blob> {
+  let img: ImageBitmap;
+  try { img = await createImageBitmap(file); }
+  catch { throw new Error("Não foi possível ler a imagem. Use uma foto JPG, PNG ou WebP."); }
+  const side = Math.min(img.width, img.height);
+  const out = Math.min(PHOTO_SIZE, side);
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = out;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) { img.close(); throw new Error("O navegador não conseguiu processar a imagem."); }
+  ctx.fillStyle = "#fff"; // PNG com transparência vira fundo branco no JPEG
+  ctx.fillRect(0, 0, out, out);
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, (img.width - side) / 2, (img.height - side) * 0.25, side, side, 0, 0, out, out);
+  img.close();
+  const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, "image/jpeg", 0.85));
+  if (!blob) throw new Error("O navegador não conseguiu processar a imagem.");
+  return blob;
+}
+
+/** Validação rápida antes de processar (tipo e tamanho do arquivo escolhido). */
+export function photoFileProblem(file: File): string | null {
+  if (!file.type.startsWith("image/")) return "Escolha um arquivo de imagem (JPG, PNG ou WebP).";
+  if (file.size > PHOTO_MAX_BYTES) return "A imagem passa de 15 MB. Escolha uma menor.";
+  return null;
+}
+
+async function deletePhotoFile(url: string | null | undefined) {
+  const path = url?.split(`/${PHOTO_BUCKET}/`)[1]?.split("?")[0];
+  if (path) await supabase.storage.from(PHOTO_BUCKET).remove([decodeURIComponent(path)]);
+}
+
+/** Envia (ou troca) a foto do técnico e apaga o arquivo anterior. */
+export async function uploadTechnicianPhoto(tech: Technician, file: File): Promise<Technician> {
+  const problem = photoFileProblem(file);
+  if (problem) throw new Error(problem);
+  const blob = await squarePhoto(file);
+  const path = `${tech.id}/${crypto.randomUUID()}.jpg`;
+  const { error: upErr } = await supabase.storage.from(PHOTO_BUCKET).upload(path, blob, { contentType: "image/jpeg", cacheControl: "31536000" });
+  if (upErr) throw upErr;
+  const photo_url = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl;
+  const { data, error } = await db.from("implantation_technicians").update({ photo_url }).eq("id", tech.id).select(TECH_COLS).single();
+  if (error) { await supabase.storage.from(PHOTO_BUCKET).remove([path]); throw error; }
+  await deletePhotoFile(tech.photo_url);
+  return data as Technician;
+}
+
+/** Tira a foto do técnico (volta a mostrar as iniciais). */
+export async function removeTechnicianPhoto(tech: Technician): Promise<Technician> {
+  const { data, error } = await db.from("implantation_technicians").update({ photo_url: null }).eq("id", tech.id).select(TECH_COLS).single();
+  if (error) throw error;
+  await deletePhotoFile(tech.photo_url);
   return data as Technician;
 }
 
@@ -229,8 +293,10 @@ export async function countTechnicianVisits(id: string): Promise<number> {
  * Remove o técnico do cadastro. Sem visitas: exclui. Com visitas: marca como removido
  * (some do cadastro e das listas, mas o nome continua no histórico das visitas).
  */
-export async function removeTechnician(id: string): Promise<"excluido" | "arquivado"> {
+export async function removeTechnician(id: string, photoUrl?: string | null): Promise<"excluido" | "arquivado"> {
   if (await countTechnicianVisits(id) === 0) {
+    // apaga a foto antes: depois de excluído o técnico, a policy do bucket não acha mais o dono do arquivo
+    await deletePhotoFile(photoUrl);
     const { error } = await db.from("implantation_technicians").delete().eq("id", id);
     if (error) throw error;
     return "excluido";
