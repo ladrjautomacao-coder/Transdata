@@ -107,16 +107,6 @@ const REQUEST_COLS =
   "members:implantation_request_members(technician:implantation_technicians(id, full_name, email, area, active, photo_url))";
 const TECH_COLS = "id, full_name, email, area, active, photo_url";
 
-// Enquanto a migração 20261016120000 (coluna photo_url) não estiver no banco, as
-// consultas são repetidas sem a coluna, para o portal não parar. Remover depois.
-const noPhoto = (cols: string) => cols.replace(/, photo_url/g, "");
-async function selectCompat<T>(run: (cols: (c: string) => string) => PromiseLike<{ data: T | null; error: { message?: string } | null }>): Promise<T | null> {
-  let res = await run(c => c);
-  if (res.error && /photo_url/.test(res.error.message ?? "")) res = await run(noPhoto);
-  if (res.error) throw res.error;
-  return res.data;
-}
-
 /** Período efetivo: o aprovado, se houver; senão o solicitado. */
 export const periodOf = (r: ImplantationRequest) => ({
   start: new Date(r.approved_start ?? r.requested_start),
@@ -134,16 +124,16 @@ export const techniciansOf = (r: ImplantationRequest) =>
   r.members.map(m => m.technician).filter((t): t is Technician => !!t);
 
 export async function fetchRequests(): Promise<ImplantationRequest[]> {
-  const data = await selectCompat(cols => db.from("implantation_requests").select(cols(REQUEST_COLS)).order("created_at", { ascending: false }));
+  const { data, error } = await db.from("implantation_requests").select(REQUEST_COLS).order("created_at", { ascending: false });
+  if (error) throw error;
   return (data ?? []) as ImplantationRequest[];
 }
 
 export async function fetchTechnicians(includeInactive = false): Promise<Technician[]> {
-  const data = await selectCompat(cols => {
-    let q = db.from("implantation_technicians").select(cols(TECH_COLS)).is("removed_at", null).order("full_name");
-    if (!includeInactive) q = q.eq("active", true);
-    return q;
-  });
+  let q = db.from("implantation_technicians").select(TECH_COLS).is("removed_at", null).order("full_name");
+  if (!includeInactive) q = q.eq("active", true);
+  const { data, error } = await q;
+  if (error) throw error;
   return (data ?? []) as Technician[];
 }
 
@@ -223,13 +213,11 @@ export async function fetchTechnicianAgenda(technicianId?: string | null): Promi
 }
 
 export async function saveTechnician(input: { id?: string; full_name: string; email: string | null; area: string | null; active?: boolean; photo_url?: string | null }): Promise<Technician> {
-  const { id, photo_url, ...base } = input;
-  // photo_url só vai no corpo quando foi informado (toggle de ativo devolve o valor atual)
-  const rest = photo_url === undefined ? base : { ...base, photo_url };
-  // falha no select desfaz o insert/update (mesma requisição), então repetir é seguro
-  const data = await selectCompat(cols => id
-    ? db.from("implantation_technicians").update(rest).eq("id", id).select(cols(TECH_COLS)).single()
-    : db.from("implantation_technicians").insert(rest).select(cols(TECH_COLS)).single());
+  const { id, ...rest } = input;
+  const { data, error } = id
+    ? await db.from("implantation_technicians").update(rest).eq("id", id).select(TECH_COLS).single()
+    : await db.from("implantation_technicians").insert(rest).select(TECH_COLS).single();
+  if (error) throw error;
   return data as Technician;
 }
 
