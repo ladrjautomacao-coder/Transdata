@@ -183,10 +183,11 @@ export default function CalendarioImplantacao() {
   const filtersOn = !!(search || techFilter || kindFilter || stateFilter || ufFilter);
   const clearFilters = () => { setSearch(""); setTechFilter(""); setKindFilter(""); setStateFilter(""); setUfFilter(""); };
 
-  // técnicos: ativos + quem estiver alocado no período (mesmo se inativado depois)
+  // técnicos: ativos + quem estiver alocado no período (mesmo se inativado depois);
+  // removido do cadastro não volta como linha — o nome fica só no detalhe da visita
   const allTechs = useMemo(() => {
     const map = new Map<string, Technician>(technicians.map(t => [t.id, t]));
-    approvedAll.filter(inRange).forEach(r => techniciansOf(r).forEach(t => { if (!map.has(t.id)) map.set(t.id, t); }));
+    approvedAll.filter(inRange).forEach(r => techniciansOf(r).forEach(t => { if (!t.removed_at && !map.has(t.id)) map.set(t.id, t); }));
     return [...map.values()].sort((a, b) => a.full_name.localeCompare(b.full_name));
   }, [technicians, approvedAll, inRange]);
   const rowTechs = useMemo(() => allTechs.filter(t => !techFilter || t.id === techFilter), [allTechs, techFilter]);
@@ -198,7 +199,7 @@ export default function CalendarioImplantacao() {
   const loads = useMemo(() => new Map(allTechs.map(t => [t.id, techLoad(t, approvedAll, winFrom, loadUntil ?? plusDays(winFrom, -1), holidayMap, today)])),
     [allTechs, approvedAll, +winFrom, +(loadUntil ?? 0), holidayMap, today]); // eslint-disable-line react-hooks/exhaustive-deps
   const todayList = approvedAll.filter(r => coversDay(r, today));
-  const inField = new Set(todayList.flatMap(r => techniciansOf(r).map(t => t.id))).size;
+  const inField = new Set(todayList.flatMap(r => techniciansOf(r).filter(t => !t.removed_at).map(t => t.id))).size;
 
   const alerts = useMemo(() => computeAlerts({
     techs: allTechs, approved: approvedAll, from: rangeStart, to: rangeEnd, today, holidays: holidayMap, custom: customHolidays, index,

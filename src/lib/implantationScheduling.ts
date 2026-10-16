@@ -46,6 +46,8 @@ export interface Technician {
   active: boolean;
   /** URL pública da foto (bucket technician-photos); sem foto, o avatar mostra as iniciais. */
   photo_url?: string | null;
+  /** Preenchido quando o técnico foi removido do cadastro (só vem nos membros das visitas). */
+  removed_at?: string | null;
 }
 
 export interface EligibleProject {
@@ -104,7 +106,7 @@ export interface HistoryEntry {
 const REQUEST_COLS =
   "id, project_id, requested_by, requester_name, visit_purpose, visit_purpose_is_custom, requested_start, requested_end, location, notes, status, approved_start, approved_end, reviewer_name, reviewed_at, rejection_reason, attendance, attendance_note, attended_by_name, attended_at, cancel_reason, created_at, " +
   "project:projects(id, company_name, project_code, city, state, country_code, manager:team_members!projects_manager_id_fkey(full_name)), " +
-  "members:implantation_request_members(technician:implantation_technicians(id, full_name, email, area, active, photo_url))";
+  "members:implantation_request_members(technician:implantation_technicians(id, full_name, email, area, active, photo_url, removed_at))";
 const TECH_COLS = "id, full_name, email, area, active, photo_url";
 
 /** Período efetivo: o aprovado, se houver; senão o solicitado. */
