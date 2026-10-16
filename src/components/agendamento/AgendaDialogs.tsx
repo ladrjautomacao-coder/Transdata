@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
-  AlertTriangle, Ban, CalendarCheck, CalendarRange, Check, CheckCircle2, Circle, History, Info, Loader2,
-  MapPin, MessageSquareWarning, Monitor, Pencil, Plus, RotateCcw, Send, Trash2, UserRoundCog, X,
+  AlertTriangle, Ban, CalendarRange, Check, CheckCircle2, History, Info, Loader2,
+  MapPin, MessageSquareWarning, Monitor, Pencil, Plus, RotateCcw, Send, Trash2, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,14 +19,13 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSepa
 import { formatLocation } from "@/lib/location";
 import { statusLabels, subPhasesByStatus } from "@/pages/ProjectManagement";
 import {
-  HIDDEN_BY_DEFAULT_STATUSES, VISIT_PURPOSE_GROUPS, VISIT_PURPOSE_PRESETS, approveRequest, cancelRequest, conflictsFor, createRequest,
+  HIDDEN_BY_DEFAULT_STATUSES, VISIT_PURPOSE_GROUPS, VISIT_PURPOSE_PRESETS, cancelRequest, createRequest,
   ATTENDANCE_LABEL, cancelApprovedRequest, errorMessage, fetchHistory, fetchTechnicians, formatPeriod, periodOf, registerAttendance,
   countTechnicianVisits, rejectRequest, removeTechnician, saveTechnician, type Attendance,
   techniciansOf, toLocalInput,
   type EligibleProject, type HistoryEntry, type ImplantationRequest, type Technician,
 } from "@/lib/implantationScheduling";
 import { ProjectBox, StatusPill, TechAvatar } from "./AgendaShared";
-import { AvailabilityPreview } from "./AvailabilityPreview";
 import { HolidayWarning } from "./HolidaysDialog";
 import { useCustomHolidays } from "@/hooks/useCustomHolidays";
 
@@ -182,185 +181,6 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={submit} disabled={saving || !!duplicate} title={duplicate ? DUPLICATE_PURPOSE_MSG : undefined}>{saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}Enviar solicitação</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/* ─── Aprovar (Aprovador) ───────────────────────────────────────────────── */
-export function ApproveDialog({ request, technicians, allRequests, open, onOpenChange, onDone, onManageTechnicians, initialSelected, onTechnicianAdded }: {
-  request: ImplantationRequest | null; technicians: Technician[]; allRequests: ImplantationRequest[];
-  open: boolean; onOpenChange: (o: boolean) => void; onDone: () => void;
-  /** Ausente = sem permissão de cadastro de técnicos (some "Novo técnico" e o atalho de edição). */
-  onManageTechnicians?: () => void;
-  /** Técnicos já marcados ao abrir (ex.: escolhidos no painel de disponibilidade). */
-  initialSelected?: string[];
-  /** Chamado após o cadastro rápido de um técnico dentro desta janela. */
-  onTechnicianAdded?: (t: Technician) => void;
-}) {
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
-  const [selected, setSelected] = useState<string[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [techSearch, setTechSearch] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newArea, setNewArea] = useState("");
-  const [savingTech, setSavingTech] = useState(false);
-
-  useEffect(() => {
-    if (!open || !request) return;
-    setStart(toLocalInput(new Date(request.requested_start)));
-    setEnd(toLocalInput(new Date(request.requested_end)));
-    setSelected(initialSelected ?? []);
-    setTechSearch(""); setAdding(false); setNewName(""); setNewArea("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, request]);
-
-  // Cadastro rápido: cria o técnico e já o deixa selecionado
-  const addTechnician = async () => {
-    if (!newName.trim()) return;
-    setSavingTech(true);
-    try {
-      const t = await saveTechnician({ full_name: newName.trim(), email: null, area: newArea.trim() || null });
-      onTechnicianAdded?.(t);
-      setSelected(v => [...v, t.id]);
-      setNewName(""); setNewArea(""); setAdding(false);
-      toast.success(`${t.full_name} cadastrado(a) e selecionado(a).`);
-    } catch (err) {
-      toast.error("Não foi possível cadastrar o técnico", { description: errorMessage(err) });
-    } finally { setSavingTech(false); }
-  };
-
-  const s = new Date(start), e = new Date(end);
-  const { custom: customHolidays } = useCustomHolidays(open);
-  const validDates = !isNaN(+s) && !isNaN(+e) && e > s;
-  const conflictMap = useMemo(() => {
-    const m: Record<string, ImplantationRequest[]> = {};
-    if (validDates && request) technicians.forEach(t => { m[t.id] = conflictsFor(t.id, s, e, allRequests, request.id); });
-    return m;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [start, end, technicians, allRequests, request, validDates]);
-
-  if (!request) return null;
-  const conflicted = selected.filter(id => conflictMap[id]?.length);
-  const blocked = !validDates || selected.length === 0 || conflicted.length > 0;
-  const toggle = (id: string) => setSelected(v => v.includes(id) ? v.filter(x => x !== id) : [...v, id]);
-
-  const submit = async () => {
-    setSaving(true);
-    try {
-      await approveRequest(request.id, s, e, selected);
-      toast.success(`Aprovada! ${request.project?.company_name ?? "Visita"} publicada no calendário.`);
-      onOpenChange(false); onDone();
-    } catch (err) {
-      toast.error("Não foi possível aprovar", { description: errorMessage(err) });
-      onDone();
-    } finally { setSaving(false); }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>Aprovar agendamento</DialogTitle>
-          <DialogDescription>Solicitado por {request.requester_name ?? "—"} em {fmtDT(request.created_at)}</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          {request.project && <ProjectBox project={request.project} />}
-          <div className="rounded-lg border border-border/60 px-3.5 py-2.5 text-xs">
-            <span className="text-muted-foreground">Objetivo:</span> <b>{request.visit_purpose}</b>
-            {request.notes && <p className="mt-1 text-muted-foreground">“{request.notes}”</p>}
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div><Label className="text-xs">Início aprovado *</Label><Input className="mt-1.5" type="datetime-local" value={start} onChange={ev => setStart(ev.target.value)} />
-              <p className="mt-1 text-[11px] text-muted-foreground">Pedido: {fmtDT(request.requested_start)}</p></div>
-            <div><Label className="text-xs">Fim aprovado *</Label><Input className="mt-1.5" type="datetime-local" value={end} onChange={ev => setEnd(ev.target.value)} />
-              <p className="mt-1 text-[11px] text-muted-foreground">Pedido: {fmtDT(request.requested_end)}</p></div>
-          </div>
-          {!validDates && <FieldError msg="O fim deve ser depois do início." />}
-          <HolidayWarning start={start ? s : null} end={end ? e : null} custom={customHolidays}
-            place={{ city: request.project?.city, state: request.project?.state }} />
-          <div className="rounded-xl border border-primary/30 bg-primary/[0.03] p-3.5">
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <Label className="text-sm font-semibold">Quem vai atuar nesta demanda? *</Label>
-              <span className="text-[11px] text-muted-foreground">clique para selecionar (mín. 1)</span>
-              <div className="ml-auto flex items-center gap-1">
-                {technicians.length > 6 && (
-                  <Input value={techSearch} onChange={ev => setTechSearch(ev.target.value)} placeholder="Buscar técnico..." className="h-7 w-40 text-xs" />
-                )}
-                {onManageTechnicians && <>
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setAdding(a => !a)}><Plus className="mr-1 h-3.5 w-3.5" />Novo técnico</Button>
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onManageTechnicians} title="Editar ou desativar técnicos" aria-label="Editar ou desativar técnicos"><UserRoundCog className="h-3.5 w-3.5" /></Button>
-                </>}
-              </div>
-            </div>
-            {!onManageTechnicians && technicians.length === 0 && (
-              <p className="mb-2.5 rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200">Nenhum técnico cadastrado. Peça a quem gerencia os técnicos da agenda para cadastrá-los.</p>
-            )}
-            {onManageTechnicians && (adding || technicians.length === 0) && (
-              <div className="mb-2.5 rounded-lg border border-dashed border-primary/40 bg-background p-2.5">
-                <p className="mb-2 text-[11px] text-muted-foreground">{technicians.length === 0 ? "Nenhum técnico cadastrado ainda. Cadastre o primeiro — ele já entra selecionado:" : "Cadastrar novo técnico (já entra selecionado):"}</p>
-                <div className="grid gap-2 sm:grid-cols-[1.5fr_1fr_auto]">
-                  <Input autoFocus value={newName} onChange={ev => setNewName(ev.target.value)} onKeyDown={ev => { if (ev.key === "Enter") addTechnician(); }} placeholder="Nome do técnico *" className="h-9" />
-                  <Input value={newArea} onChange={ev => setNewArea(ev.target.value)} onKeyDown={ev => { if (ev.key === "Enter") addTechnician(); }} placeholder="Área (ex.: Bilhetagem)" className="h-9" />
-                  <Button size="sm" className="h-9" onClick={addTechnician} disabled={!newName.trim() || savingTech}>
-                    {savingTech ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}Adicionar
-                  </Button>
-                </div>
-              </div>
-            )}
-            {technicians.length > 0 && (
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {technicians.filter(t => !techSearch.trim() || `${t.full_name} ${t.area ?? ""}`.toLowerCase().includes(techSearch.trim().toLowerCase())).map(t => {
-                  const c = conflictMap[t.id] ?? [];
-                  const on = selected.includes(t.id);
-                  return (
-                    <button key={t.id} type="button" onClick={() => toggle(t.id)}
-                      className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors ${on ? (c.length ? "border-destructive bg-destructive/10" : "border-primary bg-primary/5") : "border-border/60 hover:bg-muted/60"}`}>
-                      <TechAvatar tech={t} size="h-8 w-8 text-[10px]" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">{t.full_name}</span>
-                        <span className={`block truncate text-[10px] ${c.length ? "font-semibold text-destructive" : "text-emerald-600 dark:text-emerald-400"}`}>
-                          {c.length ? `Ocupado: ${c[0].project?.company_name} (${formatPeriod(periodOf(c[0]).start, periodOf(c[0]).end)})` : `Disponível${t.area ? ` · ${t.area}` : ""}`}
-                        </span>
-                      </span>
-                      {on ? <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {conflicted.length > 0 ? (
-              <div className="mt-2 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span><b>Conflito de agenda:</b> {conflicted.map(id => {
-                  const t = technicians.find(x => x.id === id)!; const c = conflictMap[id][0];
-                  return `${t.full_name} já está em ${c.project?.company_name} (${formatPeriod(periodOf(c).start, periodOf(c).end)})`;
-                }).join("; ")}. Remova o técnico ou ajuste o período.</span>
-              </div>
-            ) : selected.length > 0 ? (
-              <p className="mt-2 text-[11px] text-emerald-600 dark:text-emerald-400"><Check className="mr-1 inline h-3 w-3" />{selected.length} técnico(s) sem conflito.</p>
-            ) : technicians.length > 0 && <p className="mt-2 text-[11px] text-muted-foreground">Selecione pelo menos 1 técnico.</p>}
-          </div>
-          {validDates && technicians.length > 0 && (
-            <AvailabilityPreview start={s} end={e} technicians={technicians} requests={allRequests} ignoreId={request.id}
-              selectedIds={selected} onPickTechnician={toggle} compact />
-          )}
-        </div>
-        <DialogFooter className="items-center gap-2 sm:justify-between">
-          <p className="text-xs text-muted-foreground">
-            {selected.length
-              ? <>Atuando: <b className="text-foreground">{selected.map(id => technicians.find(t => t.id === id)?.full_name).filter(Boolean).join(", ")}</b></>
-              : "Nenhum técnico selecionado"}
-          </p>
-          <div className="flex gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Voltar</Button>
-          <Button onClick={submit} disabled={blocked || saving} className="bg-emerald-600 text-white hover:bg-emerald-500">
-            {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <CalendarCheck className="mr-1.5 h-4 w-4" />}Aprovar e publicar no calendário
-          </Button>
-          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

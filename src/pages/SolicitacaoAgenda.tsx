@@ -20,8 +20,9 @@ import {
 import { EmptyBlock, Kpi, RequestRow } from "@/components/agendamento/AgendaShared";
 import { AvailabilityPreview } from "@/components/agendamento/AvailabilityPreview";
 import {
-  ApproveDialog, CancelDialog, RejectDialog, RequestDetailSheet, RequestDialog, TechniciansDialog,
+  CancelDialog, RejectDialog, RequestDetailSheet, RequestDialog, TechniciansDialog,
 } from "@/components/agendamento/AgendaDialogs";
+import { AssignSheet } from "@/components/agendamento/AssignSheet";
 
 type Mode = "gp" | "ap";
 type GpTab = "todas" | RequestStatus;
@@ -398,9 +399,11 @@ export default function SolicitacaoAgenda({ view = "gp" }: { view?: Mode }) {
 
       <RequestDialog project={reqProject} open={!!reqProject} onOpenChange={o => { if (!o) setReqProject(null); }}
         existing={requests} onCreated={() => { setGpTab("pendente"); load(); }} />
-      <ApproveDialog request={approving} technicians={technicians} allRequests={requests} open={!!approving}
-        initialSelected={approveInitial}
-        onOpenChange={o => { if (!o) { setApproving(null); setApproveInitial([]); } }} onDone={refreshDetail} onManageTechnicians={canManageTechs ? () => setTechOpen(true) : undefined}
+      <AssignSheet request={approving} technicians={technicians} allRequests={requests} open={!!approving}
+        initialSelected={approveInitial.length ? approveInitial : undefined}
+        onOpenChange={o => { if (!o) { setApproving(null); setApproveInitial([]); } }} onDone={refreshDetail}
+        onReject={r => { setApproving(null); setApproveInitial([]); setRejecting(r); }}
+        onManageTechnicians={canManageTechs ? () => setTechOpen(true) : undefined}
         onTechnicianAdded={t => setTechnicians(list => [...list, t].sort((a, b) => a.full_name.localeCompare(b.full_name)))} />
       <RejectDialog request={rejecting} open={!!rejecting} onOpenChange={o => { if (!o) setRejecting(null); }} onDone={refreshDetail} />
       <CancelDialog request={cancelling} open={!!cancelling} onOpenChange={o => { if (!o) setCancelling(null); }} onDone={refreshDetail} />

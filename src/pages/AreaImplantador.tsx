@@ -14,7 +14,9 @@ import { EmptyBlock, Kpi } from "@/components/agendamento/AgendaShared";
 import { HolidayWarning } from "@/components/agendamento/HolidaysDialog";
 import { InstallAppButton } from "@/pwa/InstallAppButton";
 import { RequestDetailSheet } from "@/components/agendamento/AgendaDialogs";
-import { MonthGrid } from "@/pages/CalendarioImplantacao";
+import { MonthGrid } from "@/components/agendamento/MonthGrid";
+import { MinhaAgenda, MinhaAgendaHeader } from "@/components/agendamento/MinhaAgenda";
+import { useCityIndex } from "@/hooks/useCityIndex";
 import { holidaysByDay } from "@/lib/holidays";
 import { formatLocation } from "@/lib/location";
 import {
@@ -84,6 +86,7 @@ export default function AreaImplantador() {
   const [pickedDay, setPickedDay] = useState<Date | null>(null);
   const [detail, setDetail] = useState<ImplantationRequest | null>(null);
   const { custom: customHolidays } = useCustomHolidays();
+  const cityIndex = useCityIndex();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -136,6 +139,7 @@ export default function AreaImplantador() {
   const calendarList = useMemo(() => agenda?.technician
     ? visits.filter(v => v.status === "aprovada").map(v => toRequest(v, agenda.technician!)) : [], [visits, agenda]);
   const holidayMap = useMemo(() => holidaysByDay([month.getFullYear() - 1, month.getFullYear(), month.getFullYear() + 1], customHolidays), [month, customHolidays]);
+  const todayHolidays = useMemo(() => holidaysByDay([now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1], customHolidays), [now, customHolidays]);
   const sameMonth = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
   const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const selectedDay = pickedDay && sameMonth(pickedDay, month) ? pickedDay : sameMonth(today0, month) ? today0 : month;
@@ -201,9 +205,29 @@ export default function AreaImplantador() {
     );
   }
 
+  const tech = { ...agenda.technician, active: true };
   return (
     <div className="flex flex-col gap-5">
-      {header}
+      {isMobile ? (
+        <>
+          <MinhaAgendaHeader tech={tech} today={now} title={techId ? `Agenda de ${tech.full_name.split(" ")[0]}` : "Minha agenda"} />
+          {canPickOther && (
+            <div className="-mt-2 flex items-center gap-2">
+              <Select value={techId ?? "me"} onValueChange={v => setTechId(v === "me" ? null : v)}>
+                <SelectTrigger className="h-9 flex-1 text-xs" aria-label="Técnico"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="me">Minha agenda</SelectItem>
+                  {technicians.map(t => <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => void load()} aria-label="Atualizar"><RefreshCw className="h-4 w-4" /></Button>
+            </div>
+          )}
+        </>
+      ) : header}
+
+      <MinhaAgenda visits={calendarList} today={now} holidays={todayHolidays} index={cityIndex} onOpen={setDetail}
+        compactList={isMobile} layout={isMobile ? "stack" : "row"} />
 
       {isMobile && !isStandalone && (
         <div className="flex items-start gap-2.5 rounded-lg bg-sky-500/10 px-3.5 py-3 text-xs text-sky-800 dark:text-sky-200">
@@ -257,7 +281,8 @@ export default function AreaImplantador() {
                 <span className="px-2 text-sm font-semibold">{MONTHS_FULL[month.getMonth()]} de {month.getFullYear()}</span>
               </div>
               <MonthGrid month={month} list={calendarList} onOpen={setDetail} highlightId={null}
-                selected={selectedDay} onSelect={setPickedDay} holidays={holidayMap} />
+                selected={selectedDay} onSelect={setPickedDay} holidays={holidayMap} custom={customHolidays}
+                hint={isMobile ? "Toque num dia para ver a agenda dele" : "Clique numa visita para ver os detalhes · clique num dia para ver a agenda dele"} />
               <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
                 <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
                   <CalendarDays className="h-4 w-4 text-primary" />
@@ -272,7 +297,7 @@ export default function AreaImplantador() {
               </section>
             </>
           ) : (<>
-          <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+          {!isMobile && <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
             <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
               <CalendarClock className="h-4 w-4 text-primary" />
               <h2 className="text-sm font-semibold">Próximas visitas</h2>
@@ -283,7 +308,7 @@ export default function AreaImplantador() {
             ) : (
               <ul>{upcoming.map(v => <VisitCard key={v.id} v={v} now={now} customHolidays={customHolidays} />)}</ul>
             )}
-          </section>
+          </section>}
 
           <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
             <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
@@ -300,7 +325,7 @@ export default function AreaImplantador() {
           </>)}
         </div>
 
-        <aside className="flex flex-col gap-5">
+        <aside className="flex min-w-0 flex-col gap-5">
           <ProjectsCard title="Em atendimento" icon={FolderKanban} items={projects.active} empty="Nenhum projeto com visita agendada." />
           <ProjectsCard title="Já atendidos" icon={CalendarCheck} items={projects.done} empty="Ainda não há projetos atendidos." />
         </aside>
