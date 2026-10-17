@@ -1,0 +1,195 @@
+// Alertas de prazo por e-mail (Resend).
+//
+// • Execução diária (pg_cron, 08:00 de Brasília): cabeçalho x-job-secret. Para cada
+//   empresa com envio ativo, manda o alerta de cada projeto que chegou a um marco
+//   (implantação: 30 dias; contrato: 12, 6 e 3 meses) e, às segundas, o resumo
+//   semanal. Cada envio fica em deadline_alert_deliveries, então ninguém recebe
+//   o mesmo aviso duas vezes, mesmo que a função rode de novo.
+// • Teste (botão em Configurações): Admin logado; envia aos destinatários da empresa.
+//
+// Segredos: RESEND_API_KEY, ALERTS_FROM ("Nome <endereco@dominio>"), PORTAL_URL.
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { ymd } from "../_shared/deadlineDates.ts";
+import {
+  renderAlertEmail, renderDigestEmail, sampleAlert,
+  type DeadlineAlert, type EmailContext, type RenderedEmail,
+} from "../_shared/deadlineEmail.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-job-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+const env = (k: string) => Deno.env.get(k) ?? "";
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+interface Settings {
+  tenant_id: string;
+  enabled: boolean;
+  recipients: string[];
+  include_manager: boolean;
+  weekly_digest: boolean;
+}
+type Row = DeadlineAlert & { tenant_id: string; manager_id: string | null };
+
+/** Hoje em Brasília, YYYY-MM-DD. */
+const todaySaoPaulo = () =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+
+async function sendEmail(to: string[], email: RenderedEmail): Promise<string> {
+  const key = env("RESEND_API_KEY");
+  if (!key) throw new Error("RESEND_API_KEY não configurada no Supabase.");
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: env("ALERTS_FROM") || "Portal de Projetos Transdata <alertas@itstransdata.com>",
+      to, subject: email.subject, html: email.html, text: email.text,
+    }),
+  });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(out?.message ?? `Resend respondeu ${res.status}.`);
+  return out?.id ?? "";
+}
+
+async function contextFor(db: SupabaseClient, s: Settings, today: string, test = false): Promise<EmailContext> {
+  const { data: b } = await db.from("tenant_branding").select("status_labels, team_role_labels").eq("tenant_id", s.tenant_id).maybeSingle();
+  const portalUrl = (env("PORTAL_URL") || "https://projetostransdata.vercel.app").replace(/\/+$/, "");
+  return {
+    today, portalUrl, test,
+    logoUrl: env("ALERTS_LOGO_URL") || `${portalUrl}/email/logo-transdata-email.png`,
+    recipients: s.recipients, includesManager: s.include_manager,
+    statusLabels: b?.status_labels ?? null, roleLabels: b?.team_role_labels ?? null,
+  };
+}
+
+/** Reserva o envio (índice único impede duplicar), envia e registra o resultado. */
+async function deliver(
+  db: SupabaseClient,
+  key: { tenant_id: string; project_id: string | null; kind: string; milestone: string; due_date: string },
+  to: string[], email: RenderedEmail,
+): Promise<{ status: "enviado" | "erro" | "ja_enviado"; error?: string }> {
+  const { data: claim, error } = await db.from("deadline_alert_deliveries")
+    .insert({ ...key, recipients: to, subject: email.subject, status: "enviando" }).select("id").single();
+  if (error) {
+    if (error.code === "23505") return { status: "ja_enviado" };
+    throw error;
+  }
+  try {
+    const providerId = await sendEmail(to, email);
+    await db.from("deadline_alert_deliveries").update({ status: "enviado", provider_id: providerId }).eq("id", claim.id);
+    return { status: "enviado" };
+  } catch (e) {
+    const msg = String((e as Error)?.message ?? e).slice(0, 500);
+    await db.from("deadline_alert_deliveries").update({ status: "erro", error: msg }).eq("id", claim.id);
+    return { status: "erro", error: msg };
+  }
+}
+
+async function managerEmails(db: SupabaseClient, rows: Row[]) {
+  const ids = [...new Set(rows.map(r => r.manager_id).filter((x): x is string => !!x))];
+  if (!ids.length) return new Map<string, string>();
+  const { data } = await db.from("team_members").select("id, email").in("id", ids);
+  return new Map((data ?? []).filter(m => m.email).map(m => [m.id as string, String(m.email).trim().toLowerCase()]));
+}
+
+async function runDaily(db: SupabaseClient, today: string) {
+  // registros presos em "enviando" (execução interrompida) liberam o envio para hoje
+  await db.from("deadline_alert_deliveries")
+    .update({ status: "erro", error: "Execução interrompida antes de confirmar o envio." })
+    .eq("status", "enviando").lt("created_at", new Date(Date.now() - 2 * 3_600_000).toISOString());
+
+  const { data: settings, error: sErr } = await db.from("alert_email_settings").select("*").eq("enabled", true);
+  if (sErr) throw sErr;
+  if (!settings?.length) return { ok: true, today, message: "Nenhuma empresa com envio ativo." };
+
+  const { data: all, error } = await db.rpc("project_deadline_alerts", { _today: today });
+  if (error) throw error;
+  const summary = { ok: true, today, enviados: 0, erros: 0, ja_enviados: 0, resumos: 0, falhas: [] as string[] };
+
+  for (const s of settings as Settings[]) {
+    const rows = ((all ?? []) as Row[]).filter(r => r.tenant_id === s.tenant_id);
+    if (!rows.length) continue;
+    const ctx = await contextFor(db, s, today);
+    const gpEmail = s.include_manager ? await managerEmails(db, rows) : new Map<string, string>();
+
+    for (const r of rows) {
+      const extra = s.include_manager && r.manager_id ? gpEmail.get(r.manager_id) : undefined;
+      const to = [...new Set([...s.recipients, ...(extra ? [extra] : [])])];
+      if (!to.length) continue;
+      const res = await deliver(db, { tenant_id: s.tenant_id, project_id: r.project_id, kind: r.kind, milestone: r.milestone, due_date: r.due_date },
+        to, renderAlertEmail(r, ctx));
+      if (res.status === "enviado") { summary.enviados++; await sleep(600); }
+      else if (res.status === "erro") { summary.erros++; summary.falhas.push(`${r.company_name}: ${res.error}`); }
+      else summary.ja_enviados++;
+    }
+
+    if (s.weekly_digest && ymd(today).getUTCDay() === 1 && s.recipients.length) {
+      const res = await deliver(db, { tenant_id: s.tenant_id, project_id: null, kind: "resumo", milestone: "semanal", due_date: today },
+        s.recipients, renderDigestEmail(rows, ctx));
+      if (res.status === "enviado") summary.resumos++;
+      else if (res.status === "erro") { summary.erros++; summary.falhas.push(`Resumo semanal: ${res.error}`); }
+    }
+  }
+  return summary;
+}
+
+async function sendTest(db: SupabaseClient, tenantId: string, today: string, kind: string) {
+  const { data: s } = await db.from("alert_email_settings").select("*").eq("tenant_id", tenantId).maybeSingle();
+  if (!s || !(s as Settings).recipients?.length) return json({ error: "Cadastre ao menos um destinatário e salve antes de testar." }, 400);
+  const settings = s as Settings;
+  const { data: all, error } = await db.rpc("project_deadline_alerts", { _today: today });
+  if (error) throw error;
+  const rows = ((all ?? []) as Row[]).filter(r => r.tenant_id === tenantId);
+  const ctx = await contextFor(db, settings, today, true);
+  const email = kind === "implantacao" || kind === "contrato"
+    ? renderAlertEmail(rows.find(r => r.kind === kind) ?? sampleAlert(kind, today), ctx)
+    : renderDigestEmail(rows, ctx);
+  const res = await deliver(db, { tenant_id: tenantId, project_id: null, kind: "teste", milestone: "teste", due_date: today },
+    settings.recipients, email);
+  if (res.status !== "enviado") return json({ error: res.error ?? "Não foi possível enviar." }, 502);
+  return json({ ok: true, to: settings.recipients, subject: email.subject });
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") return json({ error: "Use POST." }, 405);
+
+  const db = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } });
+  const body = await req.json().catch(() => ({})) as { mode?: string; kind?: string; tenant_id?: string };
+  const today = todaySaoPaulo();
+
+  try {
+    // Execução agendada
+    const jobSecret = req.headers.get("x-job-secret");
+    if (jobSecret) {
+      const { data: ok } = await db.rpc("verify_job_secret", { _name: "deadline-alerts", _secret: jobSecret });
+      if (!ok) return json({ error: "Forbidden" }, 403);
+      return json(await runDaily(db, today));
+    }
+
+    // Teste disparado por um Admin logado
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
+    const anon = createClient(env("SUPABASE_URL"), env("SUPABASE_ANON_KEY"), { global: { headers: { Authorization: authHeader } } });
+    const { data: claims, error: cErr } = await anon.auth.getClaims(authHeader.replace("Bearer ", ""));
+    if (cErr || !claims?.claims?.sub) return json({ error: "Unauthorized" }, 401);
+    const userId = claims.claims.sub as string;
+
+    const { data: roles } = await db.from("user_roles").select("role").eq("user_id", userId);
+    const set = new Set((roles ?? []).map((r: { role: string }) => r.role));
+    if (!set.has("admin") && !set.has("super_admin")) return json({ error: "Apenas administradores podem enviar o teste." }, 403);
+    if (body.mode !== "test") return json({ error: "Modo inválido." }, 400);
+
+    const { data: profile } = await db.from("profiles").select("tenant_id").eq("user_id", userId).maybeSingle();
+    const tenantId = set.has("super_admin") && body.tenant_id ? body.tenant_id : profile?.tenant_id;
+    if (!tenantId) return json({ error: "Usuário sem empresa vinculada." }, 400);
+    return await sendTest(db, tenantId, today, body.kind ?? "resumo");
+  } catch (e) {
+    console.error("deadline-alerts", e);
+    return json({ error: String((e as Error)?.message ?? e) }, 500);
+  }
+});

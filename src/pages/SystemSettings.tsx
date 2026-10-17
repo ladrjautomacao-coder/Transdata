@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Trash2, Save, Settings as SettingsIcon } from "lucide-react";
+import { AlertEmailSettingsCard } from "@/components/settings/AlertEmailSettingsCard";
 
 interface Row {
   key: string;
@@ -91,6 +92,8 @@ export default function SystemSettings() {
           <p className="text-sm text-muted-foreground">Ajuste SLAs, alertas, validações e catálogos sem precisar mexer no código.</p>
         </div>
       </div>
+
+      <AlertEmailSettingsCard />
 
       <Tabs defaultValue={categories[0]}>
         <TabsList className="mb-4 flex-wrap h-auto">

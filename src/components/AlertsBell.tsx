@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, AlertTriangle, Clock, CalendarClock, UserX, RotateCcw } from "lucide-react";
+import { Bell, AlertTriangle, Clock, CalendarClock, UserX, RotateCcw, Hourglass, FileClock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { differenceInDays, format } from "date-fns";
 import { useSettings } from "@/contexts/SettingsContext";
+import { fetchDeadlineAlerts, fmtDate, remainingShort, type DeadlineAlertRow } from "@/lib/deadlineAlerts";
 
 interface AlertProject {
   id: string;
@@ -22,14 +23,22 @@ interface AlertProject {
   reached_implemented: boolean;
 }
 
-type Category = "returned" | "dzero" | "stuck" | "no_manager";
+type Category = "returned" | "dzero" | "impl30" | "contract" | "stuck" | "no_manager";
 
 const CATEGORY_META: Record<Category, { label: string; icon: typeof Bell; color: string }> = {
   returned: { label: "Retornaram de Implementado", icon: RotateCcw, color: "text-red-600" },
   dzero: { label: "D-zero vencendo (≤7 dias)", icon: CalendarClock, color: "text-orange-600" },
+  impl30: { label: "Prazo de implantação em até 30 dias", icon: Hourglass, color: "text-amber-600" },
+  contract: { label: "Contrato termina em até 12 meses", icon: FileClock, color: "text-purple-600" },
   stuck: { label: "Parados há mais de 30 dias", icon: Clock, color: "text-yellow-600" },
   no_manager: { label: "Sem gestor designado", icon: UserX, color: "text-blue-600" },
 };
+
+/** Linha do sino: `key` muda quando o alerta muda (ex.: novo marco do contrato), para voltar a contar como não visto. */
+interface BellItem { key: string; id: string; title: string; detail: string }
+
+const placeOf = (p: { city: string | null; state: string | null }) => [p.city, p.state].filter(Boolean).join("/");
+
 export function AlertsBell() {
   const navigate = useNavigate();
   const { user, isAdmin, isSuperAdmin } = useAuth();
@@ -37,6 +46,7 @@ export function AlertsBell() {
   const { settings } = useSettings();
   const [open, setOpen] = useState(false);
   const [projects, setProjects] = useState<AlertProject[]>([]);
+  const [deadlines, setDeadlines] = useState<DeadlineAlertRow[]>([]);
   const storageKey = user ? `alerts:seen:${user.id}` : "alerts:seen:anon";
   const [seen, setSeen] = useState<Set<string>>(() => {
     try {
@@ -68,11 +78,16 @@ export function AlertsBell() {
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      const { data } = await supabase
-        .from("projects")
-        .select("id, company_name, city, state, status, d_zero_date, updated_at, manager_id, reached_implemented")
-        .neq("status", "encerrado");
-      if (mounted && data) setProjects(data as AlertProject[]);
+      const [{ data }, dl] = await Promise.all([
+        supabase
+          .from("projects")
+          .select("id, company_name, city, state, status, d_zero_date, updated_at, manager_id, reached_implemented")
+          .neq("status", "encerrado"),
+        fetchDeadlineAlerts().catch(() => null),
+      ]);
+      if (!mounted) return;
+      if (data) setProjects(data as AlertProject[]);
+      if (dl) setDeadlines(dl);
     };
     load();
     const i = setInterval(load, Math.max(5, settings.pollingSeconds) * 1000);
@@ -83,30 +98,41 @@ export function AlertsBell() {
 
   const grouped = useMemo(() => {
     const today = new Date();
-    const scoped = isFullScope ? projects : projects.filter(p => p.manager_id === managerId);
-    const result: Record<Category, AlertProject[]> = { returned: [], dzero: [], stuck: [], no_manager: [] };
-    for (const p of scoped) {
-      if (p.reached_implemented) result.returned.push(p);
+    const todayYmd = format(today, "yyyy-MM-dd");
+    const inScope = (m: string | null) => isFullScope || m === managerId;
+    const result: Record<Category, BellItem[]> = { returned: [], dzero: [], impl30: [], contract: [], stuck: [], no_manager: [] };
+    for (const p of projects) {
+      if (!inScope(p.manager_id)) continue;
+      const item = (cat: Category, detail: string): BellItem => ({ key: `${cat}:${p.id}`, id: p.id, title: p.company_name, detail });
+      if (p.reached_implemented) result.returned.push(item("returned", placeOf(p)));
       if (p.d_zero_date) {
         const dz = new Date(p.d_zero_date + "T00:00:00");
         const diff = differenceInDays(dz, today);
-        if (diff >= 0 && diff <= settings.dzeroWindowDays) result.dzero.push(p);
+        if (diff >= 0 && diff <= settings.dzeroWindowDays) result.dzero.push(item("dzero", `${placeOf(p)} · D-zero ${format(dz, "dd/MM")}`));
       }
       if (p.updated_at && differenceInDays(today, new Date(p.updated_at)) > settings.stuckDays && p.status !== "suspenso") {
-        result.stuck.push(p);
+        result.stuck.push(item("stuck", `${placeOf(p)} · parado há ${differenceInDays(today, new Date(p.updated_at))}d`));
       }
-      if (isFullScope && !p.manager_id) result.no_manager.push(p);
+      if (isFullScope && !p.manager_id) result.no_manager.push(item("no_manager", placeOf(p)));
+    }
+    for (const d of deadlines) {
+      if (!inScope(d.manager_id)) continue;
+      const impl = d.kind === "implantacao";
+      const cat: Category = impl ? "impl30" : "contract";
+      result[cat].push({
+        key: `${cat}:${d.project_id}:${d.milestone}:${d.due_date}`,
+        id: d.project_id,
+        title: d.company_name,
+        detail: `${placeOf(d)} · ${impl ? "prazo" : "fim do contrato"} ${fmtDate(d.due_date)} · ${remainingShort(todayYmd, d.due_date)}`,
+      });
     }
     return result;
-  }, [projects, settings.dzeroWindowDays, settings.stuckDays, isFullScope, managerId]);
+  }, [projects, deadlines, settings.dzeroWindowDays, settings.stuckDays, isFullScope, managerId]);
 
-  const activeKeys = useMemo(() => {
-    const keys: string[] = [];
-    (Object.keys(grouped) as Category[]).forEach(cat => {
-      grouped[cat].forEach(p => keys.push(`${cat}:${p.id}`));
-    });
-    return keys;
-  }, [grouped]);
+  const activeKeys = useMemo(
+    () => (Object.keys(grouped) as Category[]).flatMap(cat => grouped[cat].map(it => it.key)),
+    [grouped]
+  );
 
   const total = activeKeys.length;
   const unseenTotal = useMemo(
@@ -171,18 +197,14 @@ export function AlertsBell() {
                       {meta.label}
                       <span className="ml-auto text-muted-foreground font-normal">{items.length}</span>
                     </div>
-                    {items.slice(0, 8).map(p => (
+                    {items.slice(0, 8).map(it => (
                       <button
-                        key={p.id + cat}
-                        onClick={() => go(p.id)}
+                        key={it.key}
+                        onClick={() => go(it.id)}
                         className="w-full text-left px-3 py-1.5 hover:bg-muted/50 transition-colors"
                       >
-                        <div className="text-sm font-medium truncate">{p.company_name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {p.city}/{p.state}
-                          {cat === "dzero" && p.d_zero_date && ` · D-zero ${format(new Date(p.d_zero_date + "T00:00:00"), "dd/MM")}`}
-                          {cat === "stuck" && ` · parado há ${differenceInDays(new Date(), new Date(p.updated_at))}d`}
-                        </div>
+                        <div className="text-sm font-medium truncate">{it.title}</div>
+                        <div className="text-xs text-muted-foreground">{it.detail}</div>
                       </button>
                     ))}
                     {items.length > 8 && (

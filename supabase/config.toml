@@ -5,3 +5,5 @@ verify_jwt = true
 verify_jwt = true
 [functions.public-signup]
 verify_jwt = false
+[functions.deadline-alerts]
+verify_jwt = false
