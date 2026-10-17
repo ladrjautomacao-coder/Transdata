@@ -80,8 +80,12 @@ const phaseOf = (a: DeadlineAlert, ctx: EmailContext) => {
 const placeOf = (a: DeadlineAlert) => [a.city, a.state].filter(Boolean).join("/");
 const managerLabel = (ctx: EmailContext) => ctx.roleLabels?.manager?.trim() || "Gerente de Projetos";
 const executiveLabel = (ctx: EmailContext) => ctx.roleLabels?.executive?.trim() || "Executivo de Vendas";
+/** Acompanhamento do projeto (notas do GP, linha da vida e mudanças de status). */
 const projectUrl = (a: DeadlineAlert, ctx: EmailContext) =>
-  a.project_id === SAMPLE_PROJECT_ID ? `${ctx.portalUrl}/projetos/lista` : `${ctx.portalUrl}/projetos/${encodeURIComponent(a.project_id)}`;
+  a.project_id === SAMPLE_PROJECT_ID ? `${ctx.portalUrl}/comercial` : `${ctx.portalUrl}/comercial?projeto=${encodeURIComponent(a.project_id)}`;
+/** Cronograma do projeto: etapas e linha do tempo das visitas técnicas. */
+const cronogramaUrl = (a: DeadlineAlert, ctx: EmailContext) =>
+  a.project_id === SAMPLE_PROJECT_ID ? `${ctx.portalUrl}/projetos/cronograma` : `${ctx.portalUrl}/projetos/cronograma?projeto=${encodeURIComponent(a.project_id)}`;
 const elapsedOf = (a: DeadlineAlert, today: string) => {
   const used = Math.min(a.deadline_days, Math.max(0, daysBetween(a.contract_date, today)));
   return { used, pct: a.deadline_days > 0 ? Math.round((used / a.deadline_days) * 100) : 0 };
@@ -210,7 +214,7 @@ function implantacaoEmail(a: DeadlineAlert, ctx: EmailContext): RenderedEmail {
   const introHtml = `${left <= 0 ? "A finalização prevista é <b>hoje</b>" : `Faltam <b style="color:${C.ink};">${plural(left, "dia", "dias")}</b> para a finalização prevista`}`
     + ` e o projeto ainda está em <b style="color:${C.ink};">${esc(phase)}</b>. Confira o andamento${gp ? ` com ${esc(gp)}` : ""} e, se a data mudou, atualize o projeto no portal.`;
   const steps = [
-    "Confira o cronograma e veja se a implantação termina dentro do prazo.",
+    "Confira o cronograma e as visitas técnicas e veja se a implantação termina dentro do prazo.",
     "Se a data foi renegociada com o cliente, atualize o <b>Prazo de implantação</b> no cadastro do projeto.",
     "Se houver risco de atraso, alinhe o plano com o gestor ainda este mês.",
   ];
@@ -228,7 +232,7 @@ function implantacaoEmail(a: DeadlineAlert, ctx: EmailContext): RenderedEmail {
       ]),
       progress("Prazo decorrido", `${used} de ${a.deadline_days} dias · <b style="color:${TONE[tone].text};">${pct}%</b>`, pct, tone,
         [`Contrato ${fmtDayMonth(a.contract_date)}`, `Hoje ${fmtDayMonth(today)}`, `Prazo ${fmtDayMonth(due)}`])),
-    buttons(button(projectUrl(a, ctx), "Abrir projeto no portal"), button(`${ctx.portalUrl}/projetos/cronograma`, "Ver cronograma", false)),
+    buttons(button(projectUrl(a, ctx), "Abrir projeto no portal"), button(cronogramaUrl(a, ctx), "Ver cronograma e visitas", false)),
     stepsBlock(steps),
     note("Por que você recebeu este aviso:", why),
   ]);
@@ -240,7 +244,8 @@ function implantacaoEmail(a: DeadlineAlert, ctx: EmailContext): RenderedEmail {
     `${managerLabel(ctx)}: ${gp ?? "Não definido"}`,
     `Fase atual: ${phase}`,
     `Prazo decorrido: ${used} de ${a.deadline_days} dias (${pct}%)`, "",
-    `Abrir projeto: ${projectUrl(a, ctx)}`, "",
+    `Abrir projeto: ${projectUrl(a, ctx)}`,
+    `Cronograma e visitas: ${cronogramaUrl(a, ctx)}`, "",
     "O que fazer agora:", ...steps.map((s, i) => `${i + 1}. ${s.replace(/<[^>]+>/g, "")}`), "",
     `Por que você recebeu este aviso: ${why}`, "",
     footerText(ctx),

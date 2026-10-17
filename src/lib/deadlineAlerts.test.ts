@@ -55,7 +55,9 @@ describe("e-mail de prazo de implantação", () => {
     expect(email.html).toContain("15/11/2026 · domingo");
     expect(email.html).toContain("150 de 180 dias");
     expect(email.html).toContain("83%");
-    expect(email.html).toContain("https://portal.exemplo/projetos/p1");
+    // "Abrir projeto" leva ao acompanhamento; "Ver cronograma" à linha do tempo de visitas do projeto
+    expect(email.html).toContain("https://portal.exemplo/comercial?projeto=p1");
+    expect(email.html).toContain("https://portal.exemplo/projetos/cronograma?projeto=p1");
     expect(email.text).toContain("Finalização prevista: 15/11/2026");
   });
   it("diz para quem foi enviado", () => {
@@ -150,6 +152,6 @@ describe("exemplo do teste", () => {
     expect(sampleAlert("implantacao", "2026-10-16").due_date).toBe("2026-11-15");
     const c = sampleAlert("contrato", "2026-10-16");
     expect(c.due_date).toBe("2027-04-16");
-    expect(renderAlertEmail(c, ctx("2026-10-16")).html).toContain("https://portal.exemplo/projetos/lista");
+    expect(renderAlertEmail(c, ctx("2026-10-16")).html).toContain('href="https://portal.exemplo/comercial"');
   });
 });

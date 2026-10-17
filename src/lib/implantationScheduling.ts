@@ -176,6 +176,14 @@ export async function fetchRequests(): Promise<ImplantationRequest[]> {
   return (data ?? []) as ImplantationRequest[];
 }
 
+/** Todas as solicitações/visitas de um projeto (linha do tempo do projeto). */
+export async function fetchProjectRequests(projectId: string): Promise<ImplantationRequest[]> {
+  const { data, error } = await db.from("implantation_requests").select(REQUEST_COLS)
+    .eq("project_id", projectId).order("requested_start", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as ImplantationRequest[];
+}
+
 export async function fetchTechnicians(includeInactive = false): Promise<Technician[]> {
   let q = db.from("implantation_technicians").select(TECH_COLS).is("removed_at", null).order("full_name");
   if (!includeInactive) q = q.eq("active", true);

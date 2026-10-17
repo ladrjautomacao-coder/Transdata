@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useProjectFilters } from "@/contexts/ProjectFiltersContext";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -272,6 +273,31 @@ export default function VisaoComercial() {
 
   useEffect(() => { if (user) fetchPage(0, false); }, [user, fetchPage]);
   useEffect(() => { if (user) loadSummary(); }, [user, loadSummary]);
+
+  // Link direto (?projeto=<id>, usado nos e-mails de alerta): abre o acompanhamento do projeto
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedId = searchParams.get("projeto");
+  const clearLinked = useCallback(() => {
+    setSearchParams(prev => { const next = new URLSearchParams(prev); next.delete("projeto"); return next; }, { replace: true });
+  }, [setSearchParams]);
+  useEffect(() => {
+    if (!user || !linkedId) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from("projects").select(SELECT_COLS).eq("id", linkedId).maybeSingle();
+      if (cancelled) return;
+      if (!data) {
+        toast.error("Projeto não encontrado", { description: "Ele pode ter sido removido ou você não tem acesso a ele." });
+        clearLinked();
+        return;
+      }
+      const notesMap = await loadNotes([linkedId]);
+      if (cancelled) return;
+      setSelected({ ...(data as unknown as FollowUpProject), notes: notesMap[linkedId] ?? [] });
+      setDrawerOpen(true);
+    })();
+    return () => { cancelled = true; };
+  }, [user, linkedId, loadNotes, clearLinked]);
 
   const flag = useCallback((id: string) => {
     setLiveAt(new Date());
@@ -667,7 +693,8 @@ export default function VisaoComercial() {
         </div>
       </div>
 
-      <ProjectFollowUpDrawer project={selected} open={drawerOpen} onOpenChange={setDrawerOpen} />
+      <ProjectFollowUpDrawer project={selected} open={drawerOpen}
+        onOpenChange={o => { setDrawerOpen(o); if (!o && linkedId) clearLinked(); }} />
     </div>
   );
 }

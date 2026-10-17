@@ -9,7 +9,7 @@ import { ProjectTimeline } from "@/components/ProjectTimeline";
 import { statusLabels, subPhasesByStatus } from "@/pages/ProjectManagement";
 import { effectiveFollowUps } from "@/lib/followUpNotes";
 import { format } from "date-fns";
-import { CalendarDays, History, MessageSquareText, Layers, Plug, ExternalLink } from "lucide-react";
+import { CalendarDays, CalendarRange, History, MessageSquareText, Layers, Plug, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import type { FollowUpProject, ProjectStatus } from "./types";
@@ -91,13 +91,20 @@ export function ProjectFollowUpDrawer({ project, open, onOpenChange }: Props) {
               <Badge variant="outline">{statusLabels[project.status]}</Badge>
               {subPhaseLabel && <span>{subPhaseLabel}</span>}
             </SheetDescription>
-            <div className="pt-2">
+            <div className="flex flex-wrap gap-2 pt-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => navigate(`/projetos/${project.id}`)}
               >
                 <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Abrir projeto
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/projetos/cronograma?projeto=${project.id}`)}
+              >
+                <CalendarRange className="mr-1.5 h-3.5 w-3.5" /> Cronograma e visitas
               </Button>
             </div>
           </SheetHeader>

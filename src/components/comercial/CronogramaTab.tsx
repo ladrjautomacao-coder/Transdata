@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { ProjectVisitsTimeline } from "@/components/agendamento/ProjectVisitsTimeline";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -104,7 +106,13 @@ export function CronogramaTab() {
   const [activities, setActivities] = useState<ActivityRow[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  // ?projeto=<id> (link dos e-mails de alerta e do Acompanhamento) já abre a visão do projeto
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => searchParams.get("projeto"));
+  const backToOverview = () => {
+    setSelectedProjectId(null);
+    if (searchParams.has("projeto")) setSearchParams(prev => { const next = new URLSearchParams(prev); next.delete("projeto"); return next; }, { replace: true });
+  };
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -247,7 +255,7 @@ export function CronogramaTab() {
   if (selectedProjectId && selectedProject) {
     return (
       <div className="space-y-4">
-        <button onClick={() => setSelectedProjectId(null)} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <button onClick={backToOverview} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ChevronLeft className="h-4 w-4" /> Voltar para visão geral
         </button>
 
@@ -272,11 +280,9 @@ export function CronogramaTab() {
         </div>
 
         {selectedActivities.length === 0 ? (
-          <EmptyState
-            type="projects"
-            title="Nenhuma atividade cadastrada"
-            description="Cadastre a primeira etapa deste projeto para começar a acompanhar o cronograma."
-          />
+          <Card className="p-4 text-sm text-muted-foreground">
+            Nenhuma etapa cadastrada. Use <b className="text-foreground">Nova Atividade</b> para montar o cronograma deste projeto.
+          </Card>
         ) : (
           <Card className="overflow-hidden">
             <div className="relative flex">
@@ -330,6 +336,8 @@ export function CronogramaTab() {
             </div>
           </Card>
         )}
+
+        <ProjectVisitsTimeline projectId={selectedProjectId} />
 
         <ActivityDialog
           open={dialogOpen}

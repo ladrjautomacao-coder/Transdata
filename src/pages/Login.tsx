@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Navigate, Link } from "react-router-dom";
+import { Navigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenantBranding } from "@/contexts/TenantBrandingContext";
 import { Mail, Lock } from "lucide-react";
@@ -167,9 +167,15 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const location = useLocation();
+  // volta para a página que pediu o login (ex.: link de um e-mail de alerta)
+  const from = (location.state as { from?: { pathname?: string; search?: string; hash?: string } } | null)?.from;
+  const redirectTo = from?.pathname?.startsWith("/") && !from.pathname.startsWith("/login")
+    ? `${from.pathname}${from.search ?? ""}${from.hash ?? ""}`
+    : "/";
 
   if (loading) return null;
-  if (session) return <Navigate to="/" replace />;
+  if (session) return <Navigate to={redirectTo} replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
