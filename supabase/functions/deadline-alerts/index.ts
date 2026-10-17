@@ -5,9 +5,13 @@
 //   (implantação: 30 dias; contrato: 12, 6 e 3 meses) e, às segundas, o resumo
 //   semanal. Cada envio fica em deadline_alert_deliveries, então ninguém recebe
 //   o mesmo aviso duas vezes, mesmo que a função rode de novo.
-// • Teste (botão em Configurações): Admin logado; envia aos destinatários da empresa.
+// • Teste (botão em Configurações): Admin logado; envia aos destinatários da empresa
+//   ou, se informado, só para `to`. Teste com `to` usa ALERTS_TEST_FROM quando existe
+//   (ex.: onboarding@resend.dev, que entrega só no e-mail da conta do Resend e não
+//   exige domínio verificado) — serve para ver o layout antes do DNS ficar pronto.
 //
-// Segredos: RESEND_API_KEY, ALERTS_FROM ("Nome <endereco@dominio>"), PORTAL_URL.
+// Segredos: RESEND_API_KEY, ALERTS_FROM ("Nome <endereco@dominio>"), PORTAL_URL,
+//           ALERTS_TEST_FROM (opcional).
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { ymd } from "../_shared/deadlineDates.ts";
 import {
@@ -39,14 +43,14 @@ type Row = DeadlineAlert & { tenant_id: string; manager_id: string | null };
 const todaySaoPaulo = () =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
-async function sendEmail(to: string[], email: RenderedEmail): Promise<string> {
+async function sendEmail(to: string[], email: RenderedEmail, from?: string): Promise<string> {
   const key = env("RESEND_API_KEY");
   if (!key) throw new Error("RESEND_API_KEY não configurada no Supabase.");
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: env("ALERTS_FROM") || "Portal de Projetos Transdata <alertas@itstransdata.com>",
+      from: from || env("ALERTS_FROM") || "Portal de Projetos Transdata <alertas@itstransdata.com>",
       to, subject: email.subject, html: email.html, text: email.text,
     }),
   });
@@ -70,7 +74,7 @@ async function contextFor(db: SupabaseClient, s: Settings, today: string, test =
 async function deliver(
   db: SupabaseClient,
   key: { tenant_id: string; project_id: string | null; kind: string; milestone: string; due_date: string },
-  to: string[], email: RenderedEmail,
+  to: string[], email: RenderedEmail, from?: string,
 ): Promise<{ status: "enviado" | "erro" | "ja_enviado"; error?: string }> {
   const { data: claim, error } = await db.from("deadline_alert_deliveries")
     .insert({ ...key, recipients: to, subject: email.subject, status: "enviando" }).select("id").single();
@@ -79,7 +83,7 @@ async function deliver(
     throw error;
   }
   try {
-    const providerId = await sendEmail(to, email);
+    const providerId = await sendEmail(to, email, from);
     await db.from("deadline_alert_deliveries").update({ status: "enviado", provider_id: providerId }).eq("id", claim.id);
     return { status: "enviado" };
   } catch (e) {
@@ -137,10 +141,17 @@ async function runDaily(db: SupabaseClient, today: string) {
   return summary;
 }
 
-async function sendTest(db: SupabaseClient, tenantId: string, today: string, kind: string) {
+const EMAIL_RE = /^[^@\s,;<>"]+@[^@\s,;<>"]+\.[a-z]{2,}$/i;
+
+async function sendTest(db: SupabaseClient, tenantId: string, today: string, kind: string, toOverride?: string) {
+  const override = toOverride?.trim().toLowerCase() || "";
+  if (override && (override.length > 254 || !EMAIL_RE.test(override))) return json({ error: "E-mail do teste inválido." }, 400);
   const { data: s } = await db.from("alert_email_settings").select("*").eq("tenant_id", tenantId).maybeSingle();
-  if (!s || !(s as Settings).recipients?.length) return json({ error: "Cadastre ao menos um destinatário e salve antes de testar." }, 400);
+  if (!s) return json({ error: "Salve a configuração de e-mails antes de testar." }, 400);
   const settings = s as Settings;
+  const to = override ? [override] : settings.recipients ?? [];
+  if (!to.length) return json({ error: "Cadastre ao menos um destinatário ou informe para quem enviar o teste." }, 400);
+  const from = override ? env("ALERTS_TEST_FROM") || undefined : undefined;
   const { data: all, error } = await db.rpc("project_deadline_alerts", { _today: today });
   if (error) throw error;
   const rows = ((all ?? []) as Row[]).filter(r => r.tenant_id === tenantId);
@@ -149,9 +160,9 @@ async function sendTest(db: SupabaseClient, tenantId: string, today: string, kin
     ? renderAlertEmail(rows.find(r => r.kind === kind) ?? sampleAlert(kind, today), ctx)
     : renderDigestEmail(rows, ctx);
   const res = await deliver(db, { tenant_id: tenantId, project_id: null, kind: "teste", milestone: "teste", due_date: today },
-    settings.recipients, email);
+    to, email, from);
   if (res.status !== "enviado") return json({ error: res.error ?? "Não foi possível enviar." }, 502);
-  return json({ ok: true, to: settings.recipients, subject: email.subject });
+  return json({ ok: true, to, subject: email.subject });
 }
 
 Deno.serve(async (req) => {
@@ -159,7 +170,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Use POST." }, 405);
 
   const db = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } });
-  const body = await req.json().catch(() => ({})) as { mode?: string; kind?: string; tenant_id?: string };
+  const body = await req.json().catch(() => ({})) as { mode?: string; kind?: string; tenant_id?: string; to?: string };
   const today = todaySaoPaulo();
 
   try {
@@ -187,7 +198,7 @@ Deno.serve(async (req) => {
     const { data: profile } = await db.from("profiles").select("tenant_id").eq("user_id", userId).maybeSingle();
     const tenantId = set.has("super_admin") && body.tenant_id ? body.tenant_id : profile?.tenant_id;
     if (!tenantId) return json({ error: "Usuário sem empresa vinculada." }, 400);
-    return await sendTest(db, tenantId, today, body.kind ?? "resumo");
+    return await sendTest(db, tenantId, today, body.kind ?? "resumo", typeof body.to === "string" ? body.to : undefined);
   } catch (e) {
     console.error("deadline-alerts", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);

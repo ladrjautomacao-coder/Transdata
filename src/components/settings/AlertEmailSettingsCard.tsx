@@ -51,6 +51,7 @@ export function AlertEmailSettingsCard() {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
+  const [testTo, setTestTo] = useState("");
 
   const load = useCallback(async () => {
     if (!tenantId) return;
@@ -108,11 +109,13 @@ export function AlertEmailSettingsCard() {
     }
   };
 
+  const testToValid = !testTo.trim() || isValidEmail(testTo);
   const test = async (kind: "resumo" | "implantacao" | "contrato") => {
     if (dirty) { toast.warning("Salve as alterações antes de enviar o teste."); return; }
+    if (!testToValid) { toast.error("E-mail do teste inválido."); return; }
     setTesting(kind);
     try {
-      const r = await sendTestAlertEmail(kind);
+      const r = await sendTestAlertEmail(kind, testTo);
       toast.success("E-mail de teste enviado.", { description: `Para ${r.to.join(", ")}.` });
     } catch (e) {
       toast.error("Não foi possível enviar o teste", { description: errorMessage(e) });
@@ -187,10 +190,16 @@ export function AlertEmailSettingsCard() {
         <aside className="min-w-0 space-y-4">
           <div className="rounded-lg border border-border/60 p-3">
             <p className="text-xs font-semibold">Enviar um teste</p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">Vai para os destinatários salvos, com “[Teste]” no assunto. Usa os prazos reais de hoje ou um projeto de exemplo.</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">Com “[Teste]” no assunto. Usa os prazos reais de hoje ou um projeto de exemplo.</p>
+            <Label className="mt-2.5 block text-[11px]" htmlFor="alert-test-to">Enviar o teste para</Label>
+            <Input id="alert-test-to" type="email" className="mt-1 h-8 text-xs" placeholder="Destinatários salvos" value={testTo}
+              onChange={e => setTestTo(e.target.value)} />
+            {testToValid
+              ? <p className="mt-1 text-[11px] text-muted-foreground">Enquanto o domínio não estiver verificado no Resend, use aqui o e-mail da conta do Resend.</p>
+              : <p className="mt-1 text-[11px] font-medium text-destructive">E-mail inválido.</p>}
             <div className="mt-2 grid gap-1.5">
               {TESTS.map(t => (
-                <Button key={t.kind} variant="outline" size="sm" className="h-8 justify-start text-xs" disabled={!!testing || !saved?.recipients.length}
+                <Button key={t.kind} variant="outline" size="sm" className="h-8 justify-start text-xs" disabled={!!testing || !testToValid || (!testTo.trim() && !saved?.recipients.length)}
                   onClick={() => void test(t.kind)}>
                   {testing === t.kind ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <t.icon className="mr-1.5 h-3.5 w-3.5" />}{t.label}
                   <Send className="ml-auto h-3.5 w-3.5 text-muted-foreground" />

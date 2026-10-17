@@ -70,9 +70,12 @@ export async function fetchRecentDeliveries(tenantId: string, limit = 8): Promis
   return (data ?? []) as AlertDelivery[];
 }
 
-/** E-mail de teste para os destinatários cadastrados (resumo ou um alerta de exemplo). */
-export async function sendTestAlertEmail(kind: "resumo" | DeadlineKind): Promise<{ to: string[]; subject: string }> {
-  const { data, error } = await supabase.functions.invoke("deadline-alerts", { body: { mode: "test", kind } });
+/**
+ * E-mail de teste (resumo ou um alerta de exemplo) para os destinatários cadastrados
+ * ou só para `to` — com `to`, o servidor usa o remetente de teste (ALERTS_TEST_FROM).
+ */
+export async function sendTestAlertEmail(kind: "resumo" | DeadlineKind, to?: string): Promise<{ to: string[]; subject: string }> {
+  const { data, error } = await supabase.functions.invoke("deadline-alerts", { body: { mode: "test", kind, to: to?.trim() || undefined } });
   if (error) {
     // a função devolve { error } com a mensagem do Resend/validação
     const ctx = (error as { context?: Response }).context;
