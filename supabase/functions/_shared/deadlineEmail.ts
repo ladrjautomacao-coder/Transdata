@@ -331,73 +331,131 @@ export function renderAlertEmail(a: DeadlineAlert, ctx: EmailContext): RenderedE
   return a.kind === "implantacao" ? implantacaoEmail(a, ctx) : contratoEmail(a, ctx);
 }
 
-/* ─── Resumo semanal ────────────────────────────────────────────────────── */
-export function renderDigestEmail(alerts: DeadlineAlert[], ctx: EmailContext): RenderedEmail {
-  const { today } = ctx;
-  const byDue = (x: DeadlineAlert, y: DeadlineAlert) => x.due_date.localeCompare(y.due_date) || x.company_name.localeCompare(y.company_name);
-  const impl = alerts.filter(a => a.kind === "implantacao").sort(byDue);
-  const contr = alerts.filter(a => a.kind === "contrato").sort(byDue);
-  const c3 = contr.filter(a => a.milestone === "3m").length;
-  const projects = new Set(alerts.map(a => a.project_id)).size;
-  const title = projects ? `${plural(projects, "projeto", "projetos")} com prazos se aproximando` : "Nenhum prazo se aproximando";
-  const introPlain = `${cap(fmtLongDate(today))}. Implantações que terminam nos próximos 30 dias e contratos que terminam nos próximos 12 meses.`;
+/* ─── Resumos semanais: um de implantação e outro de contrato ──────────── */
+const byDue = (x: DeadlineAlert, y: DeadlineAlert) => x.due_date.localeCompare(y.due_date) || x.company_name.localeCompare(y.company_name);
+const verbN = (n: number) => (n === 1 ? "termina" : "terminam");
 
-  const tiles = ([[impl.length, "Implantação em até 30 dias", "amber"], [c3, "Contrato em até 3 meses", "orange"], [contr.length - c3, "Contrato em 3 a 12 meses", "purple"]] as [number, string, Tone][])
-    .map(([n, label, t], i) => `<td class="col" width="33%" valign="top" style="padding:0 ${i < 2 ? 12 : 0}px 12px 0;">${tbl(`<tr><td style="padding:14px 16px;">
+function tilesRow(items: [number, string, Tone][]) {
+  const tds = items.map(([n, label, t], i) => `<td class="col" width="33%" valign="top" style="padding:0 ${i < items.length - 1 ? 12 : 0}px 12px 0;">${tbl(`<tr><td style="padding:14px 16px;">
       <div style="font:800 30px/36px ${FONT};color:${TONE[t].text};">${n}</div>
       <div style="margin-top:2px;font:600 13px/18px ${FONT};color:${TONE[t].tileLabel};">${esc(label)}</div></td></tr>`,
-      `background:${TONE[t].tileBg};border:1px solid ${TONE[t].tileBorder};border-radius:10px;`, `bgcolor="${TONE[t].tileBg}"`)}</td>`).join("");
+    `background:${TONE[t].tileBg};border:1px solid ${TONE[t].tileBorder};border-radius:10px;`, `bgcolor="${TONE[t].tileBg}"`)}</td>`).join("");
+  return `<tr><td class="px" style="padding:24px 32px 0;">${tbl(`<tr>${tds}</tr>`)}</td></tr>`;
+}
+const sectionHeading = (text: string, tone: Tone) =>
+  `<div style="font:700 13px/18px ${FONT};letter-spacing:0.06em;text-transform:uppercase;color:${TONE[tone].text};"><span style="color:${TONE[tone].dot};">&#9679;</span>&nbsp;${esc(text)}</div>`;
+const emptyNote = (text: string) => `<div style="margin-top:12px;font:400 14px/21px ${FONT};color:${C.muted};">${esc(text)}</div>`;
+const wideButton = (href: string, label: string) =>
+  `<tr><td class="px" style="padding:28px 32px 0;"><a href="${esc(href)}" class="btn" style="display:block;padding:13px 24px;border-radius:8px;background:${C.brand};color:#FFFFFF;text-align:center;font:700 15px/20px ${FONT};text-decoration:none;">${esc(label)}</a></td></tr>`;
 
-  const heading = (text: string, tone: Tone) =>
-    `<div style="font:700 13px/18px ${FONT};letter-spacing:0.06em;text-transform:uppercase;color:${TONE[tone].text};"><span style="color:${TONE[tone].dot};">&#9679;</span>&nbsp;${esc(text)}</div>`;
-  const empty = (text: string) => `<div style="margin-top:12px;font:400 14px/21px ${FONT};color:${C.muted};">${esc(text)}</div>`;
+/** Faixa de urgência da implantação: até 7 dias, 8 a 15, 16 a 30. */
+const implTone = (days: number): Tone => (days <= 7 ? "orange" : days <= 15 ? "amber" : "purple");
+const implLeft = (days: number) => (days <= 0 ? "vence hoje" : days === 1 ? "vence amanhã" : `em ${days} dias`);
 
-  const implCards = impl.map(a => {
+/** Resumo semanal de implantação: projetos não implementados com finalização nos próximos 30 dias. */
+export function renderImplantacaoDigest(alerts: DeadlineAlert[], ctx: EmailContext): RenderedEmail {
+  const { today } = ctx;
+  const impl = alerts.filter(a => a.kind === "implantacao").sort(byDue);
+  const days = (a: DeadlineAlert) => daysBetween(today, a.due_date);
+  const c7 = impl.filter(a => days(a) <= 7).length;
+  const c15 = impl.filter(a => days(a) > 7 && days(a) <= 15).length;
+  const c30 = impl.length - c7 - c15;
+  const n = impl.length;
+  const title = n ? `${plural(n, "implantação", "implantações")} ${verbN(n)} nos próximos 30 dias` : "Nenhuma implantação termina nos próximos 30 dias";
+  const introPlain = `${cap(fmtLongDate(today))}. Projetos ainda não implementados com a finalização prevista nos próximos 30 dias.`;
+  const preheader = `Até 7 dias: ${c7} · 8 a 15 dias: ${c15} · 16 a 30 dias: ${c30} · ${fmtLongDate(today)}`;
+
+  const cards = impl.map(a => {
+    const t = implTone(days(a));
     const { pct } = elapsedOf(a, today);
     return gap(12) + tbl(`<tr><td style="padding:16px 18px;">
       ${tbl(`<tr><td valign="top"><div style="font:700 16px/22px ${FONT};color:${C.ink};">${esc(a.company_name)}</div>
           <div style="margin-top:2px;font:400 13px/19px ${FONT};color:${C.muted};">${subtitleOf(a)}</div></td>
-        <td valign="top" align="right" style="white-space:nowrap;padding-left:12px;"><div style="font:700 15px/22px ${FONT};color:${TONE.amber.text};">${fmtDate(a.due_date)}</div>
-          <div style="margin-top:2px;font:600 12px/17px ${FONT};color:${TONE.amber.text};">${esc(remainingShort(today, a.due_date))}</div></td></tr>`)}
+        <td valign="top" align="right" style="white-space:nowrap;padding-left:12px;"><div style="font:700 15px/22px ${FONT};color:${TONE[t].text};">${fmtDate(a.due_date)}</div>
+          <div style="margin-top:2px;font:700 12px/17px ${FONT};color:${TONE[t].text};">${esc(implLeft(days(a)))}</div></td></tr>`)}
       <div style="margin-top:10px;font:400 13px/20px ${FONT};color:${C.body};">GP: <b style="color:${C.ink};">${esc(a.manager_name ?? "Não definido")}</b> · Fase: <b style="color:${C.ink};">${esc(phaseOf(a, ctx))}</b> · Prazo: ${a.deadline_days} dias desde ${fmtDate(a.contract_date)}</div>
-      ${gap(10)}${tbl(`<tr><td>${bar(pct, "amber", 8)}</td><td width="96" align="right" style="font:700 12px/16px ${FONT};color:${TONE.amber.text};white-space:nowrap;">${pct}% do prazo</td></tr>`)}
+      ${gap(10)}${tbl(`<tr><td>${bar(pct, t, 8)}</td><td width="104" align="right" style="font:700 12px/16px ${FONT};color:${TONE[t].text};white-space:nowrap;">${pct}% do prazo</td></tr>`)}
       <div style="margin-top:10px;"><a href="${esc(projectUrl(a, ctx))}" style="font:700 14px/20px ${FONT};color:${C.brand};text-decoration:none;">Abrir projeto &rarr;</a></div>
       </td></tr>`, `border:1px solid ${C.line};border-radius:10px;`);
   }).join("");
 
-  const contrRows = contr.map((a, i) => {
-    const t = toneOf("contrato", a.milestone);
-    return `<tr><td style="padding:14px 18px;${i < contr.length - 1 ? `border-bottom:1px solid #EFEBF3;` : ""}">${tbl(`<tr>
-      <td valign="middle"><div style="font:700 15px/21px ${FONT};color:${C.ink};"><a href="${esc(projectUrl(a, ctx))}" style="color:${C.ink};text-decoration:none;">${esc(a.company_name)}</a></div>
-        <div style="margin-top:2px;font:400 13px/19px ${FONT};color:${C.muted};">${[a.project_code, placeOf(a), a.manager_name ? `GP ${a.manager_name}` : null].filter(Boolean).map(esc).join(" · ")}</div></td>
-      <td valign="middle" align="right" style="white-space:nowrap;padding-left:12px;"><div style="font:700 14px/20px ${FONT};color:${C.ink};">${fmtDate(a.due_date)}</div>
-        <div style="margin-top:4px;"><span style="display:inline-block;padding:2px 10px;border-radius:999px;background:${TONE[t].bg};color:${TONE[t].text};font:700 12px/17px ${FONT};">${esc(remainingShort(today, a.due_date))}</span></div></td></tr>`)}</td></tr>`;
-  }).join("");
-
-  const how = "a finalização prevista é a data do contrato somada ao prazo de implantação, e o fim do contrato é a data do contrato somada ao prazo contratual. O portal avisa 30 dias antes do fim da implantação e 12, 6 e 3 meses antes do fim do contrato. Este resumo chega toda segunda-feira.";
-  const subject = subjectOf(ctx, `[Resumo de prazos] ${plural(impl.length, "implantação", "implantações")} em 30 dias · ${plural(contr.length, "contrato", "contratos")} em 12 meses`);
-
-  const html = shell(ctx, title, introPlain, [
-    hero(overline("Resumo semanal de prazos"), title, esc(introPlain)),
-    `<tr><td class="px" style="padding:24px 32px 0;">${tbl(`<tr>${tiles}</tr>`)}</td></tr>`,
-    `<tr><td class="px" style="padding:16px 32px 0;">${heading("Prazo de implantação · próximos 30 dias", "amber")}${impl.length ? implCards : empty("Nenhuma implantação termina nos próximos 30 dias.")}</td></tr>`,
-    `<tr><td class="px" style="padding:28px 32px 0;">${heading("Prazo de contrato · próximos 12 meses", "purple")}${contr.length
-      ? gap(12) + tbl(contrRows, `border:1px solid ${C.line};border-radius:10px;`)
-      : empty("Nenhum contrato termina nos próximos 12 meses.")}</td></tr>`,
-    `<tr><td class="px" style="padding:28px 32px 0;"><a href="${esc(`${ctx.portalUrl}/projetos/lista`)}" class="btn" style="display:block;padding:13px 24px;border-radius:8px;background:${C.brand};color:#FFFFFF;text-align:center;font:700 15px/20px ${FONT};text-decoration:none;">Ver todos os projetos no portal</a></td></tr>`,
+  const how = "a finalização prevista é a data do contrato somada ao prazo de implantação. Cada projeto gera um alerta 30 dias antes dessa data, enquanto não for implementado, e este resumo chega toda segunda-feira.";
+  const subject = subjectOf(ctx, `[Prazo de implantação] Resumo semanal: ${plural(n, "implantação", "implantações")} ${verbN(n)} em até 30 dias`);
+  const html = shell(ctx, title, preheader, [
+    hero(overline("Resumo semanal · prazo de implantação"), title, esc(introPlain)),
+    tilesRow([[c7, "Terminam em até 7 dias", "orange"], [c15, "Em 8 a 15 dias", "amber"], [c30, "Em 16 a 30 dias", "purple"]]),
+    `<tr><td class="px" style="padding:16px 32px 0;">${sectionHeading("Projetos por data de finalização", "amber")}${n ? cards : emptyNote("Nenhuma implantação termina nos próximos 30 dias.")}</td></tr>`,
+    wideButton(`${ctx.portalUrl}/projetos/cronograma`, "Ver cronograma no portal"),
     note("Como funciona:", how),
   ]);
   const text = textOf([
-    title, "", introPlain, "",
-    `Implantação em até 30 dias: ${impl.length} · Contrato em até 3 meses: ${c3} · Contrato em 3 a 12 meses: ${contr.length - c3}`, "",
-    "PRAZO DE IMPLANTAÇÃO · PRÓXIMOS 30 DIAS",
-    ...(impl.length ? impl.map(a => `- ${a.company_name}: ${fmtDate(a.due_date)} (${remainingShort(today, a.due_date)}) · GP ${a.manager_name ?? "não definido"} · ${projectUrl(a, ctx)}`) : ["Nenhuma."]), "",
-    "PRAZO DE CONTRATO · PRÓXIMOS 12 MESES",
-    ...(contr.length ? contr.map(a => `- ${a.company_name}: ${fmtDate(a.due_date)} (${remainingShort(today, a.due_date)}) · ${projectUrl(a, ctx)}`) : ["Nenhum."]), "",
+    title, "", introPlain, "", preheader, "",
+    ...(n
+      ? impl.map(a => `- ${a.company_name}: ${fmtDate(a.due_date)} (${implLeft(days(a))}) · GP ${a.manager_name ?? "não definido"} · ${phaseOf(a, ctx)} · ${projectUrl(a, ctx)}`)
+      : ["Nenhuma implantação termina nos próximos 30 dias."]), "",
     `Como funciona: ${how}`, "",
     footerText(ctx),
   ]);
-  return { subject, preheader: introPlain, html, text };
+  return { subject, preheader, html, text };
+}
+
+const CONTRACT_BUCKETS: { milestone: DeadlineMilestone; label: string; short: string; tone: Tone }[] = [
+  { milestone: "3m", label: "Terminam em até 3 meses", short: "Até 3 meses", tone: "orange" },
+  { milestone: "6m", label: "Em 3 a 6 meses", short: "3 a 6 meses", tone: "amber" },
+  { milestone: "12m", label: "Em 6 a 12 meses", short: "6 a 12 meses", tone: "purple" },
+];
+
+/** Resumo semanal de contrato: contratos que terminam nos próximos 12 meses, por faixa (3, 6 e 12 meses). */
+export function renderContratoDigest(alerts: DeadlineAlert[], ctx: EmailContext): RenderedEmail {
+  const { today } = ctx;
+  const contr = alerts.filter(a => a.kind === "contrato").sort(byDue);
+  const n = contr.length;
+  const groups = CONTRACT_BUCKETS.map(b => ({ ...b, items: contr.filter(a => a.milestone === b.milestone) }));
+  const execLabel = executiveLabel(ctx) === "Executivo de Vendas" ? "Executivo" : executiveLabel(ctx);
+  const title = n ? `${plural(n, "contrato", "contratos")} ${verbN(n)} nos próximos 12 meses` : "Nenhum contrato termina nos próximos 12 meses";
+  const introPlain = `${cap(fmtLongDate(today))}. ${n ? "Hora de planejar com os clientes as renovações e os aditivos." : "Nenhuma renovação para planejar por enquanto."}`;
+  const preheader = `${groups.map(g => `${g.short}: ${g.items.length}`).join(" · ")} · ${fmtLongDate(today)}`;
+
+  const row = (a: DeadlineAlert, last: boolean, tone: Tone) => {
+    const people = [
+      a.manager_name ? `GP <b style="color:${C.ink};">${esc(a.manager_name)}</b>` : null,
+      a.executive_name ? `${esc(execLabel)} <b style="color:${C.ink};">${esc(a.executive_name)}</b>` : null,
+    ].filter(Boolean).join(" · ");
+    return `<tr><td style="padding:14px 18px;${last ? "" : "border-bottom:1px solid #EFEBF3;"}">${tbl(`<tr>
+      <td valign="middle"><div style="font:700 15px/21px ${FONT};color:${C.ink};"><a href="${esc(projectUrl(a, ctx))}" style="color:${C.ink};text-decoration:none;">${esc(a.company_name)}</a></div>
+        <div style="margin-top:2px;font:400 13px/19px ${FONT};color:${C.muted};">${subtitleOf(a, phaseOf(a, ctx))}</div>
+        ${people ? `<div style="margin-top:2px;font:400 13px/19px ${FONT};color:${C.body};">${people}</div>` : ""}</td>
+      <td valign="middle" align="right" style="white-space:nowrap;padding-left:12px;"><div style="font:700 14px/20px ${FONT};color:${C.ink};">${fmtDate(a.due_date)}</div>
+        <div style="margin-top:4px;"><span style="display:inline-block;padding:2px 10px;border-radius:999px;background:${TONE[tone].bg};color:${TONE[tone].text};font:700 12px/17px ${FONT};">${esc(remainingShort(today, a.due_date))}</span></div></td></tr>`)}</td></tr>`;
+  };
+  const sections = n
+    ? groups.filter(g => g.items.length).map((g, i) =>
+      `<tr><td class="px" style="padding:${i === 0 ? 16 : 24}px 32px 0;">${sectionHeading(g.label, g.tone)}${gap(12)}${tbl(
+        g.items.map((a, j) => row(a, j === g.items.length - 1, g.tone)).join(""), `border:1px solid ${C.line};border-radius:10px;`)}</td></tr>`)
+    : [`<tr><td class="px" style="padding:16px 32px 0;">${emptyNote("Nenhum contrato termina nos próximos 12 meses.")}</td></tr>`];
+
+  const how = "o fim do contrato é a data do contrato somada ao prazo contratual. Cada projeto gera alertas 12, 6 e 3 meses antes dessa data, e este resumo chega toda segunda-feira.";
+  const subject = subjectOf(ctx, `[Prazo de contrato] Resumo semanal: ${plural(n, "contrato", "contratos")} ${verbN(n)} em até 12 meses`);
+  const html = shell(ctx, title, preheader, [
+    hero(overline("Resumo semanal · prazo de contrato"), title, esc(introPlain)),
+    tilesRow(groups.map(g => [g.items.length, g.label, g.tone] as [number, string, Tone])),
+    ...sections,
+    wideButton(`${ctx.portalUrl}/projetos/lista`, "Ver todos os projetos no portal"),
+    note("Como funciona:", how),
+  ]);
+  const text = textOf([
+    title, "", introPlain, "", preheader, "",
+    ...(n
+      ? groups.filter(g => g.items.length).flatMap(g => [
+        g.label.toUpperCase(),
+        ...g.items.map(a => `- ${a.company_name}: ${fmtDate(a.due_date)} (${remainingShort(today, a.due_date)}) · GP ${a.manager_name ?? "não definido"}${a.executive_name ? ` · ${execLabel} ${a.executive_name}` : ""} · ${projectUrl(a, ctx)}`),
+        "",
+      ])
+      : ["Nenhum contrato termina nos próximos 12 meses.", ""]),
+    `Como funciona: ${how}`, "",
+    footerText(ctx),
+  ]);
+  return { subject, preheader, html, text };
 }
 
 /** Projeto fictício para o e-mail de teste quando não há nenhum prazo real no período. */

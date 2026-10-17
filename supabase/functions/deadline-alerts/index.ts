@@ -2,8 +2,9 @@
 //
 // • Execução diária (pg_cron, 08:00 de Brasília): cabeçalho x-job-secret. Para cada
 //   empresa com envio ativo, manda o alerta de cada projeto que chegou a um marco
-//   (implantação: 30 dias; contrato: 12, 6 e 3 meses) e, às segundas, o resumo
-//   semanal. Cada envio fica em deadline_alert_deliveries, então ninguém recebe
+//   (implantação: 30 dias; contrato: 12, 6 e 3 meses) e, às segundas, os resumos
+//   semanais — um de implantação e outro de contrato, cada um só quando tem projetos.
+//   Cada envio fica em deadline_alert_deliveries, então ninguém recebe
 //   o mesmo aviso duas vezes, mesmo que a função rode de novo.
 // • Teste (botão em Configurações): Admin logado; envia aos destinatários da empresa
 //   ou, se informado, só para `to`. Teste com `to` usa ALERTS_TEST_FROM quando existe
@@ -15,7 +16,7 @@
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { ymd } from "../_shared/deadlineDates.ts";
 import {
-  renderAlertEmail, renderDigestEmail, sampleAlert,
+  renderAlertEmail, renderContratoDigest, renderImplantacaoDigest, sampleAlert,
   type DeadlineAlert, type EmailContext, type RenderedEmail,
 } from "../_shared/deadlineEmail.ts";
 
@@ -132,10 +133,17 @@ async function runDaily(db: SupabaseClient, today: string) {
     }
 
     if (s.weekly_digest && ymd(today).getUTCDay() === 1 && s.recipients.length) {
-      const res = await deliver(db, { tenant_id: s.tenant_id, project_id: null, kind: "resumo", milestone: "semanal", due_date: today },
-        s.recipients, renderDigestEmail(rows, ctx));
-      if (res.status === "enviado") summary.resumos++;
-      else if (res.status === "erro") { summary.erros++; summary.falhas.push(`Resumo semanal: ${res.error}`); }
+      const digests = [
+        { kind: "implantacao", label: "Resumo de implantação", render: renderImplantacaoDigest },
+        { kind: "contrato", label: "Resumo de contrato", render: renderContratoDigest },
+      ] as const;
+      for (const d of digests) {
+        if (!rows.some(r => r.kind === d.kind)) continue;
+        const res = await deliver(db, { tenant_id: s.tenant_id, project_id: null, kind: "resumo", milestone: d.kind, due_date: today },
+          s.recipients, d.render(rows, ctx));
+        if (res.status === "enviado") { summary.resumos++; await sleep(600); }
+        else if (res.status === "erro") { summary.erros++; summary.falhas.push(`${d.label}: ${res.error}`); }
+      }
     }
   }
   return summary;
@@ -158,7 +166,9 @@ async function sendTest(db: SupabaseClient, tenantId: string, today: string, kin
   const ctx = await contextFor(db, settings, today, true);
   const email = kind === "implantacao" || kind === "contrato"
     ? renderAlertEmail(rows.find(r => r.kind === kind) ?? sampleAlert(kind, today), ctx)
-    : renderDigestEmail(rows, ctx);
+    : kind === "resumo_contrato"
+      ? renderContratoDigest(rows, ctx)
+      : renderImplantacaoDigest(rows, ctx);
   const res = await deliver(db, { tenant_id: tenantId, project_id: null, kind: "teste", milestone: "teste", due_date: today },
     to, email, from);
   if (res.status !== "enviado") return json({ error: res.error ?? "Não foi possível enviar." }, 502);
@@ -198,7 +208,7 @@ Deno.serve(async (req) => {
     const { data: profile } = await db.from("profiles").select("tenant_id").eq("user_id", userId).maybeSingle();
     const tenantId = set.has("super_admin") && body.tenant_id ? body.tenant_id : profile?.tenant_id;
     if (!tenantId) return json({ error: "Usuário sem empresa vinculada." }, 400);
-    return await sendTest(db, tenantId, today, body.kind ?? "resumo", typeof body.to === "string" ? body.to : undefined);
+    return await sendTest(db, tenantId, today, body.kind ?? "resumo_implantacao", typeof body.to === "string" ? body.to : undefined);
   } catch (e) {
     console.error("deadline-alerts", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);

@@ -74,7 +74,9 @@ export async function fetchRecentDeliveries(tenantId: string, limit = 8): Promis
  * E-mail de teste (resumo ou um alerta de exemplo) para os destinatários cadastrados
  * ou só para `to` — com `to`, o servidor usa o remetente de teste (ALERTS_TEST_FROM).
  */
-export async function sendTestAlertEmail(kind: "resumo" | DeadlineKind, to?: string): Promise<{ to: string[]; subject: string }> {
+export type TestEmailKind = "resumo_implantacao" | "resumo_contrato" | DeadlineKind;
+
+export async function sendTestAlertEmail(kind: TestEmailKind, to?: string): Promise<{ to: string[]; subject: string }> {
   const { data, error } = await supabase.functions.invoke("deadline-alerts", { body: { mode: "test", kind, to: to?.trim() || undefined } });
   if (error) {
     // a função devolve { error } com a mensagem do Resend/validação

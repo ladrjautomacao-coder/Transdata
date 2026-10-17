@@ -10,18 +10,21 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   fetchAlertEmailSettings, fetchRecentDeliveries, isValidEmail, saveAlertEmailSettings, sendTestAlertEmail,
-  type AlertDelivery, type AlertEmailSettings,
+  type AlertDelivery, type AlertEmailSettings, type TestEmailKind,
 } from "@/lib/deadlineAlerts";
 
 const errorMessage = (e: unknown) => (e as { message?: string })?.message ?? String(e);
 const KIND_LABEL: Record<AlertDelivery["kind"], string> = { implantacao: "Implantação", contrato: "Contrato", resumo: "Resumo semanal", teste: "Teste" };
+const deliveryLabel = (d: AlertDelivery) =>
+  d.kind === "resumo" ? (d.milestone === "contrato" ? "Resumo de contrato" : d.milestone === "implantacao" ? "Resumo de implantação" : "Resumo semanal") : KIND_LABEL[d.kind];
 const STATUS_STYLE: Record<AlertDelivery["status"], { label: string; cls: string; dot: string }> = {
   enviado: { label: "Enviado", cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-500" },
   erro: { label: "Erro", cls: "bg-red-500/15 text-red-700 dark:text-red-300", dot: "bg-red-500" },
   enviando: { label: "Enviando", cls: "bg-amber-500/15 text-amber-700 dark:text-amber-300", dot: "bg-amber-500" },
 };
-const TESTS: { kind: "resumo" | "implantacao" | "contrato"; label: string; icon: typeof Mail }[] = [
-  { kind: "resumo", label: "Resumo semanal", icon: Mail },
+const TESTS: { kind: TestEmailKind; label: string; icon: typeof Mail }[] = [
+  { kind: "resumo_implantacao", label: "Resumo de implantação", icon: Mail },
+  { kind: "resumo_contrato", label: "Resumo de contrato", icon: Mail },
   { kind: "implantacao", label: "Alerta de prazo de implantação", icon: Hourglass },
   { kind: "contrato", label: "Alerta de prazo de contrato", icon: FileClock },
 ];
@@ -110,7 +113,7 @@ export function AlertEmailSettingsCard() {
   };
 
   const testToValid = !testTo.trim() || isValidEmail(testTo);
-  const test = async (kind: "resumo" | "implantacao" | "contrato") => {
+  const test = async (kind: TestEmailKind) => {
     if (dirty) { toast.warning("Salve as alterações antes de enviar o teste."); return; }
     if (!testToValid) { toast.error("E-mail do teste inválido."); return; }
     setTesting(kind);
@@ -140,7 +143,7 @@ export function AlertEmailSettingsCard() {
         <div className="min-w-0 space-y-4">
           <p className="text-sm text-muted-foreground">
             Todo dia às 8h o portal envia um e-mail para cada projeto que chegou a um marco: <b className="text-foreground">implantação</b> 30 dias
-            antes da finalização prevista e <b className="text-foreground">contrato</b> 12, 6 e 3 meses antes do fim. Às segundas chega também o resumo semanal.
+            antes da finalização prevista e <b className="text-foreground">contrato</b> 12, 6 e 3 meses antes do fim. Às segundas chegam também dois resumos semanais: um de implantação e outro de contrato.
             Cada aviso é enviado uma vez só.
           </p>
 
@@ -174,7 +177,7 @@ export function AlertEmailSettingsCard() {
             <SwitchRow id="alert-enabled" checked={state.enabled} onChange={v => set({ enabled: v })}
               label="Envio ativo" hint="Pausado, nenhum e-mail sai. O sino do portal continua mostrando os prazos." />
             <SwitchRow id="alert-digest" checked={state.weekly_digest} onChange={v => set({ weekly_digest: v })}
-              label="Resumo semanal às segundas" hint="Implantações dos próximos 30 dias e contratos dos próximos 12 meses num e-mail só." />
+              label="Resumos semanais às segundas" hint="Dois e-mails: implantações dos próximos 30 dias e contratos dos próximos 12 meses. Só sai o que tiver projetos." />
             <SwitchRow id="alert-manager" checked={state.include_manager} onChange={v => set({ include_manager: v })}
               label="Enviar também ao GP do projeto" hint="Usa o e-mail do Gerente de Projetos cadastrado em Equipe. O resumo semanal vai só para a lista acima." />
           </div>
@@ -222,7 +225,7 @@ export function AlertEmailSettingsCard() {
                         <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${st.cls}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />{st.label}
                         </span>
-                        <span className="text-[11px] text-muted-foreground">{KIND_LABEL[d.kind]} · {format(new Date(d.created_at), "dd/MM HH:mm")}</span>
+                        <span className="text-[11px] text-muted-foreground">{deliveryLabel(d)} · {format(new Date(d.created_at), "dd/MM HH:mm")}</span>
                       </div>
                       {d.subject && <p className="mt-0.5 truncate text-xs" title={d.subject}>{d.subject}</p>}
                       {d.status === "erro" && d.error && <p className="mt-0.5 text-[11px] text-destructive">{d.error}</p>}

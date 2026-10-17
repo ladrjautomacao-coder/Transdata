@@ -3,7 +3,7 @@ import {
   addMonths, monthsAndDays, remainingShort, remainingText, toneOf,
 } from "../../supabase/functions/_shared/deadlineDates.ts";
 import {
-  renderAlertEmail, renderDigestEmail, sampleAlert, type DeadlineAlert, type EmailContext,
+  renderAlertEmail, renderContratoDigest, renderImplantacaoDigest, sampleAlert, type DeadlineAlert, type EmailContext,
 } from "../../supabase/functions/_shared/deadlineEmail.ts";
 
 const ctx = (today: string, extra: Partial<EmailContext> = {}): EmailContext => ({
@@ -87,25 +87,61 @@ describe("e-mail de prazo de contrato", () => {
   });
 });
 
-describe("resumo semanal", () => {
-  it("resume implantações e contratos", () => {
-    const other: DeadlineAlert = { ...contr, project_id: "p3", company_name: "Viação Exemplo Ltda", milestone: "3m", due_date: "2027-01-19" };
-    const email = renderDigestEmail([contr, impl, other, { ...impl, project_id: "p4", company_name: "Transportes Demonstração Ltda", due_date: "2026-11-06" }], ctx("2026-10-19"));
-    expect(email.subject).toBe("[Resumo de prazos] 2 implantações em 30 dias · 2 contratos em 12 meses");
-    expect(email.html).toContain("4 projetos com prazos se aproximando");
-    expect(email.html).toContain("Segunda-feira, 19 de outubro de 2026");
-    // ordenado pelo prazo: Transportes (06/11) antes de Expresso (15/11)
-    expect(email.html.indexOf("Transportes Demonstração")).toBeLessThan(email.html.indexOf("Expresso Modelo"));
+describe("resumo semanal de implantação", () => {
+  const monday = ctx("2026-10-19");
+  const rows: DeadlineAlert[] = [
+    impl, // 15/11: em 27 dias
+    { ...impl, project_id: "p4", company_name: "Transportes Demonstração Ltda", due_date: "2026-11-06" }, // em 18 dias
+    { ...impl, project_id: "p5", company_name: "Viação Aurora Exemplo Ltda", due_date: "2026-10-23" }, // em 4 dias
+    contr, // contrato não entra
+  ];
+  const email = renderImplantacaoDigest(rows, monday);
+  it("tem assunto e faixas só de implantação", () => {
+    expect(email.subject).toBe("[Prazo de implantação] Resumo semanal: 3 implantações terminam em até 30 dias");
+    expect(email.preheader).toBe("Até 7 dias: 1 · 8 a 15 dias: 0 · 16 a 30 dias: 2 · segunda-feira, 19 de outubro de 2026");
+    expect(email.html).toContain("3 implantações terminam nos próximos 30 dias");
+    expect(email.html).not.toContain("Rodoviária Exemplo");
   });
-  it("sem prazos, avisa que está tudo em dia", () => {
-    const email = renderDigestEmail([], ctx("2026-10-19"));
-    expect(email.html).toContain("Nenhum prazo se aproximando");
-    expect(email.html).toContain("Nenhuma implantação termina nos próximos 30 dias.");
+  it("lista pela data de finalização", () => {
+    const pos = ["Viação Aurora", "Transportes Demonstração", "Expresso Modelo"].map(s => email.html.indexOf(s));
+    expect(pos).toEqual([...pos].sort((a, b) => a - b));
+    expect(email.html).toContain("em 4 dias");
+  });
+  it("sem implantações no período, diz isso", () => {
+    const empty = renderImplantacaoDigest([contr], monday);
+    expect(empty.html).toContain("Nenhuma implantação termina nos próximos 30 dias");
+  });
+});
+
+describe("resumo semanal de contrato", () => {
+  const monday = ctx("2026-10-19");
+  const rows: DeadlineAlert[] = [
+    contr, // 16/04/2027: faixa 3 a 6 meses
+    { ...contr, project_id: "p3", company_name: "Viação Exemplo Ltda", milestone: "3m", due_date: "2027-01-19" },
+    { ...contr, project_id: "p6", company_name: "Expresso Litoral Exemplo Ltda", milestone: "12m", due_date: "2027-08-30", executive_name: null },
+    impl, // implantação não entra
+  ];
+  const email = renderContratoDigest(rows, monday);
+  it("tem assunto e faixas só de contrato", () => {
+    expect(email.subject).toBe("[Prazo de contrato] Resumo semanal: 3 contratos terminam em até 12 meses");
+    expect(email.preheader).toBe("Até 3 meses: 1 · 3 a 6 meses: 1 · 6 a 12 meses: 1 · segunda-feira, 19 de outubro de 2026");
+    expect(email.html).not.toContain("Expresso Modelo");
+  });
+  it("agrupa por faixa, da mais próxima para a mais distante, com GP e Executivo", () => {
+    const pos = ["Terminam em até 3 meses", "Viação Exemplo", "Em 3 a 6 meses", "Rodoviária Exemplo", "Em 6 a 12 meses", "Expresso Litoral"]
+      .map(s => email.html.lastIndexOf(s));
+    expect(pos).toEqual([...pos].sort((a, b) => a - b));
+    expect(email.html).toContain("Rafael Costa");
+    expect(email.text).toContain("Executivo Rafael Costa");
+  });
+  it("usa o singular com um contrato só", () => {
+    expect(renderContratoDigest([contr], monday).subject).toBe("[Prazo de contrato] Resumo semanal: 1 contrato termina em até 12 meses");
   });
   it("marca o teste no assunto e no corpo", () => {
-    const email = renderDigestEmail([], ctx("2026-10-19", { test: true }));
-    expect(email.subject.startsWith("[Teste] ")).toBe(true);
-    expect(email.html).toContain("E-mail de teste enviado pelo portal");
+    const test = renderContratoDigest([], ctx("2026-10-19", { test: true }));
+    expect(test.subject.startsWith("[Teste] ")).toBe(true);
+    expect(test.html).toContain("E-mail de teste enviado pelo portal");
+    expect(test.html).toContain("Nenhum contrato termina nos próximos 12 meses");
   });
 });
 
