@@ -3,7 +3,8 @@ import {
   addMonths, monthsAndDays, remainingShort, remainingText, toneOf,
 } from "../../supabase/functions/_shared/deadlineDates.ts";
 import {
-  renderAlertEmail, renderContratoDigest, renderImplantacaoDigest, sampleAlert, type DeadlineAlert, type EmailContext,
+  renderAlertEmail, renderContratoDigest, renderDzeroReminder, renderImplantacaoDigest, sampleAlert, sampleDzero,
+  type DeadlineAlert, type DzeroPending, type EmailContext,
 } from "../../supabase/functions/_shared/deadlineEmail.ts";
 
 const ctx = (today: string, extra: Partial<EmailContext> = {}): EmailContext => ({
@@ -144,6 +145,31 @@ describe("resumo semanal de contrato", () => {
     expect(test.subject.startsWith("[Teste] ")).toBe(true);
     expect(test.html).toContain("E-mail de teste enviado pelo portal");
     expect(test.html).toContain("Nenhum contrato termina nos próximos 12 meses");
+  });
+});
+
+describe("lembrete de D-zero", () => {
+  const pend: DzeroPending = {
+    project_id: "p9", company_name: "Viação Sinal Exemplo Ltda", project_code: "VSXSC-0050", city: "Joinville", state: "SC",
+    status: "comercial", sub_phase: "cobranca_dzero", manager_name: "Ana Ribeiro", executive_name: "Rafael Costa",
+    registered_on: "2026-10-13", contract_date: "2026-10-13", d_zero_date: null, days_waiting: 6, reminders_sent: 2,
+  };
+  const email = renderDzeroReminder(pend, ctx("2026-10-19"));
+  it("tem assunto amigável e padronizado", () => {
+    expect(email.subject).toBe("[Lembrete D-zero] Viação Sinal Exemplo Ltda aguarda o pagamento do sinal há 6 dias");
+  });
+  it("explica o D-zero e mostra o número do lembrete e a etapa atual", () => {
+    expect(email.html).toContain("Lembrete nº 3");
+    expect(email.html).toContain("pagamento do sinal que o cliente faz à Transdata");
+    expect(email.html).toContain("Cobrança D-zero emitida");
+    expect(email.html).toContain("etapa atual");
+    expect(email.html).toContain("https://portal.exemplo/comercial?projeto=p9");
+    expect(email.text).toContain("Data D-zero: não informada");
+    expect(email.text).toContain("Pagamento D-zero efetuado");
+  });
+  it("tem exemplo para o teste quando nenhum projeto aguarda o D-zero", () => {
+    expect(renderDzeroReminder(sampleDzero("2026-10-19"), ctx("2026-10-19", { test: true })).subject)
+      .toBe("[Teste] [Lembrete D-zero] Projeto de exemplo aguarda o pagamento do sinal há 6 dias");
   });
 });
 

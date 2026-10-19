@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { FileClock, Hourglass, Loader2, Mail, Plus, RefreshCw, Save, Send, X } from "lucide-react";
+import { CircleDollarSign, FileClock, Hourglass, Loader2, Mail, Plus, RefreshCw, Save, Send, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,9 @@ import {
 } from "@/lib/deadlineAlerts";
 
 const errorMessage = (e: unknown) => (e as { message?: string })?.message ?? String(e);
-const KIND_LABEL: Record<AlertDelivery["kind"], string> = { implantacao: "Implantação", contrato: "Contrato", resumo: "Resumo semanal", teste: "Teste" };
+const KIND_LABEL: Record<AlertDelivery["kind"], string> = {
+  implantacao: "Implantação", contrato: "Contrato", resumo: "Resumo semanal", teste: "Teste", dzero: "Lembrete de D-zero",
+};
 const deliveryLabel = (d: AlertDelivery) =>
   d.kind === "resumo" ? (d.milestone === "contrato" ? "Resumo de contrato" : d.milestone === "implantacao" ? "Resumo de implantação" : "Resumo semanal") : KIND_LABEL[d.kind];
 const STATUS_STYLE: Record<AlertDelivery["status"], { label: string; cls: string; dot: string }> = {
@@ -27,6 +29,7 @@ const TESTS: { kind: TestEmailKind; label: string; icon: typeof Mail }[] = [
   { kind: "resumo_contrato", label: "Resumo de contrato", icon: Mail },
   { kind: "implantacao", label: "Alerta de prazo de implantação", icon: Hourglass },
   { kind: "contrato", label: "Alerta de prazo de contrato", icon: FileClock },
+  { kind: "dzero", label: "Lembrete de D-zero", icon: CircleDollarSign },
 ];
 
 function SwitchRow({ id, checked, onChange, label, hint }: { id: string; checked: boolean; onChange: (v: boolean) => void; label: string; hint: string }) {
@@ -143,7 +146,8 @@ export function AlertEmailSettingsCard() {
         <div className="min-w-0 space-y-4">
           <p className="text-sm text-muted-foreground">
             Todo dia às 8h o portal envia um e-mail para cada projeto que chegou a um marco: <b className="text-foreground">implantação</b> 30 dias
-            antes da finalização prevista e <b className="text-foreground">contrato</b> 12, 6 e 3 meses antes do fim. Às segundas chegam também dois resumos semanais: um de implantação e outro de contrato.
+            antes da finalização prevista e <b className="text-foreground">contrato</b> 12, 6 e 3 meses antes do fim. Às segundas chegam também dois resumos semanais: um de implantação e outro de contrato. E, de segunda a sexta,
+            um <b className="text-foreground">lembrete de D-zero</b> a cada 2 dias para cada projeto da fase Comercial que ainda não teve o pagamento do sinal confirmado.
             Cada aviso é enviado uma vez só.
           </p>
 

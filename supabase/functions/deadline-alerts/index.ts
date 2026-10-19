@@ -6,6 +6,8 @@
 //   semanais — um de implantação e outro de contrato, cada um só quando tem projetos.
 //   Cada envio fica em deadline_alert_deliveries, então ninguém recebe
 //   o mesmo aviso duas vezes, mesmo que a função rode de novo.
+//   De segunda a sexta também lembra o D-zero (pagamento do sinal) dos projetos da fase
+//   Comercial que ainda não o tiveram confirmado: a cada 2 dias a partir do cadastro.
 // • Teste (botão em Configurações): Admin logado; envia aos destinatários da empresa
 //   ou, se informado, só para `to`. Teste com `to` usa ALERTS_TEST_FROM quando existe
 //   (ex.: onboarding@resend.dev, que entrega só no e-mail da conta do Resend e não
@@ -14,10 +16,10 @@
 // Segredos: RESEND_API_KEY, ALERTS_FROM ("Nome <endereco@dominio>"), PORTAL_URL,
 //           ALERTS_TEST_FROM (opcional).
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { ymd } from "../_shared/deadlineDates.ts";
+import { daysBetween, ymd } from "../_shared/deadlineDates.ts";
 import {
-  renderAlertEmail, renderContratoDigest, renderImplantacaoDigest, sampleAlert,
-  type DeadlineAlert, type EmailContext, type RenderedEmail,
+  renderAlertEmail, renderContratoDigest, renderDzeroReminder, renderImplantacaoDigest, sampleAlert, sampleDzero,
+  type DeadlineAlert, type DzeroPending, type EmailContext, type RenderedEmail,
 } from "../_shared/deadlineEmail.ts";
 
 const corsHeaders = {
@@ -94,7 +96,9 @@ async function deliver(
   }
 }
 
-async function managerEmails(db: SupabaseClient, rows: Row[]) {
+type DzeroRow = DzeroPending & { tenant_id: string; manager_id: string | null; last_reminder: string | null };
+
+async function managerEmails(db: SupabaseClient, rows: { manager_id: string | null }[]) {
   const ids = [...new Set(rows.map(r => r.manager_id).filter((x): x is string => !!x))];
   if (!ids.length) return new Map<string, string>();
   const { data } = await db.from("team_members").select("id, email").in("id", ids);
@@ -113,7 +117,7 @@ async function runDaily(db: SupabaseClient, today: string) {
 
   const { data: all, error } = await db.rpc("project_deadline_alerts", { _today: today });
   if (error) throw error;
-  const summary = { ok: true, today, enviados: 0, erros: 0, ja_enviados: 0, resumos: 0, falhas: [] as string[] };
+  const summary = { ok: true, today, enviados: 0, erros: 0, ja_enviados: 0, resumos: 0, lembretes_dzero: 0, falhas: [] as string[] };
 
   for (const s of settings as Settings[]) {
     const rows = ((all ?? []) as Row[]).filter(r => r.tenant_id === s.tenant_id);
@@ -146,7 +150,40 @@ async function runDaily(db: SupabaseClient, today: string) {
       }
     }
   }
+
+  // Lembretes de D-zero: um problema aqui não pode impedir os alertas de prazo acima
+  try {
+    await runDzero(db, settings as Settings[], today, summary);
+  } catch (e) {
+    summary.erros++;
+    summary.falhas.push(`Lembretes de D-zero: ${String((e as Error)?.message ?? e)}`);
+  }
   return summary;
+}
+
+/** De segunda a sexta: lembra cada projeto que aguarda o D-zero, a cada 2 dias desde o cadastro ou o último lembrete. */
+async function runDzero(db: SupabaseClient, settings: Settings[], today: string,
+  summary: { lembretes_dzero: number; erros: number; falhas: string[] }) {
+  const weekday = ymd(today).getUTCDay();
+  if (weekday === 0 || weekday === 6) return;
+  const { data, error } = await db.rpc("project_dzero_pending", { _today: today });
+  if (error) throw error;
+  for (const s of settings) {
+    const rows = ((data ?? []) as DzeroRow[])
+      .filter(r => r.tenant_id === s.tenant_id && (!r.last_reminder || daysBetween(r.last_reminder, today) >= 2));
+    if (!rows.length) continue;
+    const ctx = await contextFor(db, s, today);
+    const gpEmail = s.include_manager ? await managerEmails(db, rows) : new Map<string, string>();
+    for (const r of rows) {
+      const extra = s.include_manager && r.manager_id ? gpEmail.get(r.manager_id) : undefined;
+      const to = [...new Set([...s.recipients, ...(extra ? [extra] : [])])];
+      if (!to.length) continue;
+      const res = await deliver(db, { tenant_id: s.tenant_id, project_id: r.project_id, kind: "dzero", milestone: "lembrete", due_date: today },
+        to, renderDzeroReminder(r, ctx));
+      if (res.status === "enviado") { summary.lembretes_dzero++; await sleep(600); }
+      else if (res.status === "erro") { summary.erros++; summary.falhas.push(`D-zero ${r.company_name}: ${res.error}`); }
+    }
+  }
 }
 
 const EMAIL_RE = /^[^@\s,;<>"]+@[^@\s,;<>"]+\.[a-z]{2,}$/i;
@@ -160,15 +197,23 @@ async function sendTest(db: SupabaseClient, tenantId: string, today: string, kin
   const to = override ? [override] : settings.recipients ?? [];
   if (!to.length) return json({ error: "Cadastre ao menos um destinatário ou informe para quem enviar o teste." }, 400);
   const from = override ? env("ALERTS_TEST_FROM") || undefined : undefined;
-  const { data: all, error } = await db.rpc("project_deadline_alerts", { _today: today });
-  if (error) throw error;
-  const rows = ((all ?? []) as Row[]).filter(r => r.tenant_id === tenantId);
   const ctx = await contextFor(db, settings, today, true);
-  const email = kind === "implantacao" || kind === "contrato"
-    ? renderAlertEmail(rows.find(r => r.kind === kind) ?? sampleAlert(kind, today), ctx)
-    : kind === "resumo_contrato"
-      ? renderContratoDigest(rows, ctx)
-      : renderImplantacaoDigest(rows, ctx);
+  let email: RenderedEmail;
+  if (kind === "dzero") {
+    const { data: pend, error: dErr } = await db.rpc("project_dzero_pending", { _today: today });
+    if (dErr) throw dErr;
+    const first = ((pend ?? []) as DzeroRow[]).find(r => r.tenant_id === tenantId);
+    email = renderDzeroReminder(first ?? sampleDzero(today), ctx);
+  } else {
+    const { data: all, error } = await db.rpc("project_deadline_alerts", { _today: today });
+    if (error) throw error;
+    const rows = ((all ?? []) as Row[]).filter(r => r.tenant_id === tenantId);
+    email = kind === "implantacao" || kind === "contrato"
+      ? renderAlertEmail(rows.find(r => r.kind === kind) ?? sampleAlert(kind, today), ctx)
+      : kind === "resumo_contrato"
+        ? renderContratoDigest(rows, ctx)
+        : renderImplantacaoDigest(rows, ctx);
+  }
   const res = await deliver(db, { tenant_id: tenantId, project_id: null, kind: "teste", milestone: "teste", due_date: today },
     to, email, from);
   if (res.status !== "enviado") return json({ error: res.error ?? "Não foi possível enviar." }, 502);

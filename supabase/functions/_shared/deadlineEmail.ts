@@ -72,25 +72,31 @@ export const esc = (s: unknown) =>
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const listPt = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} e ${xs[xs.length - 1]}` : xs[0] ?? "");
 
-const phaseOf = (a: DeadlineAlert, ctx: EmailContext) => {
+/** O que todo e-mail precisa saber do projeto (alerta de prazo, lembrete de D-zero). */
+export type ProjectRef = {
+  project_id: string; company_name: string; project_code: string | null;
+  city: string | null; state: string | null; status: string; sub_phase: string | null;
+};
+
+const phaseOf = (a: ProjectRef, ctx: EmailContext) => {
   const st = ctx.statusLabels?.[a.status] || DEFAULT_STATUS[a.status] || a.status;
   const sp = a.sub_phase ? SUB_PHASE[a.sub_phase] : null;
   return sp && sp !== st ? `${st} · ${sp}` : st;
 };
-const placeOf = (a: DeadlineAlert) => [a.city, a.state].filter(Boolean).join("/");
+const placeOf = (a: ProjectRef) => [a.city, a.state].filter(Boolean).join("/");
 const managerLabel = (ctx: EmailContext) => ctx.roleLabels?.manager?.trim() || "Gerente de Projetos";
 const executiveLabel = (ctx: EmailContext) => ctx.roleLabels?.executive?.trim() || "Executivo de Vendas";
 /** Acompanhamento do projeto (notas do GP, linha da vida e mudanças de status). */
-const projectUrl = (a: DeadlineAlert, ctx: EmailContext) =>
+const projectUrl = (a: ProjectRef, ctx: EmailContext) =>
   a.project_id === SAMPLE_PROJECT_ID ? `${ctx.portalUrl}/comercial` : `${ctx.portalUrl}/comercial?projeto=${encodeURIComponent(a.project_id)}`;
 /** Cronograma do projeto: etapas e linha do tempo das visitas técnicas. */
-const cronogramaUrl = (a: DeadlineAlert, ctx: EmailContext) =>
+const cronogramaUrl = (a: ProjectRef, ctx: EmailContext) =>
   a.project_id === SAMPLE_PROJECT_ID ? `${ctx.portalUrl}/projetos/cronograma` : `${ctx.portalUrl}/projetos/cronograma?projeto=${encodeURIComponent(a.project_id)}`;
 const elapsedOf = (a: DeadlineAlert, today: string) => {
   const used = Math.min(a.deadline_days, Math.max(0, daysBetween(a.contract_date, today)));
   return { used, pct: a.deadline_days > 0 ? Math.round((used / a.deadline_days) * 100) : 0 };
 };
-const subtitleOf = (a: DeadlineAlert, extra?: string) => [a.project_code, placeOf(a), extra].filter(Boolean).map(esc).join(" · ");
+const subtitleOf = (a: ProjectRef, extra?: string) => [a.project_code, placeOf(a), extra].filter(Boolean).map(esc).join(" · ");
 
 /* ─── Peças ─────────────────────────────────────────────────────────────── */
 const tbl = (inner: string, style = "", attrs = "") =>
@@ -132,7 +138,7 @@ function progress(label: string, detailHtml: string, pct: number, tone: Tone, sc
     + gap(8) + bar(pct, tone) + gap(8) + tbl(`<tr>${scaleCells}</tr>`);
 }
 
-function projectCard(a: DeadlineAlert, subtitleHtml: string, factsHtml: string, progressHtml: string) {
+function projectCard(a: ProjectRef, subtitleHtml: string, factsHtml: string, progressHtml: string) {
   return `<tr><td class="px" style="padding:24px 32px 0;">${tbl(`
     <tr><td style="padding:16px 20px;background:${C.soft};border-bottom:1px solid ${C.line};border-radius:10px 10px 0 0;">
       <div style="font:700 17px/24px ${FONT};color:${C.ink};">${esc(a.company_name)}</div>
@@ -148,12 +154,12 @@ const button = (href: string, label: string, primary = true) =>
 const buttons = (...btns: string[]) =>
   `<tr><td class="px" style="padding:24px 32px 0;">${btns.join(`<span class="sp" style="display:inline-block;width:12px;height:10px;"></span>`)}</td></tr>`;
 
-function stepsBlock(list: string[]) {
+function stepsBlock(list: string[], title = "O que fazer agora") {
   const items = list.map((s, i) => tbl(`<tr>
     <td width="36" valign="top" style="padding-top:10px;"><div style="width:24px;height:24px;border-radius:12px;background:${C.brand};color:#FFFFFF;font:700 12px/24px ${FONT};text-align:center;">${i + 1}</div></td>
     <td valign="top" style="padding-top:12px;font:400 14px/21px ${FONT};color:${C.steps};">${s}</td></tr>`)).join("");
   return `<tr><td class="px" style="padding:28px 32px 0;">${tbl(`<tr><td style="padding:18px 22px 20px;">
-    <div style="font:700 15px/22px ${FONT};color:${C.ink};">O que fazer agora</div>${items}</td></tr>`, `background:${C.panel};border-radius:10px;`, `bgcolor="${C.panel}"`)}</td></tr>`;
+    <div style="font:700 15px/22px ${FONT};color:${C.ink};">${esc(title)}</div>${items}</td></tr>`, `background:${C.panel};border-radius:10px;`, `bgcolor="${C.panel}"`)}</td></tr>`;
 }
 
 const note = (title: string, text: string, pad = "24px 32px 28px") =>
@@ -478,5 +484,108 @@ export function sampleAlert(kind: DeadlineKind, today: string): DeadlineAlert {
   return {
     ...base, status: "encerrado", executive_name: "Executivo de Vendas", contract_date: start, kind, milestone: "6m",
     deadline_days: daysBetween(start, due), due_date: due, days_left: daysBetween(today, due),
+  };
+}
+
+/* ─── Lembrete de D-zero ────────────────────────────────────────────────── */
+/** Uma linha de public.project_dzero_pending(). */
+export interface DzeroPending extends ProjectRef {
+  manager_name: string | null;
+  executive_name: string | null;
+  /** Data do cadastro do projeto (Brasília). */
+  registered_on: string;
+  contract_date: string | null;
+  d_zero_date: string | null;
+  days_waiting: number;
+  /** Lembretes já enviados (o próximo é o nº reminders_sent + 1). */
+  reminders_sent: number;
+}
+
+/** Caminho da fase Comercial até o D-zero (etapas do portal). */
+const DZERO_PATH: { id: string; label: string }[] = [
+  { id: "aguardando_contrato", label: "Aguardando contrato" },
+  { id: "contrato_assinado", label: "Contrato assinado" },
+  { id: "cobranca_dzero", label: "Cobrança emitida" },
+  { id: "pagamento_dzero", label: "Pagamento do D-zero" },
+];
+
+/**
+ * Lembrete amigável, a cada 2 dias, do projeto que depende do D-zero — o pagamento do
+ * sinal que o cliente faz à Transdata para dar início ao projeto.
+ */
+export function renderDzeroReminder(a: DzeroPending, ctx: EmailContext): RenderedEmail {
+  const n = a.reminders_sent + 1;
+  const days = Math.max(0, a.days_waiting);
+  const waiting = plural(days, "dia", "dias");
+  const gp = a.manager_name?.trim() || null;
+  const exec = a.executive_name?.trim() || null;
+  const stage = a.sub_phase ? SUB_PHASE[a.sub_phase] ?? a.sub_phase : "Etapa não informada";
+  const title = `${a.company_name} aguarda o D-zero para iniciar`;
+  const introPlain = `Olá! Este é um lembrete amigável: o projeto de ${a.company_name} depende do D-zero, o pagamento do sinal que o cliente faz à Transdata para darmos início ao projeto. Ele foi cadastrado há ${waiting} e o pagamento ainda não foi confirmado no portal.`;
+  const introHtml = `Olá! Este é um lembrete amigável: o projeto de <b style="color:${C.ink};">${esc(a.company_name)}</b> depende do <b style="color:${C.ink};">D-zero</b>, `
+    + `o pagamento do sinal que o cliente faz à Transdata para darmos início ao projeto. Ele foi cadastrado há <b style="color:${C.ink};">${waiting}</b> `
+    + `e o pagamento ainda não foi confirmado no portal.`;
+
+  const at = Math.max(0, DZERO_PATH.findIndex(s => s.id === a.sub_phase));
+  const cells = DZERO_PATH.map((s, i) => {
+    const state = i < at ? "feito" : i === at ? "atual" : "futuro";
+    const circle = state === "feito"
+      ? `<div style="width:28px;height:28px;border-radius:14px;background:${C.brand};color:#FFFFFF;font:700 14px/28px ${FONT};text-align:center;margin:0 auto;">&#10003;</div>`
+      : state === "atual"
+        ? `<div style="width:22px;height:22px;border-radius:14px;border:3px solid ${TONE.amber.dot};background:${TONE.amber.bg};color:${TONE.amber.dot};font:700 12px/22px ${FONT};text-align:center;margin:0 auto;">&#9679;</div>`
+        : `<div style="width:24px;height:24px;border-radius:14px;border:2px solid #C9BFD4;background:#FFFFFF;margin:0 auto;">&nbsp;</div>`;
+    const sub = state === "feito" ? "concluída" : state === "atual" ? "etapa atual" : i === DZERO_PATH.length - 1 ? "libera o início" : "próxima";
+    return `<td width="25%" align="center" valign="top" style="padding:0 2px;">${circle}
+      <div style="margin-top:6px;font:700 12px/17px ${FONT};color:${state === "atual" ? TONE.amber.text : state === "futuro" ? C.body : C.ink};">${esc(s.label)}</div>
+      <div style="margin-top:2px;font:${state === "atual" ? 600 : 400} 11px/16px ${FONT};color:${state === "atual" ? TONE.amber.text : C.muted};">${sub}</div></td>`;
+  }).join("");
+  const path = `<div style="font:600 13px/20px ${FONT};color:${C.ink};margin-bottom:12px;">Caminho até o início do projeto</div>${tbl(`<tr>${cells}</tr>`)}`;
+
+  const steps = [
+    "Confirme com o cliente ou com o financeiro se o sinal já foi pago.",
+    "Pagamento confirmado? Atualize a etapa do projeto para <b>Pagamento D-zero efetuado</b> e os lembretes param.",
+    "Se houver algum impedimento, registre uma nota no acompanhamento do projeto para o time acompanhar.",
+  ];
+  const why = "o portal lembra a cada 2 dias, de segunda a sexta, os projetos da fase Comercial que ainda não tiveram o pagamento do D-zero confirmado. Os lembretes começam 2 dias após o cadastro do projeto.";
+  const subject = subjectOf(ctx, `[Lembrete D-zero] ${a.company_name} aguarda o pagamento do sinal há ${waiting}`);
+
+  const html = shell(ctx, title, introPlain, [
+    hero(`${pill(`Lembrete nº ${n}`, "purple")}&nbsp;&nbsp;${overline("Projeto com dependência do D-zero")}`, title, introHtml),
+    projectCard(a, subtitleOf(a),
+      facts([
+        { label: "Cadastrado em", html: `${fmtDate(a.registered_on)} · há ${waiting}` },
+        { label: "Etapa atual", html: esc(stage), color: TONE.amber.text },
+        { label: "Data D-zero", html: a.d_zero_date ? fmtDate(a.d_zero_date) : "Não informada" },
+        { label: managerLabel(ctx), html: esc(gp ?? "Não definido") },
+        { label: executiveLabel(ctx), html: esc(exec ?? "Não definido") },
+      ]),
+      path),
+    buttons(button(projectUrl(a, ctx), "Abrir acompanhamento do projeto")),
+    stepsBlock(steps, "Como ajudar"),
+    note("Por que você recebeu este lembrete:", why),
+  ]);
+  const text = textOf([
+    `Lembrete nº ${n} · Projeto com dependência do D-zero`, "",
+    title, "", introPlain, "",
+    `Projeto: ${a.company_name}${[a.project_code, placeOf(a)].filter(Boolean).length ? ` (${[a.project_code, placeOf(a)].filter(Boolean).join(" · ")})` : ""}`,
+    `Cadastrado em: ${fmtDate(a.registered_on)} (há ${waiting})`,
+    `Etapa atual: ${stage}`,
+    `Data D-zero: ${a.d_zero_date ? fmtDate(a.d_zero_date) : "não informada"}`,
+    `${managerLabel(ctx)}: ${gp ?? "Não definido"}`,
+    `${executiveLabel(ctx)}: ${exec ?? "Não definido"}`, "",
+    `Abrir acompanhamento: ${projectUrl(a, ctx)}`, "",
+    "Como ajudar:", ...steps.map((s, i) => `${i + 1}. ${s.replace(/<[^>]+>/g, "")}`), "",
+    `Por que você recebeu este lembrete: ${why}`, "",
+    footerText(ctx),
+  ]);
+  return { subject, preheader: introPlain, html, text };
+}
+
+/** Projeto fictício para o teste do lembrete quando nenhum projeto aguarda o D-zero. */
+export function sampleDzero(today: string): DzeroPending {
+  return {
+    project_id: SAMPLE_PROJECT_ID, company_name: "Projeto de exemplo", project_code: "EXEMPLO-0001", city: "Florianópolis", state: "SC",
+    status: "comercial", sub_phase: "cobranca_dzero", manager_name: "Gerente de Projetos", executive_name: "Executivo de Vendas",
+    registered_on: addDays(today, -6), contract_date: addDays(today, -6), d_zero_date: null, days_waiting: 6, reminders_sent: 2,
   };
 }
