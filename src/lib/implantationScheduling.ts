@@ -144,6 +144,8 @@ export type DestinationParts = AddressParts & {
   meeting_url?: string | null;
   location: string | null;
   project: { city: string; state: string | null; country_code: string | null } | null;
+  /** Pendente sem link: o Aprovador ainda vai informar. */
+  status?: string;
 };
 
 /** Google Maps do local da visita: endereço informado, senão o local livre, senão a cidade do projeto. */
@@ -235,9 +237,10 @@ export async function createRequest(input: {
   if (error) throw error;
 }
 
-export async function approveRequest(id: string, start: Date, end: Date, technicianIds: string[]) {
+/** Aprova e atribui. Visita remota exige o link da reunião (informado pelo Aprovador). */
+export async function approveRequest(id: string, start: Date, end: Date, technicianIds: string[], meetingUrl: string | null = null) {
   const { error } = await db.rpc("approve_implantation_request", {
-    _request_id: id, _start: start.toISOString(), _end: end.toISOString(), _technician_ids: technicianIds,
+    _request_id: id, _start: start.toISOString(), _end: end.toISOString(), _technician_ids: technicianIds, _meeting_url: meetingUrl,
   });
   if (error) throw error;
 }

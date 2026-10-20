@@ -24,7 +24,7 @@ import {
   ATTENDANCE_LABEL, cancelApprovedRequest, errorMessage, fetchHistory, fetchTechnicians, formatPeriod, periodOf, registerAttendance,
   countTechnicianVisits, rejectRequest, removeTechnician, saveTechnician, type Attendance,
   photoFileProblem, removeTechnicianPhoto, techniciansOf, toLocalInput, uploadTechnicianPhoto,
-  VISIT_FORMAT_LABEL, REMOTE_PERIODS, formatAddress, normalizeMeetingUrl, visitFormatText, type RemotePeriod, type VisitFormat,
+  VISIT_FORMAT_LABEL, REMOTE_PERIODS, formatAddress, visitFormatText, type RemotePeriod, type VisitFormat,
   type EligibleProject, type HistoryEntry, type ImplantationRequest, type Technician,
 } from "@/lib/implantationScheduling";
 import { MeetingLink, ProjectBox, StatusPill, TechAvatar, VisitDestination } from "./AgendaShared";
@@ -84,10 +84,9 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
   const [district, setDistrict] = useState("");
   const [city, setCity] = useState("");
   const [uf, setUf] = useState("");
-  const [meetingUrl, setMeetingUrl] = useState("");
   const [notes, setNotes] = useState("");
   const { custom: customHolidays } = useCustomHolidays(open);
-  const [errors, setErrors] = useState<{ purpose?: string; dates?: string; format?: string; period?: string; address?: string; meeting?: string }>({});
+  const [errors, setErrors] = useState<{ purpose?: string; dates?: string; format?: string; period?: string; address?: string }>({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -97,13 +96,13 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
     setPurpose(""); setCustom(""); setStart(toLocalInput(s)); setEnd(toLocalInput(e));
     // o formato é escolha obrigatória do GP; cidade e UF já vêm do projeto
     setFormat(""); setPeriod(""); datesTouched.current = false;
-    setStreet(""); setDistrict(""); setCity(project.city ?? ""); setUf(project.state ?? ""); setMeetingUrl("");
+    setStreet(""); setDistrict(""); setCity(project.city ?? ""); setUf(project.state ?? "");
     setNotes(""); setErrors({});
   }, [open, project]);
 
   const remote = format === "remoto";
   const chooseFormat = (f: VisitFormat) => {
-    setFormat(f); setErrors(er => ({ ...er, format: undefined, period: undefined, address: undefined, meeting: undefined }));
+    setFormat(f); setErrors(er => ({ ...er, format: undefined, period: undefined, address: undefined }));
     // remoto costuma ser um encontro só: sem datas mexidas, o último dia passa a ser o primeiro (e volta ao padrão no presencial)
     if (!datesTouched.current && start) {
       const e = new Date(start); e.setDate(e.getDate() + 2); e.setHours(18, 0, 0, 0);
@@ -134,7 +133,6 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
     const turn = remote && period ? REMOTE_PERIODS[period] : null;
     const s = turn ? atHour(start, turn.from) : new Date(start), e = turn ? atHour(end, turn.to) : new Date(end);
     const presencial = format === "presencial";
-    const url = remote ? normalizeMeetingUrl(meetingUrl) : null;
     const missing = presencial
       ? [!street.trim() && "rua e número", !district.trim() && "bairro", !city.trim() && "cidade", isBR && !uf && "estado"].filter((x): x is string => !!x)
       : [];
@@ -146,9 +144,6 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
       format: !format ? "Escolha se o treinamento é presencial ou remoto." : undefined,
       period: remote && !period ? "Escolha o período: manhã ou tarde." : undefined,
       address: missing.length ? `Informe ${joinPt(missing)}.` : undefined,
-      meeting: format === "remoto" && !url
-        ? meetingUrl.trim() ? "Link inválido. Cole o endereço completo da reunião (ex.: https://meet.google.com/...)." : "Cole o link da reunião."
-        : undefined,
     };
     setErrors(next);
     if (Object.values(next).some(Boolean)) return;
@@ -161,7 +156,8 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
         project_id: project.id, visit_purpose: finalPurpose,
         visit_purpose_is_custom: !(VISIT_PURPOSE_PRESETS as readonly string[]).includes(finalPurpose),
         requested_start: s.toISOString(), requested_end: e.toISOString(),
-        visit_format: format as VisitFormat, ...address, meeting_url: url,
+        // remoto: o link da reunião é informado pelo Aprovador na aprovação
+        visit_format: format as VisitFormat, ...address, meeting_url: null,
         location: presencial ? formatAddress(address) : VISIT_FORMAT_LABEL.remoto,
         notes: notes.trim() || null,
       });
@@ -312,13 +308,10 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
               <FieldError msg={errors.address} />
             </div>
           )}
-          {format === "remoto" && (
-            <div>
-              <Label className="text-xs" htmlFor="req-meeting">Link da reunião *</Label>
-              <Input id="req-meeting" className="mt-1.5" type="url" inputMode="url" value={meetingUrl} maxLength={2000}
-                onChange={e => setMeetingUrl(e.target.value)} placeholder="https://meet.google.com/..." />
-              {errors.meeting ? <FieldError msg={errors.meeting} />
-                : <p className="mt-1 text-[11px] text-muted-foreground">Teams, Meet, Zoom ou outro. Os técnicos abrem o link pela Área do Implantador.</p>}
+          {remote && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-border/60 px-3.5 py-2.5 text-xs text-muted-foreground">
+              <Video className="mt-0.5 h-4 w-4 shrink-0 text-sky-600 dark:text-sky-300" />
+              <span>O <b className="text-foreground">link da reunião</b> é informado pelo Aprovador na aprovação. Os técnicos entram por ele na Área do Implantador.</span>
             </div>
           )}
           <div><Label className="text-xs">Observações</Label><Textarea className="mt-1.5" rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Informações úteis para o Aprovador e os técnicos..." /></div>
@@ -550,7 +543,7 @@ export function RequestDetailSheet({ request, open, onOpenChange, mode, onApprov
             {request.visit_format && <><dt className="text-muted-foreground">Formato</dt><dd>{visitFormatText(request.visit_format, start, end)}</dd></>}
             <dt className="pt-1.5 text-muted-foreground">{request.visit_format === "remoto" ? "Reunião" : "Destino"}</dt>
             <dd className="min-w-0"><VisitDestination visit={request} action /></dd>
-            {request.visit_format === "remoto" && <><dt className="text-muted-foreground">Link</dt><dd className="min-w-0 text-xs"><MeetingLink url={request.meeting_url} /></dd></>}
+            {request.visit_format === "remoto" && <><dt className="text-muted-foreground">Link</dt><dd className="min-w-0 text-xs"><MeetingLink url={request.meeting_url} pending={request.status === "pendente"} /></dd></>}
             <dt className="text-muted-foreground">Solicitante</dt><dd>{request.requester_name ?? "—"}</dd>
             <dt className="text-muted-foreground">GP do projeto</dt><dd>{request.project?.manager?.full_name ?? "—"}</dd>
             <dt className="text-muted-foreground">Técnicos</dt>

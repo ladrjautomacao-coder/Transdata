@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, CheckCircle2, Clock3, Info, Loader2, Plus, UserRoundCog, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock3, Info, Loader2, Plus, UserRoundCog, Video, XCircle } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { useCustomHolidays } from "@/hooks/useCustomHolidays";
 import { useCityIndex } from "@/hooks/useCityIndex";
 import { holidaysByDay } from "@/lib/holidays";
 import {
-  VISIT_FORMAT_LABEL, approveRequest, errorMessage, saveTechnician, toLocalInput, visitFormatText,
+  VISIT_FORMAT_LABEL, approveRequest, errorMessage, normalizeMeetingUrl, remotePeriodText, saveTechnician, toLocalInput, visitFormatText,
   type ImplantationRequest, type Technician,
 } from "@/lib/implantationScheduling";
 import {
@@ -42,6 +42,8 @@ export function AssignSheet({ request, open, onOpenChange, technicians, allReque
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [editPeriod, setEditPeriod] = useState(false);
+  const [meetingUrl, setMeetingUrl] = useState("");
+  const [linkTouched, setLinkTouched] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -57,6 +59,8 @@ export function AssignSheet({ request, open, onOpenChange, technicians, allReque
     setStart(toLocalInput(new Date(request.requested_start)));
     setEnd(toLocalInput(new Date(request.requested_end)));
     setEditPeriod(false);
+    // solicitações antigas já trazem o link do GP; as novas chegam sem e o Aprovador informa
+    setMeetingUrl(request.meeting_url ?? ""); setLinkTouched(false);
     setSelected(initialSelected ?? []);
     autoPicked.current = !!initialSelected?.length;
     setAdding(false); setNewName(""); setNewArea("");
@@ -86,8 +90,17 @@ export function AssignSheet({ request, open, onOpenChange, technicians, allReque
   if (!request) return null;
   const pending = request.status === "pendente";
   const chosen = candidates.filter(c => selected.includes(c.tech.id));
-  const checks = validDates ? checksFor({ request, start: s, end: e, chosen, custom, index }) : [];
-  const blocked = !pending || !validDates || chosen.length === 0 || chosen.some(c => !c.free);
+  // visita remota: o link da reunião é obrigatório para aprovar
+  const remote = request.visit_format === "remoto";
+  const url = remote ? normalizeMeetingUrl(meetingUrl) : null;
+  const turn = validDates ? remotePeriodText(request.visit_format, s, e) : null;
+  const linkError = !remote || url ? null
+    : meetingUrl.trim() ? "Link inválido. Cole o endereço completo da reunião (ex.: https://meet.google.com/...)." : "Informe o link da reunião para aprovar.";
+  const checks = validDates ? [
+    ...checksFor({ request, start: s, end: e, chosen, custom, index }),
+    ...(remote ? [url ? { level: "ok" as const, text: "Link da reunião informado" } : { level: "error" as const, text: "Falta o link da reunião (obrigatório na visita remota)" }] : []),
+  ] : [];
+  const blocked = !pending || !validDates || chosen.length === 0 || chosen.some(c => !c.free) || (remote && !url);
   const firstDay = startOfDay(validDates ? s : new Date(request.requested_start));
   const lastDay = validDates ? startOfDay(new Date(+e - 1)) : firstDay;
   const days = Math.max(1, Math.round((+lastDay - +firstDay) / 864e5) + 1);
@@ -118,7 +131,7 @@ export function AssignSheet({ request, open, onOpenChange, technicians, allReque
   const submit = async () => {
     setSaving(true);
     try {
-      await approveRequest(request.id, s, e, selected);
+      await approveRequest(request.id, s, e, selected, url);
       toast.success(`Aprovada e atribuída a ${joinPt(names)}`, { description: `${client} já está na agenda técnica.` });
       onOpenChange(false); onDone();
     } catch (err) {
@@ -148,6 +161,27 @@ export function AssignSheet({ request, open, onOpenChange, technicians, allReque
           {!pending && (
             <p className="flex items-start gap-2 rounded-lg bg-muted px-3.5 py-3 text-sm text-muted-foreground"><Info className="mt-0.5 h-4 w-4 shrink-0" />Esta solicitação já foi avaliada.</p>
           )}
+          {pending && remote && (
+            <section className={`rounded-xl border-2 p-4 transition-colors ${url ? "border-emerald-500/40 bg-emerald-500/[0.06]" : "border-sky-500/50 bg-sky-500/10"}`}>
+              <div className="flex items-start gap-3">
+                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white ${url ? "bg-emerald-600" : "bg-sky-600"}`}>
+                  {url ? <CheckCircle2 className="h-5 w-5" /> : <Video className="h-5 w-5" />}
+                </span>
+                <div className="min-w-0">
+                  <label htmlFor="assign-meeting" className="block text-[15px] font-semibold">Link da reunião *</label>
+                  <p className="text-[13px] text-muted-foreground">
+                    Visita remota{turn ? ` · ${turn}` : ""}. Obrigatório para aprovar: os técnicos entram por ele na Área do Implantador.
+                  </p>
+                </div>
+              </div>
+              <Input id="assign-meeting" className="mt-3 bg-background" type="url" inputMode="url" maxLength={2000} value={meetingUrl}
+                onChange={ev => setMeetingUrl(ev.target.value)} onBlur={() => setLinkTouched(true)}
+                placeholder="https://meet.google.com/..." aria-invalid={linkTouched && !!linkError} />
+              {linkTouched && linkError
+                ? <p className="mt-1.5 text-[12px] font-medium text-destructive">{linkError}</p>
+                : <p className="mt-1.5 text-[12px] text-muted-foreground">Teams, Meet, Zoom ou outro.</p>}
+            </section>
+          )}
           <section>
             <h3 className="mb-2.5 text-[15px] font-semibold">Solicitação</h3>
             <dl className="grid grid-cols-[104px_1fr] gap-x-3 gap-y-2.5 text-sm">
@@ -170,7 +204,7 @@ export function AssignSheet({ request, open, onOpenChange, technicians, allReque
               <dd><span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-semibold ${kind.chip}`}>{kind.label}</span>{kind.label !== request.visit_purpose && <span className="ml-2 text-muted-foreground">{request.visit_purpose}</span>}</dd>
               {request.visit_format && <><dt className="text-muted-foreground">Formato</dt><dd>{validDates ? visitFormatText(request.visit_format, s, e) : VISIT_FORMAT_LABEL[request.visit_format]}</dd></>}
               {request.visit_format === "remoto" ? (
-                <><dt className="text-muted-foreground">Reunião</dt><dd className="min-w-0"><MeetingLink url={request.meeting_url} /></dd></>
+                <><dt className="text-muted-foreground">Reunião</dt><dd className="min-w-0">{pending ? <span className="text-muted-foreground">Link informado por você, no destaque acima</span> : <MeetingLink url={request.meeting_url} />}</dd></>
               ) : (
                 <>
                   <dt className="text-muted-foreground">{request.visit_format ? "Endereço" : "Local"}</dt>

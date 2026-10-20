@@ -87,7 +87,7 @@ export function VisitDestination({ visit, action = false, extra }: { visit: Dest
   if (remote) {
     const link = meetingHref(visit.meeting_url);
     title = "Remoto · videochamada";
-    subtitle = link ? hostOf(link) : "Link não informado";
+    subtitle = link ? hostOf(link) : noLinkText(visit.status === "pendente");
   } else if (visit.visit_format === "presencial" && visit.address_street?.trim()) {
     title = visit.address_street.trim();
     const cityUf = visit.address_city?.trim() ? [visit.address_city.trim(), visit.address_state?.trim()].filter(Boolean).join("/") : projectCity;
@@ -121,9 +121,12 @@ export function VisitDestination({ visit, action = false, extra }: { visit: Dest
   );
 }
 
+/** Texto quando a visita remota ainda não tem link: pendente, o Aprovador informa ao aprovar. */
+const noLinkText = (pending?: boolean) => pending ? "Informado pelo Aprovador na aprovação" : "Link não informado";
+
 /** Link da reunião de uma visita remota (só abre http/https). */
-export function MeetingLink({ url }: { url: string | null | undefined }) {
-  if (!url) return <span className="text-muted-foreground">Link não informado</span>;
+export function MeetingLink({ url, pending }: { url: string | null | undefined; pending?: boolean }) {
+  if (!url) return <span className="text-muted-foreground">{noLinkText(pending)}</span>;
   if (!/^https?:\/\//i.test(url)) return <span className="break-all">{url}</span>;
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-start gap-1 break-all font-medium text-primary hover:underline">
