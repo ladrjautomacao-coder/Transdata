@@ -4,6 +4,7 @@ import { PwaUpdatePrompt } from "@/pwa/PwaUpdatePrompt";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
+import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { TenantBrandingProvider, useTenantBranding } from "@/contexts/TenantBrandingContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
@@ -102,11 +103,14 @@ const App = () => (
       <Sonner />
       <PwaUpdatePrompt />
       <BrowserRouter>
-        <AuthProvider>
-          <TenantBrandingProvider>
-            <AppRoutes />
-          </TenantBrandingProvider>
-        </AuthProvider>
+        {/* última proteção: nunca mais página em branco */}
+        <AppErrorBoundary fullPage>
+          <AuthProvider>
+            <TenantBrandingProvider>
+              <AppRoutes />
+            </TenantBrandingProvider>
+          </AuthProvider>
+        </AppErrorBoundary>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

@@ -1,6 +1,7 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
+import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { Signal } from "lucide-react";
 import { ProjectFiltersProvider } from "@/contexts/ProjectFiltersContext";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -12,6 +13,7 @@ import { InstallAppButton } from "@/pwa/InstallAppButton";
 
 export function AppLayout() {
   const { portalName } = useTenantBranding();
+  const location = useLocation();
 
   return (
     <ProjectFiltersProvider>
@@ -37,7 +39,10 @@ export function AppLayout() {
             </div>
           </header>
           <div className="flex-1 p-3 md:p-6 overflow-auto bg-background">
-            <Outlet />
+            {/* erro numa tela não derruba o portal: menu e topo continuam, e trocar de tela limpa o erro */}
+            <AppErrorBoundary resetKey={location.pathname}>
+              <Outlet />
+            </AppErrorBoundary>
           </div>
         </main>
       </div>
