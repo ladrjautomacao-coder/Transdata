@@ -185,18 +185,18 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
               <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Visitas já na agenda deste projeto</p>
               <ul className="space-y-1">
                 {activeVisits.map(r => (
-                  <li key={r.id} className="flex items-center gap-2 text-xs">
+                  <li key={r.id} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                     <StatusPill status={r.status} />
-                    <span className="font-medium">{r.visit_purpose}</span>
+                    <span className="min-w-0 break-words font-medium">{r.visit_purpose}</span>
                     <span className="text-muted-foreground">· {formatPeriod(periodOf(r).start, periodOf(r).end)}</span>
                   </li>
                 ))}
               </ul>
             </div>
           )}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div><Label className="text-xs">Início desejado *</Label><Input className="mt-1.5" type="datetime-local" value={start} onChange={e => setStart(e.target.value)} /></div>
-            <div><Label className="text-xs">Fim desejado *</Label><Input className="mt-1.5" type="datetime-local" value={end} onChange={e => setEnd(e.target.value)} /></div>
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="min-w-0"><Label className="text-xs">Início desejado *</Label><Input className="mt-1.5 min-w-0" type="datetime-local" value={start} onChange={e => setStart(e.target.value)} /></div>
+            <div className="min-w-0"><Label className="text-xs">Fim desejado *</Label><Input className="mt-1.5 min-w-0" type="datetime-local" value={end} onChange={e => setEnd(e.target.value)} /></div>
           </div>
           <FieldError msg={errors.dates} />
           <HolidayWarning start={start ? new Date(start) : null} end={end ? new Date(end) : null} custom={customHolidays}
@@ -225,7 +225,7 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
           {format === "presencial" && (
             <div className="rounded-lg border border-border/60 p-3">
               <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Endereço do treinamento</p>
-              <div className="grid gap-3 sm:grid-cols-[1fr_1fr_96px]">
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_96px]">
                 <div className="sm:col-span-3">
                   <Label className="text-xs" htmlFor="req-street">Rua e número *</Label>
                   <Input id="req-street" className="mt-1.5" value={street} maxLength={160} onChange={e => setStreet(e.target.value)} placeholder="Ex.: Rua das Flores, 120" />

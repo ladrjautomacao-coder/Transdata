@@ -137,14 +137,15 @@ export function ProjectBox({ project, extra }: {
   extra?: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/40 p-3">
+    <div className="flex min-w-0 items-center gap-3 rounded-xl border border-border/60 bg-muted/40 p-3">
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Bus className="h-4 w-4" /></span>
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold">
-          {project.company_name}
-          {project.project_code && <span className="font-mono text-xs font-normal text-muted-foreground"> · {project.project_code}</span>}
+      <div className="min-w-0 flex-1">
+        {/* nome sozinho na 1ª linha; código (que pode ser bem longo) vai para a 2ª, com reticências */}
+        <p className="truncate text-sm font-semibold" title={project.company_name}>{project.company_name}</p>
+        <p className="truncate text-[11px] text-muted-foreground" title={project.project_code ?? undefined}>
+          {project.project_code && <span className="font-mono">{project.project_code} · </span>}
+          {formatLocation(project.city, project.state, project.country_code)}{extra}
         </p>
-        <p className="truncate text-[11px] text-muted-foreground">{formatLocation(project.city, project.state, project.country_code)}{extra}</p>
       </div>
     </div>
   );
