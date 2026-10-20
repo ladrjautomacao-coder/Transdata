@@ -7,7 +7,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  ATTENDANCE_LABEL, errorMessage, fetchProjectRequests, formatPeriod, periodOf, techniciansOf, type ImplantationRequest,
+  ATTENDANCE_LABEL, errorMessage, fetchProjectRequests, formatPeriod, periodOf, remotePeriodText, techniciansOf, type ImplantationRequest,
 } from "@/lib/implantationScheduling";
 import { VISIT_STATE, placeLabel, placeOf, visitState, type VisitState } from "@/lib/agendaTecnica";
 import { EmptyBlock, TechAvatar } from "./AgendaShared";
@@ -198,7 +198,7 @@ function VisitItem({ r, k, onOpen }: { r: ImplantationRequest; k: Kind; onOpen: 
   const closed = k === "cancelada" || k === "reprovada";
   const label = k === "concluida" && r.attendance ? ATTENDANCE_LABEL[r.attendance] : STYLE[k].label;
   const remote = r.visit_format === "remoto";
-  const where = remote ? "Remoto · videochamada" : r.location?.trim() || placeLabel(placeOf(r));
+  const where = remote ? `Remoto · ${remotePeriodText(r.visit_format, start, end) ?? "videochamada"}` : r.location?.trim() || placeLabel(placeOf(r));
   return (
     <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={e => { if (e.key === "Enter") onOpen(); }}
       className={`cursor-pointer rounded-lg border border-border/60 p-3 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${closed ? "opacity-60" : ""}`}>

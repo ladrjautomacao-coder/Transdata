@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle, Ban, CalendarRange, Camera, Check, CheckCircle2, History, Info, Loader2,
-  MapPin, MessageSquareWarning, Monitor, Pencil, Plus, RotateCcw, Send, Trash2, Video, X, type LucideIcon,
+  MapPin, MessageSquareWarning, Monitor, Pencil, Plus, RotateCcw, Send, Sun, Sunset, Trash2, Video, X, type LucideIcon,
 } from "lucide-react";
 import { Constants } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ import {
   ATTENDANCE_LABEL, cancelApprovedRequest, errorMessage, fetchHistory, fetchTechnicians, formatPeriod, periodOf, registerAttendance,
   countTechnicianVisits, rejectRequest, removeTechnician, saveTechnician, type Attendance,
   photoFileProblem, removeTechnicianPhoto, techniciansOf, toLocalInput, uploadTechnicianPhoto,
-  VISIT_FORMAT_LABEL, formatAddress, normalizeMeetingUrl, type VisitFormat,
+  VISIT_FORMAT_LABEL, REMOTE_PERIODS, formatAddress, normalizeMeetingUrl, visitFormatText, type RemotePeriod, type VisitFormat,
   type EligibleProject, type HistoryEntry, type ImplantationRequest, type Technician,
 } from "@/lib/implantationScheduling";
 import { MeetingLink, ProjectBox, StatusPill, TechAvatar, VisitDestination } from "./AgendaShared";
@@ -46,7 +46,27 @@ const FORMAT_OPTIONS: { value: VisitFormat; icon: LucideIcon; hint: string }[] =
   { value: "presencial", icon: MapPin, hint: "No endereço do cliente" },
   { value: "remoto", icon: Video, hint: "Por videochamada" },
 ];
+const PERIOD_OPTIONS: { value: RemotePeriod; icon: LucideIcon }[] = [
+  { value: "manha", icon: Sun },
+  { value: "tarde", icon: Sunset },
+];
 const joinPt = (xs: string[]) => xs.length > 1 ? `${xs.slice(0, -1).join(", ")} e ${xs[xs.length - 1]}` : xs[0] ?? "";
+/** Dia de um valor de datetime-local ("AAAA-MM-DDTHH:mm") na hora h, horário local. */
+const atHour = (local: string, h: number) => new Date(`${local.slice(0, 10)}T${String(h).padStart(2, "0")}:00`);
+
+/** Cartão de escolha única (formato do treinamento, turno). */
+function ChoiceCard({ on, icon: Icon, title, hint, onSelect }: { on: boolean; icon: LucideIcon; title: string; hint: string; onSelect: () => void }) {
+  return (
+    <button type="button" role="radio" aria-checked={on} onClick={onSelect}
+      className={`flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${on ? "border-primary bg-primary/10 ring-1 ring-primary" : "border-border hover:bg-muted/50"}`}>
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}><Icon className="h-4 w-4" /></span>
+      <span className="min-w-0">
+        <span className={`block text-sm font-medium ${on ? "text-primary" : ""}`}>{title}</span>
+        <span className="block text-[11px] text-muted-foreground">{hint}</span>
+      </span>
+    </button>
+  );
+}
 
 export function RequestDialog({ project, open, onOpenChange, onCreated, existing = [] }: {
   project: EligibleProject | null; open: boolean; onOpenChange: (o: boolean) => void; onCreated: () => void;
@@ -58,6 +78,8 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [format, setFormat] = useState<VisitFormat | "">("");
+  const [period, setPeriod] = useState<RemotePeriod | "">("");
+  const datesTouched = useRef(false);
   const [street, setStreet] = useState("");
   const [district, setDistrict] = useState("");
   const [city, setCity] = useState("");
@@ -65,7 +87,7 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
   const [meetingUrl, setMeetingUrl] = useState("");
   const [notes, setNotes] = useState("");
   const { custom: customHolidays } = useCustomHolidays(open);
-  const [errors, setErrors] = useState<{ purpose?: string; dates?: string; format?: string; address?: string; meeting?: string }>({});
+  const [errors, setErrors] = useState<{ purpose?: string; dates?: string; format?: string; period?: string; address?: string; meeting?: string }>({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -74,9 +96,25 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
     const e = new Date(s); e.setDate(e.getDate() + 2); e.setHours(18, 0, 0, 0);
     setPurpose(""); setCustom(""); setStart(toLocalInput(s)); setEnd(toLocalInput(e));
     // o formato é escolha obrigatória do GP; cidade e UF já vêm do projeto
-    setFormat(""); setStreet(""); setDistrict(""); setCity(project.city ?? ""); setUf(project.state ?? ""); setMeetingUrl("");
+    setFormat(""); setPeriod(""); datesTouched.current = false;
+    setStreet(""); setDistrict(""); setCity(project.city ?? ""); setUf(project.state ?? ""); setMeetingUrl("");
     setNotes(""); setErrors({});
   }, [open, project]);
+
+  const remote = format === "remoto";
+  const chooseFormat = (f: VisitFormat) => {
+    setFormat(f); setErrors(er => ({ ...er, format: undefined, period: undefined, address: undefined, meeting: undefined }));
+    // remoto costuma ser um encontro só: sem datas mexidas, o último dia passa a ser o primeiro (e volta ao padrão no presencial)
+    if (!datesTouched.current && start) {
+      const e = new Date(start); e.setDate(e.getDate() + 2); e.setHours(18, 0, 0, 0);
+      setEnd(f === "remoto" ? start : toLocalInput(e));
+    }
+  };
+  const setDay = (which: "start" | "end", day: string) => {
+    datesTouched.current = true;
+    const prev = which === "start" ? start : end;
+    (which === "start" ? setStart : setEnd)(day ? `${day}T${prev.slice(11, 16) || "09:00"}` : "");
+  };
 
   if (!project) return null;
   const isBR = (project.country_code ?? "BR") === "BR";
@@ -92,16 +130,21 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
 
   const submit = async () => {
     const finalPurpose = purpose === OTHER ? custom.trim() : purpose;
-    const s = new Date(start), e = new Date(end);
+    // remoto: o horário vem do turno escolhido (manhã 09h–12h, tarde 14h–17h)
+    const turn = remote && period ? REMOTE_PERIODS[period] : null;
+    const s = turn ? atHour(start, turn.from) : new Date(start), e = turn ? atHour(end, turn.to) : new Date(end);
     const presencial = format === "presencial";
-    const url = format === "remoto" ? normalizeMeetingUrl(meetingUrl) : null;
+    const url = remote ? normalizeMeetingUrl(meetingUrl) : null;
     const missing = presencial
       ? [!street.trim() && "rua e número", !district.trim() && "bairro", !city.trim() && "cidade", isBR && !uf && "estado"].filter((x): x is string => !!x)
       : [];
     const next: typeof errors = {
       purpose: !purpose ? "Escolha o objetivo da visita." : purpose === OTHER && !custom.trim() ? "Digite o nome da visita." : duplicate ? DUPLICATE_PURPOSE_MSG : undefined,
-      dates: isNaN(+s) || isNaN(+e) ? "Informe início e fim." : e <= s ? "O fim deve ser depois do início." : s < new Date() ? "O início não pode ser no passado." : undefined,
+      dates: isNaN(+s) || isNaN(+e) ? (remote ? "Informe o primeiro e o último dia." : "Informe início e fim.")
+        : e <= s ? (remote ? "O último dia não pode ser antes do primeiro." : "O fim deve ser depois do início.")
+        : s < new Date() ? "O início não pode ser no passado." : undefined,
       format: !format ? "Escolha se o treinamento é presencial ou remoto." : undefined,
+      period: remote && !period ? "Escolha o período: manhã ou tarde." : undefined,
       address: missing.length ? `Informe ${joinPt(missing)}.` : undefined,
       meeting: format === "remoto" && !url
         ? meetingUrl.trim() ? "Link inválido. Cole o endereço completo da reunião (ex.: https://meet.google.com/...)." : "Cole o link da reunião."
@@ -194,34 +237,50 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
               </ul>
             </div>
           )}
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <div className="min-w-0"><Label className="text-xs">Início desejado *</Label><Input className="mt-1.5 min-w-0" type="datetime-local" value={start} onChange={e => setStart(e.target.value)} /></div>
-            <div className="min-w-0"><Label className="text-xs">Fim desejado *</Label><Input className="mt-1.5 min-w-0" type="datetime-local" value={end} onChange={e => setEnd(e.target.value)} /></div>
-          </div>
-          <FieldError msg={errors.dates} />
-          <HolidayWarning start={start ? new Date(start) : null} end={end ? new Date(end) : null} custom={customHolidays}
-            place={{ city: project?.city, state: project?.state }} />
           <div>
             <Label className="text-xs" id="req-format-label">Formato do treinamento *</Label>
             <div role="radiogroup" aria-labelledby="req-format-label" className="mt-1.5 grid grid-cols-2 gap-2">
-              {FORMAT_OPTIONS.map(o => {
-                const on = format === o.value;
-                const Icon = o.icon;
-                return (
-                  <button key={o.value} type="button" role="radio" aria-checked={on}
-                    onClick={() => { setFormat(o.value); setErrors(er => ({ ...er, format: undefined, address: undefined, meeting: undefined })); }}
-                    className={`flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${on ? "border-primary bg-primary/10 ring-1 ring-primary" : "border-border hover:bg-muted/50"}`}>
-                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}><Icon className="h-4 w-4" /></span>
-                    <span className="min-w-0">
-                      <span className={`block text-sm font-medium ${on ? "text-primary" : ""}`}>{VISIT_FORMAT_LABEL[o.value]}</span>
-                      <span className="block text-[11px] text-muted-foreground">{o.hint}</span>
-                    </span>
-                  </button>
-                );
-              })}
+              {FORMAT_OPTIONS.map(o => (
+                <ChoiceCard key={o.value} on={format === o.value} icon={o.icon} title={VISIT_FORMAT_LABEL[o.value]} hint={o.hint} onSelect={() => chooseFormat(o.value)} />
+              ))}
             </div>
             <FieldError msg={errors.format} />
           </div>
+          {remote && (
+            <div>
+              <Label className="text-xs" id="req-period-label">Período *</Label>
+              <div role="radiogroup" aria-labelledby="req-period-label" className="mt-1.5 grid grid-cols-2 gap-2">
+                {PERIOD_OPTIONS.map(o => (
+                  <ChoiceCard key={o.value} on={period === o.value} icon={o.icon} title={REMOTE_PERIODS[o.value].label} hint={REMOTE_PERIODS[o.value].hours}
+                    onSelect={() => { setPeriod(o.value); setErrors(er => ({ ...er, period: undefined })); }} />
+                ))}
+              </div>
+              <FieldError msg={errors.period} />
+            </div>
+          )}
+          {remote ? (
+            <div>
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="min-w-0"><Label className="text-xs" htmlFor="req-day1">Primeiro dia *</Label><Input id="req-day1" className="mt-1.5 min-w-0" type="date" value={start.slice(0, 10)} onChange={e => setDay("start", e.target.value)} /></div>
+                <div className="min-w-0"><Label className="text-xs" htmlFor="req-day2">Último dia *</Label><Input id="req-day2" className="mt-1.5 min-w-0" type="date" value={end.slice(0, 10)} min={start.slice(0, 10) || undefined} onChange={e => setDay("end", e.target.value)} /></div>
+              </div>
+              {errors.dates ? <FieldError msg={errors.dates} /> : (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Encontro único: o mesmo dia nos dois campos. Em mais dias, o treinamento acontece {period === "manha" ? "de manhã" : period === "tarde" ? "à tarde" : "no mesmo período"} em todos eles.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div>
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="min-w-0"><Label className="text-xs">Início desejado *</Label><Input className="mt-1.5 min-w-0" type="datetime-local" value={start} onChange={e => { datesTouched.current = true; setStart(e.target.value); }} /></div>
+                <div className="min-w-0"><Label className="text-xs">Fim desejado *</Label><Input className="mt-1.5 min-w-0" type="datetime-local" value={end} onChange={e => { datesTouched.current = true; setEnd(e.target.value); }} /></div>
+              </div>
+              <FieldError msg={errors.dates} />
+            </div>
+          )}
+          <HolidayWarning start={start ? new Date(start) : null} end={end ? new Date(end) : null} custom={customHolidays}
+            place={{ city: project?.city, state: project?.state }} />
           {format === "presencial" && (
             <div className="rounded-lg border border-border/60 p-3">
               <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Endereço do treinamento</p>
@@ -488,7 +547,7 @@ export function RequestDetailSheet({ request, open, onOpenChange, mode, onApprov
             {request.status === "aprovada" && request.approved_start && (+new Date(request.approved_start) !== +new Date(request.requested_start) || +new Date(request.approved_end!) !== +new Date(request.requested_end)) && (
               <><dt className="text-muted-foreground">Pedido original</dt><dd className="text-muted-foreground">{formatPeriod(new Date(request.requested_start), new Date(request.requested_end))}</dd></>
             )}
-            {request.visit_format && <><dt className="text-muted-foreground">Formato</dt><dd>{VISIT_FORMAT_LABEL[request.visit_format]}</dd></>}
+            {request.visit_format && <><dt className="text-muted-foreground">Formato</dt><dd>{visitFormatText(request.visit_format, start, end)}</dd></>}
             <dt className="pt-1.5 text-muted-foreground">{request.visit_format === "remoto" ? "Reunião" : "Destino"}</dt>
             <dd className="min-w-0"><VisitDestination visit={request} action /></dd>
             {request.visit_format === "remoto" && <><dt className="text-muted-foreground">Link</dt><dd className="min-w-0 text-xs"><MeetingLink url={request.meeting_url} /></dd></>}

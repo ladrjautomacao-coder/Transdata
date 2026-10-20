@@ -105,6 +105,32 @@ export const ATTENDANCE_LABEL: Record<Attendance, string> = { presencial: "Atend
 export type VisitFormat = "presencial" | "remoto";
 export const VISIT_FORMAT_LABEL: Record<VisitFormat, string> = { presencial: "Presencial", remoto: "Remoto" };
 
+/** Turnos do treinamento remoto (horário local). */
+export type RemotePeriod = "manha" | "tarde";
+export const REMOTE_PERIODS: Record<RemotePeriod, { label: string; hours: string; from: number; to: number }> = {
+  manha: { label: "Manhã", hours: "09h às 12h", from: 9, to: 12 },
+  tarde: { label: "Tarde", hours: "14h às 17h", from: 14, to: 17 },
+};
+
+/** Turno pelo horário (09h–12h ou 14h–17h); null se for outro horário. */
+export function remotePeriodOf(start: Date, end: Date): RemotePeriod | null {
+  const at = (d: Date, h: number) => d.getHours() === h && d.getMinutes() === 0;
+  return (Object.keys(REMOTE_PERIODS) as RemotePeriod[]).find(k => at(start, REMOTE_PERIODS[k].from) && at(end, REMOTE_PERIODS[k].to)) ?? null;
+}
+
+/** "Manhã, 09h às 12h" de uma visita remota num dos turnos; null nos demais casos. */
+export function remotePeriodText(format: VisitFormat | null | undefined, start: Date, end: Date) {
+  const p = format === "remoto" ? remotePeriodOf(start, end) : null;
+  return p ? `${REMOTE_PERIODS[p].label}, ${REMOTE_PERIODS[p].hours}` : null;
+}
+
+/** "Presencial", "Remoto" ou "Remoto · Manhã, 09h às 12h". */
+export function visitFormatText(format: VisitFormat | null | undefined, start: Date, end: Date) {
+  if (!format) return null;
+  const turn = remotePeriodText(format, start, end);
+  return turn ? `${VISIT_FORMAT_LABEL[format]} · ${turn}` : VISIT_FORMAT_LABEL[format];
+}
+
 type AddressParts = { address_street?: string | null; address_district?: string | null; address_city?: string | null; address_state?: string | null };
 /** "Rua X, 100, Centro, Tubarão/SC" a partir do endereço informado na solicitação. */
 export function formatAddress(a: AddressParts) {

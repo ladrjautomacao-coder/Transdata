@@ -1,5 +1,5 @@
 import { CalendarCheck, ChevronRight, FileText, MapPin, Navigation, Route, Video } from "lucide-react";
-import { mapsUrlFor, periodOf, type ImplantationRequest, type Technician } from "@/lib/implantationScheduling";
+import { mapsUrlFor, periodOf, remotePeriodText, type ImplantationRequest, type Technician } from "@/lib/implantationScheduling";
 import type { Holiday } from "@/lib/holidays";
 import {
   MONTH_SHORT, VISIT_KIND, coversDay, dayDiff, dayTitle, distanceKm, fmtDM, fmtDayRange, fmtHM, fmtKm, fmtWdDM, isTeamWorkday,
@@ -78,6 +78,7 @@ export function MinhaAgenda({ visits, today, holidays, index, onOpen, compactLis
               const { first, last } = visitDays(r);
               const ord = visitOrdinal(r.visit_purpose);
               const k = VISIT_KIND[visitKindOf(r.visit_purpose)];
+              const { start, end } = periodOf(r);
               return (
                 <li key={r.id} className="border-b border-border/60 last:border-b-0">
                   <button type="button" onClick={() => onOpen(r)} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40">
@@ -87,7 +88,7 @@ export function MinhaAgenda({ visits, today, holidays, index, onOpen, compactLis
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold">{r.project?.company_name ?? "Projeto removido"}</span>
-                      <span className="block truncate text-xs text-muted-foreground">{ord ? `${ord} visita` : r.visit_purpose}, {fmtHM(periodOf(r).start)}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{ord ? `${ord} visita` : r.visit_purpose}, {remotePeriodText(r.visit_format, start, end) ?? fmtHM(start)}</span>
                       <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-foreground/80">
                         {r.visit_format === "remoto" ? <Video className="h-3 w-3 shrink-0 text-sky-600 dark:text-sky-300" /> : <MapPin className="h-3 w-3 shrink-0 text-primary" />}
                         <span className="truncate">{destinationShort(r)}</span>
@@ -116,7 +117,8 @@ export function MinhaAgenda({ visits, today, holidays, index, onOpen, compactLis
 
 function FeaturedVisit({ r, current, today, onOpen }: { r: ImplantationRequest; current: boolean; today: Date; onOpen: (r: ImplantationRequest) => void }) {
   const { first, last, count } = visitDays(r);
-  const { start } = periodOf(r);
+  const { start, end } = periodOf(r);
+  const turn = remotePeriodText(r.visit_format, start, end);
   const ord = visitOrdinal(r.visit_purpose);
   const inDays = dayDiff(today, first);
   const remote = r.visit_format === "remoto";
@@ -135,7 +137,7 @@ function FeaturedVisit({ r, current, today, onOpen }: { r: ImplantationRequest; 
         <span>{ord ? `${ord} visita` : r.visit_purpose}, {count > 1 ? `de ${fmtDayRange(first, last)}` : `em ${fmtWdDM(first)}`}</span>
       </p>
       <div className="mt-3 rounded-xl bg-muted/40 p-3">
-        <VisitDestination visit={r} extra={<> · início às {fmtHM(start)}</>} />
+        <VisitDestination visit={r} extra={<> · {turn ?? `início às ${fmtHM(start)}`}</>} />
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
         {remote ? (

@@ -3,7 +3,7 @@ import { AlertTriangle, CalendarCheck, Check, Clock3, XCircle } from "lucide-rea
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { techniciansOf, type ImplantationRequest } from "@/lib/implantationScheduling";
+import { periodOf, remotePeriodText, techniciansOf, type ImplantationRequest } from "@/lib/implantationScheduling";
 import {
   VISIT_KIND, VISIT_STATE, coversDay, placeLabel, placeOf, visitKindOf, visitState, visitSummary,
   type AgendaAlert,
@@ -45,11 +45,12 @@ export function VisitHover({ request: r, alerts = [], onOpen, onAssign, children
   const now = new Date();
   const techs = techniciansOf(r);
   const pending = r.status === "pendente";
+  const turn = remotePeriodText(r.visit_format, periodOf(r).start, periodOf(r).end);
   const rows: [string, ReactNode][] = [
     ["Técnico", techs.length
       ? <span className="flex flex-wrap items-center gap-1.5">{techs.map(t => <span key={t.id} className="inline-flex items-center gap-1.5"><TechAvatar tech={t} size="h-5 w-5 text-[8px]" />{t.full_name}</span>)}</span>
       : <span className="text-amber-700 dark:text-amber-300">A definir na aprovação</span>],
-    r.visit_format === "remoto" ? ["Formato", "Remoto (videochamada)"] : ["Local", r.location?.trim() || placeLabel(placeOf(r))],
+    r.visit_format === "remoto" ? ["Formato", turn ? `Remoto (videochamada) · ${turn}` : "Remoto (videochamada)"] : ["Local", r.location?.trim() || placeLabel(placeOf(r))],
     ["Objetivo", r.visit_purpose],
     ["Projeto", r.project?.project_code ?? "—"],
     ["GP", r.project?.manager?.full_name ?? r.requester_name ?? "—"],
