@@ -1,6 +1,10 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { installDomGuard } from "./lib/domGuard";
+
+// antes do primeiro render: tradutor/extensão do navegador não pode derrubar as telas
+installDomGuard();
 
 // Instalações antigas do PWA (worker /sw.js e caches próprios) podiam restaurar uma tela
 // obsoleta. O app atual usa /service-worker.js (Workbox, caches "workbox-*") com aviso de
