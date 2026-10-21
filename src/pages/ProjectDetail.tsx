@@ -41,6 +41,7 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { subPhasesByStatus } from "@/pages/ProjectManagement";
 import { teamRoleLabels } from "@/lib/teamRoleLabels";
 import { useNoteDraft } from "@/hooks/useNoteDraft";
+import ProjectPendenciesSection from "@/components/kanban/ProjectPendenciesSection";
 
 type ProjectStatus = Database["public"]["Enums"]["project_status"];
 type BrazilianState = Database["public"]["Enums"]["brazilian_state"];
@@ -753,6 +754,16 @@ export default function ProjectDetail() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Implantação pendente: cards filhos (soluções que o cliente deixou para depois) */}
+      <ProjectPendenciesSection
+        project={{
+          id: project.id, company_name: project.company_name, status: project.status,
+          manager_id: project.manager?.id ?? project.manager_id ?? null, reached_implemented: !!project.reached_implemented,
+          solutions: ((project.project_solutions ?? []) as { solution: { id: string; name: string } | null }[]).flatMap(ps => (ps.solution ? [ps.solution] : [])),
+        }}
+        onProjectChanged={loadProject}
+      />
 
       {/* Acompanhamento do Projeto */}
       <Card className="mb-6">

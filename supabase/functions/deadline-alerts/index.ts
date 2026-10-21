@@ -6,6 +6,8 @@
 //   semanais — um de implantação e outro de contrato, cada um só quando tem projetos.
 //   Cada envio fica em deadline_alert_deliveries, então ninguém recebe
 //   o mesmo aviso duas vezes, mesmo que a função rode de novo.
+//   Às segundas também vai o resumo das implantações pendentes (cards filhos abertos há
+//   mais de 30 dias), só quando há algum.
 //   De segunda a sexta também lembra o D-zero (pagamento do sinal) dos projetos da fase
 //   Comercial que ainda não o tiveram confirmado: a cada 2 dias a partir do cadastro.
 // • Teste (botão em Configurações): Admin logado; envia aos destinatários da empresa
@@ -18,9 +20,14 @@
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { daysBetween, ymd } from "../_shared/deadlineDates.ts";
 import {
-  renderAlertEmail, renderContratoDigest, renderDzeroReminder, renderImplantacaoDigest, sampleAlert, sampleDzero,
-  type DeadlineAlert, type DzeroPending, type EmailContext, type RenderedEmail,
+  renderAlertEmail, renderContratoDigest, renderDzeroReminder, renderImplantacaoDigest, renderPendenciesDigest,
+  sampleAlert, sampleDzero, samplePendencies,
+  type DeadlineAlert, type DzeroPending, type EmailContext, type PendencyOpen, type RenderedEmail,
 } from "../_shared/deadlineEmail.ts";
+
+/** Cards filhos abertos há mais de N dias entram no resumo de segunda-feira. */
+const PENDENCY_DIGEST_DAYS = 30;
+type PendencyRow = PendencyOpen & { tenant_id: string };
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -158,7 +165,32 @@ async function runDaily(db: SupabaseClient, today: string) {
     summary.erros++;
     summary.falhas.push(`Lembretes de D-zero: ${String((e as Error)?.message ?? e)}`);
   }
+  // Resumo de implantações pendentes (cards filhos), às segundas
+  try {
+    await runPendencies(db, settings as Settings[], today, summary);
+  } catch (e) {
+    summary.erros++;
+    summary.falhas.push(`Implantações pendentes: ${String((e as Error)?.message ?? e)}`);
+  }
   return summary;
+}
+
+/** Segunda-feira: um resumo por empresa com os cards filhos abertos há mais de 30 dias (só quando há algum). */
+async function runPendencies(db: SupabaseClient, settings: Settings[], today: string,
+  summary: { resumos: number; erros: number; falhas: string[] }) {
+  if (ymd(today).getUTCDay() !== 1) return;
+  const { data, error } = await db.rpc("project_pendencies_open", { _today: today });
+  if (error) throw error;
+  for (const s of settings) {
+    if (!s.weekly_digest || !s.recipients.length) continue;
+    const rows = ((data ?? []) as PendencyRow[]).filter(r => r.tenant_id === s.tenant_id && r.days_open > PENDENCY_DIGEST_DAYS);
+    if (!rows.length) continue;
+    const ctx = await contextFor(db, s, today);
+    const res = await deliver(db, { tenant_id: s.tenant_id, project_id: null, kind: "resumo", milestone: "pendencias", due_date: today },
+      s.recipients, renderPendenciesDigest(rows, ctx, PENDENCY_DIGEST_DAYS));
+    if (res.status === "enviado") { summary.resumos++; await sleep(600); }
+    else if (res.status === "erro") { summary.erros++; summary.falhas.push(`Implantações pendentes: ${res.error}`); }
+  }
 }
 
 /** De segunda a sexta: lembra cada projeto que aguarda o D-zero, a cada 2 dias desde o cadastro ou o último lembrete. */
@@ -204,6 +236,11 @@ async function sendTest(db: SupabaseClient, tenantId: string, today: string, kin
     if (dErr) throw dErr;
     const first = ((pend ?? []) as DzeroRow[]).find(r => r.tenant_id === tenantId);
     email = renderDzeroReminder(first ?? sampleDzero(today), ctx);
+  } else if (kind === "pendencias") {
+    const { data: pend, error: pErr } = await db.rpc("project_pendencies_open", { _today: today });
+    if (pErr) throw pErr;
+    const rows = ((pend ?? []) as PendencyRow[]).filter(r => r.tenant_id === tenantId && r.days_open > PENDENCY_DIGEST_DAYS);
+    email = renderPendenciesDigest(rows.length ? rows : samplePendencies(today), ctx, PENDENCY_DIGEST_DAYS);
   } else {
     const { data: all, error } = await db.rpc("project_deadline_alerts", { _today: today });
     if (error) throw error;

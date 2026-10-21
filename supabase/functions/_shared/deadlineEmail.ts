@@ -589,3 +589,90 @@ export function sampleDzero(today: string): DzeroPending {
     registered_on: addDays(today, -6), contract_date: addDays(today, -6), d_zero_date: null, days_waiting: 6, reminders_sent: 2,
   };
 }
+
+/* ─── Resumo semanal: implantações pendentes (cards filhos) ─────────────── */
+/** Uma linha de public.project_pendencies_open(). */
+export interface PendencyOpen extends ProjectRef {
+  pendency_id: string;
+  manager_name: string | null;
+  /** Solução ou item que o cliente deixou para depois. */
+  title: string;
+  reason_kind: string;
+  reason: string | null;
+  expected_date: string | null;
+  opened_on: string;
+  days_open: number;
+}
+
+const PENDENCY_REASON: Record<string, string> = {
+  decisao_cliente: "Decisão do cliente", infraestrutura_cliente: "Infraestrutura do cliente",
+  terceiros: "Aguardando terceiros", outro: "Outro motivo",
+};
+/** Detalhe do projeto, onde fica a seção "Implantação pendente". */
+const projectDetailUrl = (a: ProjectRef, ctx: EmailContext) =>
+  a.project_id === SAMPLE_PROJECT_ID ? `${ctx.portalUrl}/projetos/gestao` : `${ctx.portalUrl}/projetos/${encodeURIComponent(a.project_id)}`;
+const pendTone = (days: number): Tone => (days > 90 ? "orange" : days > 60 ? "amber" : "purple");
+
+/**
+ * Resumo semanal dos cards filhos abertos há mais de `minDays` dias: soluções que o
+ * cliente deixou para depois, com o projeto pai já em Implementado.
+ */
+export function renderPendenciesDigest(rows: PendencyOpen[], ctx: EmailContext, minDays = 30): RenderedEmail {
+  const { today } = ctx;
+  const list = rows.filter(r => r.days_open > minDays)
+    .sort((x, y) => y.days_open - x.days_open || x.company_name.localeCompare(y.company_name));
+  const n = list.length;
+  const c90 = list.filter(r => r.days_open > 90).length;
+  const c60 = list.filter(r => r.days_open > 60 && r.days_open <= 90).length;
+  const c30 = n - c90 - c60;
+  const title = n
+    ? `${plural(n, "implantação pendente", "implantações pendentes")} há mais de ${minDays} dias`
+    : `Nenhuma implantação pendente há mais de ${minDays} dias`;
+  const introPlain = `${cap(fmtLongDate(today))}. Soluções contratadas que os clientes deixaram para depois e que ainda aguardam ativação. É um bom momento para retomar o contato.`;
+  const preheader = `Mais de 90 dias: ${c90} · 61 a 90 dias: ${c60} · ${minDays + 1} a 60 dias: ${c30} · ${fmtLongDate(today)}`;
+
+  const cards = list.map(r => {
+    const t = pendTone(r.days_open);
+    const reason = PENDENCY_REASON[r.reason_kind] ?? r.reason_kind;
+    return gap(12) + tbl(`<tr><td style="padding:16px 18px;">
+      ${tbl(`<tr><td valign="top"><div style="font:700 16px/22px ${FONT};color:${C.ink};">${esc(r.company_name)}</div>
+          <div style="margin-top:2px;font:400 13px/19px ${FONT};color:${C.muted};">${subtitleOf(r, phaseOf(r, ctx))}</div></td>
+        <td valign="top" align="right" style="white-space:nowrap;padding-left:12px;"><span style="display:inline-block;padding:3px 10px;border-radius:999px;background:${TONE[t].bg};color:${TONE[t].text};font:700 12px/17px ${FONT};">há ${r.days_open} dias</span></td></tr>`)}
+      <div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:${TONE.orange.tileBg};border:1px dashed ${TONE.orange.tileBorder};">
+        <div style="font:700 15px/21px ${FONT};color:${C.ink};">&#8627;&nbsp;${esc(r.title)}</div>
+        <div style="margin-top:2px;font:400 13px/19px ${FONT};color:${C.body};"><b style="color:${TONE.orange.text};">${esc(reason)}</b>${r.reason ? ` · ${esc(r.reason)}` : ""}</div></div>
+      <div style="margin-top:10px;font:400 13px/20px ${FONT};color:${C.body};">GP: <b style="color:${C.ink};">${esc(r.manager_name ?? "Não definido")}</b> · Aberto em ${fmtDate(r.opened_on)}${r.expected_date ? ` · Previsão de retomada: <b style="color:${C.ink};">${fmtDate(r.expected_date)}</b>` : ""}</div>
+      <div style="margin-top:10px;"><a href="${esc(projectDetailUrl(r, ctx))}" style="font:700 14px/20px ${FONT};color:${C.brand};text-decoration:none;">Abrir projeto &rarr;</a></div>
+      </td></tr>`, `border:1px solid ${C.line};border-radius:10px;`);
+  }).join("");
+
+  const how = `o GP registra um card filho quando o cliente deixa uma solução contratada para depois e o projeto segue para Implementado. Cards filhos abertos há mais de ${minDays} dias entram neste resumo, que chega toda segunda-feira.`;
+  const subject = subjectOf(ctx, `[Implantação pendente] Resumo semanal: ${plural(n, "solução aguarda", "soluções aguardam")} ativação do cliente`);
+  const html = shell(ctx, title, preheader, [
+    hero(overline("Resumo semanal · implantação pendente"), title, esc(introPlain)),
+    tilesRow([[c90, "Há mais de 90 dias", "orange"], [c60, "De 61 a 90 dias", "amber"], [c30, `De ${minDays + 1} a 60 dias`, "purple"]]),
+    `<tr><td class="px" style="padding:16px 32px 0;">${sectionHeading("Cards filhos em aberto", "orange")}${n ? cards : emptyNote(`Nenhum card filho aberto há mais de ${minDays} dias.`)}</td></tr>`,
+    wideButton(`${ctx.portalUrl}/projetos/gestao`, "Ver o Kanban no portal"),
+    note("Como funciona:", how),
+  ]);
+  const text = textOf([
+    title, "", introPlain, "", preheader, "",
+    ...(n
+      ? list.map(r => `- ${r.company_name}: ${r.title} · ${PENDENCY_REASON[r.reason_kind] ?? r.reason_kind} · há ${r.days_open} dias · GP ${r.manager_name ?? "não definido"} · ${projectDetailUrl(r, ctx)}`)
+      : [`Nenhum card filho aberto há mais de ${minDays} dias.`]), "",
+    `Como funciona: ${how}`, "",
+    footerText(ctx),
+  ]);
+  return { subject, preheader, html, text };
+}
+
+/** Cards filhos fictícios para o teste quando não há nenhum aberto há mais de 30 dias. */
+export function samplePendencies(today: string): PendencyOpen[] {
+  const base = { project_id: SAMPLE_PROJECT_ID, project_code: "EXEMPLO-0001", status: "encerrado", sub_phase: null, manager_name: "Gerente de Projetos", expected_date: null };
+  return [
+    { ...base, pendency_id: "s1", company_name: "Projeto de exemplo", city: "Florianópolis", state: "SC", title: "Biometria facial",
+      reason_kind: "decisao_cliente", reason: "Cliente vai ativar após a troca das câmeras.", opened_on: addDays(today, -97), days_open: 97 },
+    { ...base, pendency_id: "s2", company_name: "Outro projeto de exemplo", city: "Joinville", state: "SC", title: "Integração com a prefeitura",
+      reason_kind: "terceiros", reason: "Aguardando a prefeitura liberar a API.", opened_on: addDays(today, -41), days_open: 41, expected_date: addDays(today, 20) },
+  ];
+}

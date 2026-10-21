@@ -8,7 +8,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Building2, MapPin, Calendar, Users, Pencil, Clock, Lock } from "lucide-react";
+import { Building2, MapPin, Calendar, Users, Pencil, Clock, Lock, CornerDownRight } from "lucide-react";
+import { pendencyLabel } from "@/lib/projectPendencies";
 import { format } from "date-fns";
 import type { ProjectRow } from "@/pages/ProjectManagement";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -29,9 +30,15 @@ interface Props {
   index: number;
   onUpdateObservations: (projectId: string, text: string) => Promise<void>;
   canEdit?: boolean;
+  /** Cards filhos em aberto (soluções que o cliente deixou para depois). */
+  pendencies?: number;
+  /** Presente = pode criar card filho (Implantação e Implementado). */
+  onCreateChild?: () => void;
+  /** Em Implantação com card filho aberto: aviso para mover o projeto para Implementado. */
+  onMoveToImplemented?: () => void;
 }
 
-export default function KanbanCard({ project: p, index, onUpdateObservations, canEdit = true }: Props) {
+export default function KanbanCard({ project: p, index, onUpdateObservations, canEdit = true, pendencies = 0, onCreateChild, onMoveToImplemented }: Props) {
   const navigate = useNavigate();
   const { settings } = useSettings();
   const [open, setOpen] = useState(false);
@@ -82,7 +89,7 @@ export default function KanbanCard({ project: p, index, onUpdateObservations, ca
           {...dragProvided.dragHandleProps}
         >
           <Card
-            className={`relative ${canEdit ? "cursor-grab active:cursor-grabbing hover:shadow-md" : "cursor-pointer opacity-90"} transition-shadow border-border/40 bg-card overflow-hidden ${dragSnapshot.isDragging ? "shadow-lg ring-2 ring-primary/20" : ""} ${borderClass}`}
+            className={`group relative ${canEdit ? "cursor-grab active:cursor-grabbing hover:shadow-md" : "cursor-pointer opacity-90"} transition-shadow border-border/40 bg-card overflow-hidden ${dragSnapshot.isDragging ? "shadow-lg ring-2 ring-primary/20" : ""} ${borderClass}`}
             onClick={() => !dragSnapshot.isDragging && !open && navigate(`/projetos/${p.id}`, { state: { from: "/projetos/gestao" } })}
           >
             {sla && (
@@ -145,6 +152,11 @@ export default function KanbanCard({ project: p, index, onUpdateObservations, ca
                   </TooltipProvider>
                 )}
                 <div className="flex flex-col gap-1 items-end shrink-0">
+                  {pendencies > 0 && (
+                    <Badge className="h-4 gap-0.5 border-orange-500/40 bg-orange-500/15 px-1.5 text-[10px] text-orange-700 hover:bg-orange-500/15 dark:text-orange-300" title="Soluções que ficaram para depois (coluna Implantação pendente)">
+                      <CornerDownRight className="h-2.5 w-2.5" />{pendencyLabel(pendencies)}
+                    </Badge>
+                  )}
                   {p.is_pilot && (
                     <Badge className="bg-amber-500 text-white hover:bg-amber-600 text-[10px] h-4 px-1.5">Piloto</Badge>
                   )}
@@ -232,6 +244,27 @@ export default function KanbanCard({ project: p, index, onUpdateObservations, ca
                     <Badge key={i} variant="secondary" className="text-[10px] h-4 px-1.5">{ps.solution?.name}</Badge>
                   ))}
                 </div>
+              )}
+              {canEdit && onMoveToImplemented && pendencies > 0 && (
+                // o objetivo do card filho: liberar o projeto pai para Implementado
+                <div className="rounded-md border border-orange-500/40 bg-orange-500/10 p-2" onClick={e => e.stopPropagation()}>
+                  <p className="flex items-start gap-1.5 text-[11px] font-medium leading-snug text-orange-800 dark:text-orange-200">
+                    <CornerDownRight className="mt-0.5 h-3 w-3 shrink-0" />
+                    {pendencies === 1 ? "O que faltou já está no card filho." : `O que faltou já está em ${pendencies} cards filhos.`} Mova o projeto para Implementado.
+                  </p>
+                  <button type="button" onClick={onMoveToImplemented}
+                    className="mt-1.5 flex w-full items-center justify-center gap-1 rounded bg-emerald-600 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-emerald-500">
+                    Mover para Implementado
+                  </button>
+                </div>
+              )}
+              {canEdit && onCreateChild && (
+                // em Implantação fica sempre à vista; em Implementado aparece ao passar o mouse (no toque, sempre)
+                <button type="button" onClick={e => { e.stopPropagation(); onCreateChild(); }}
+                  className={`flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-orange-500/40 py-1 text-[11px] font-medium text-orange-700 transition-[colors,opacity] hover:bg-orange-500/10 focus-visible:opacity-100 dark:text-orange-300 ${p.status === "encerrado" ? "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100" : ""}`}
+                  title="Registrar uma solução que o cliente deixou para depois">
+                  <CornerDownRight className="h-3 w-3" />Card filho
+                </button>
               )}
             </CardContent>
           </Card>

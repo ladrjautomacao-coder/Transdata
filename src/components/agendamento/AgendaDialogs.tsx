@@ -55,7 +55,7 @@ const joinPt = (xs: string[]) => xs.length > 1 ? `${xs.slice(0, -1).join(", ")} 
 const atHour = (local: string, h: number) => new Date(`${local.slice(0, 10)}T${String(h).padStart(2, "0")}:00`);
 
 /** Cartão de escolha única (formato do treinamento, turno). */
-function ChoiceCard({ on, icon: Icon, title, hint, onSelect }: { on: boolean; icon: LucideIcon; title: string; hint: string; onSelect: () => void }) {
+export function ChoiceCard({ on, icon: Icon, title, hint, onSelect }: { on: boolean; icon: LucideIcon; title: string; hint: string; onSelect: () => void }) {
   return (
     <button type="button" role="radio" aria-checked={on} onClick={onSelect}
       className={`flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${on ? "border-primary bg-primary/10 ring-1 ring-primary" : "border-border hover:bg-muted/50"}`}>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { CircleDollarSign, FileClock, Hourglass, Loader2, Mail, Plus, RefreshCw, Save, Send, X } from "lucide-react";
+import { CircleDollarSign, CornerDownRight, FileClock, Hourglass, Loader2, Mail, Plus, RefreshCw, Save, Send, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ const KIND_LABEL: Record<AlertDelivery["kind"], string> = {
   implantacao: "Implantação", contrato: "Contrato", resumo: "Resumo semanal", teste: "Teste", dzero: "Lembrete de D-zero",
 };
 const deliveryLabel = (d: AlertDelivery) =>
-  d.kind === "resumo" ? (d.milestone === "contrato" ? "Resumo de contrato" : d.milestone === "implantacao" ? "Resumo de implantação" : "Resumo semanal") : KIND_LABEL[d.kind];
+  d.kind === "resumo" ? (d.milestone === "contrato" ? "Resumo de contrato" : d.milestone === "implantacao" ? "Resumo de implantação" : d.milestone === "pendencias" ? "Resumo de implantações pendentes" : "Resumo semanal") : KIND_LABEL[d.kind];
 const STATUS_STYLE: Record<AlertDelivery["status"], { label: string; cls: string; dot: string }> = {
   enviado: { label: "Enviado", cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-500" },
   erro: { label: "Erro", cls: "bg-red-500/15 text-red-700 dark:text-red-300", dot: "bg-red-500" },
@@ -30,6 +30,7 @@ const TESTS: { kind: TestEmailKind; label: string; icon: typeof Mail }[] = [
   { kind: "implantacao", label: "Alerta de prazo de implantação", icon: Hourglass },
   { kind: "contrato", label: "Alerta de prazo de contrato", icon: FileClock },
   { kind: "dzero", label: "Lembrete de D-zero", icon: CircleDollarSign },
+  { kind: "pendencias", label: "Resumo de implantações pendentes", icon: CornerDownRight },
 ];
 
 function SwitchRow({ id, checked, onChange, label, hint }: { id: string; checked: boolean; onChange: (v: boolean) => void; label: string; hint: string }) {

@@ -3,7 +3,7 @@ import {
   addMonths, monthsAndDays, remainingShort, remainingText, toneOf,
 } from "../../supabase/functions/_shared/deadlineDates.ts";
 import {
-  renderAlertEmail, renderContratoDigest, renderDzeroReminder, renderImplantacaoDigest, sampleAlert, sampleDzero,
+  renderAlertEmail, renderContratoDigest, renderDzeroReminder, renderImplantacaoDigest, renderPendenciesDigest, sampleAlert, sampleDzero, samplePendencies,
   type DeadlineAlert, type DzeroPending, type EmailContext,
 } from "../../supabase/functions/_shared/deadlineEmail.ts";
 
@@ -179,5 +179,24 @@ describe("exemplo do teste", () => {
     const c = sampleAlert("contrato", "2026-10-16");
     expect(c.due_date).toBe("2027-04-16");
     expect(renderAlertEmail(c, ctx("2026-10-16")).html).toContain('href="https://portal.exemplo/comercial"');
+  });
+});
+
+describe("resumo de implantações pendentes (cards filhos)", () => {
+  const today = "2026-10-26";
+  it("só entram os abertos há mais de 30 dias, do mais antigo para o mais novo", () => {
+    const rows = samplePendencies(today);
+    const recent = { ...rows[1], pendency_id: "s3", company_name: "Recente", days_open: 12 };
+    const e = renderPendenciesDigest([recent, ...rows], ctx(today));
+    expect(e.subject).toBe("[Implantação pendente] Resumo semanal: 2 soluções aguardam ativação do cliente");
+    expect(e.text).not.toContain("Recente");
+    expect(e.text.indexOf("Biometria facial")).toBeLessThan(e.text.indexOf("Integração com a prefeitura"));
+    expect(e.html).toContain("Cliente vai ativar após a troca das câmeras.");
+    expect(e.html).toContain('href="https://portal.exemplo/projetos/gestao"');
+  });
+  it("leva ao detalhe do projeto, onde fica a seção do card filho", () => {
+    const [r] = samplePendencies(today);
+    const e = renderPendenciesDigest([{ ...r, project_id: "abc" }], ctx(today));
+    expect(e.html).toContain('href="https://portal.exemplo/projetos/abc"');
   });
 });

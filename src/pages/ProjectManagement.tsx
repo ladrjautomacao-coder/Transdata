@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { Fragment, useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useProjectFilters } from "@/contexts/ProjectFiltersContext";
@@ -21,6 +21,12 @@ import KanbanLegend from "@/components/kanban/KanbanLegend";
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { statusLabels } from "@/lib/statusLabels";
+import PendencyColumn from "@/components/kanban/PendencyColumn";
+import PendencyDialog, { type PendencyDialogMode } from "@/components/kanban/PendencyDialog";
+import type { PendencyAction } from "@/components/kanban/PendencyCard";
+import { RequestDialog } from "@/components/agendamento/AgendaDialogs";
+import { countByProject, fetchOpenPendencies, pendenciesOfProjects, type ProjectPendency } from "@/lib/projectPendencies";
+import { fetchProjectRequests, type EligibleProject, type ImplantationRequest } from "@/lib/implantationScheduling";
 
 export { statusLabels };
 
@@ -70,6 +76,7 @@ export const subPhasesByStatus: Partial<Record<ProjectStatus, SubPhaseConfig[]>>
 export interface ProjectRow {
   id: string;
   company_name: string;
+  project_code: string | null;
   city: string;
   state: string | null;
   country_code: string | null;
@@ -91,7 +98,7 @@ export interface ProjectRow {
   executive: { full_name: string } | null;
   manager: { full_name: string } | null;
   manager_id: string | null;
-  project_solutions: { solution: { name: string } | null }[];
+  project_solutions: { solution: { id: string; name: string } | null }[];
   project_integrations: { integration: { name: string } | null }[];
 }
 
@@ -115,11 +122,18 @@ export default function ProjectManagement() {
       .then(({ data }) => setCurrentManagerId((data as string | null) || null));
   }, [user?.email]);
 
+  // cards filhos (Implantação pendente); falha na leitura não derruba o quadro
+  const [pendencies, setPendencies] = useState<ProjectPendency[]>([]);
+  const loadPendencies = useCallback(() => fetchOpenPendencies().then(setPendencies).catch(() => setPendencies([])), []);
+  const [pendDialog, setPendDialog] = useState<PendencyDialogMode | null>(null);
+  const [agendaFor, setAgendaFor] = useState<{ project: EligibleProject; existing: ImplantationRequest[] } | null>(null);
+
   const loadProjects = useCallback(async () => {
     setLoading(true);
+    void loadPendencies();
     const { data } = await supabase
       .from("projects")
-      .select("id, company_name, city, state, country_code, contract_date, d_zero_date, handover_date, status, sub_phase, is_pilot, complementary_sale, complementary_fleet, implemented_fleet, observations, reached_implemented, reached_implemented_at, updated_at, manager_id, executive:team_members!projects_executive_id_fkey(full_name), manager:team_members!projects_manager_id_fkey(full_name), project_solutions(solution:solutions(name)), project_integrations(integration:integrations(name))")
+      .select("id, company_name, project_code, city, state, country_code, contract_date, d_zero_date, handover_date, status, sub_phase, is_pilot, complementary_sale, complementary_fleet, implemented_fleet, observations, reached_implemented, reached_implemented_at, updated_at, manager_id, executive:team_members!projects_executive_id_fkey(full_name), manager:team_members!projects_manager_id_fkey(full_name), project_solutions(solution:solutions(id, name)), project_integrations(integration:integrations(name))")
       .order("company_name");
 
     // Considerar também os acompanhamentos já registrados em project_notes
@@ -138,7 +152,7 @@ export default function ProjectManagement() {
     }));
     setProjects(rows);
     setLoading(false);
-  }, []);
+  }, [loadPendencies]);
 
   useEffect(() => { loadProjects(); }, [loadProjects]);
 
@@ -157,7 +171,8 @@ export default function ProjectManagement() {
     return Array.from(set).sort();
   }, [projects]);
 
-  const filtered = useMemo(() => {
+  // filtros do quadro sem o de status: o card filho segue o projeto pai (que costuma estar em Implementado)
+  const filteredAnyStatus = useMemo(() => {
     let list = projects;
     if (filters.managerId) {
       const mgr = managers.find(m => m.id === filters.managerId);
@@ -171,9 +186,43 @@ export default function ProjectManagement() {
       ? list.filter(p => (p.country_code || "BR") === filters.state.slice(2))
       : list.filter(p => p.state === filters.state && (p.country_code || "BR") === "BR");
     if (filters.city) list = list.filter(p => p.city === filters.city);
-    if (filters.status) list = list.filter(p => p.status === filters.status);
     return list;
   }, [projects, filters, managers]);
+  const filtered = useMemo(
+    () => (filters.status ? filteredAnyStatus.filter(p => p.status === filters.status) : filteredAnyStatus),
+    [filteredAnyStatus, filters.status],
+  );
+  const projectById = useMemo(() => new Map(projects.map(p => [p.id, p])), [projects]);
+  const visiblePendencies = useMemo(
+    () => pendenciesOfProjects(pendencies, new Set(filteredAnyStatus.map(p => p.id))),
+    [pendencies, filteredAnyStatus],
+  );
+  const pendencyCount = useMemo(() => countByProject(pendencies), [pendencies]);
+
+  const openCreateChild = useCallback((p: ProjectRow) => setPendDialog({
+    kind: "criar",
+    project: {
+      id: p.id, company_name: p.company_name, status: p.status,
+      solutions: p.project_solutions.flatMap(ps => (ps.solution ? [ps.solution] : [])),
+    },
+    openTitles: pendencies.filter(x => x.project_id === p.id).map(x => x.title),
+  }), [pendencies]);
+
+  const onPendencyAction = useCallback(async (kind: PendencyAction, x: ProjectPendency) => {
+    const p = projectById.get(x.project_id);
+    if (!p) return;
+    if (kind === "agenda") {
+      // solicitação de agenda no projeto pai (visita extra é aceita em projeto implementado)
+      const existing = await fetchProjectRequests(p.id).catch(() => [] as ImplantationRequest[]);
+      setAgendaFor({
+        project: { id: p.id, company_name: p.company_name, project_code: p.project_code, city: p.city, state: p.state, country_code: p.country_code,
+          status: p.status, sub_phase: p.sub_phase, manager_id: p.manager_id, manager: p.manager },
+        existing,
+      });
+    } else {
+      setPendDialog({ kind, pendency: x, projectName: p.company_name });
+    }
+  }, [projectById]);
 
   const columns = Constants.public.Enums.project_status;
 
@@ -188,22 +237,15 @@ export default function ProjectManagement() {
   const activeFilterCount = Object.values(filters).filter(v => v !== "").length;
   const hasActiveFilters = activeFilterCount > 0;
 
-  const onDragEnd = useCallback(async (result: DropResult) => {
-    const { draggableId, destination } = result;
-    if (!destination) return;
-
-    // Parse composite droppable ID: "status::sub_phase" or just "status"
-    const parts = destination.droppableId.split("::");
-    const newStatus = parts[0] as ProjectStatus;
-    const newSubPhase = parts[1] || null;
-
+  /** Move o projeto de coluna (arrastar e soltar ou "Mover para Implementado" do card filho). */
+  const moveProject = useCallback(async (draggableId: string, newStatus: ProjectStatus, newSubPhase: string | null): Promise<boolean> => {
     const project = projects.find(p => p.id === draggableId);
-    if (!project) return;
+    if (!project) return false;
     if (!canEditProject(project)) {
       toast.error("Você só pode mover projetos vinculados a você.");
-      return;
+      return false;
     }
-    if (project.status === newStatus && project.sub_phase === newSubPhase) return;
+    if (project.status === newStatus && project.sub_phase === newSubPhase) return true;
 
     // Optimistic update
     const willMarkReached = newStatus === "encerrado" && !project.reached_implemented;
@@ -224,14 +266,23 @@ export default function ProjectManagement() {
     if (error) {
       toast.error("Erro ao atualizar status do projeto");
       setProjects(prev => prev.map(p => p.id === draggableId ? { ...p, status: project.status, sub_phase: project.sub_phase, reached_implemented: project.reached_implemented, reached_implemented_at: project.reached_implemented_at } : p));
-    } else {
-      const label = newSubPhase
-        ? subPhasesByStatus[newStatus]?.find(sp => sp.id === newSubPhase)?.label || statusLabels[newStatus]
-        : statusLabels[newStatus];
-      toast.success(`Projeto movido para ${label}`);
-      // Mudança de status registrada automaticamente por trigger no banco
+      return false;
     }
+    const label = newSubPhase
+      ? subPhasesByStatus[newStatus]?.find(sp => sp.id === newSubPhase)?.label || statusLabels[newStatus]
+      : statusLabels[newStatus];
+    toast.success(`Projeto movido para ${label}`);
+    // Mudança de status registrada automaticamente por trigger no banco
+    return true;
   }, [projects, canEditProject]);
+
+  const onDragEnd = useCallback(async (result: DropResult) => {
+    const { draggableId, destination } = result;
+    if (!destination) return;
+    // Parse composite droppable ID: "status::sub_phase" or just "status"
+    const parts = destination.droppableId.split("::");
+    await moveProject(draggableId, parts[0] as ProjectStatus, parts[1] || null);
+  }, [moveProject]);
 
 
   const onUpdateObservations = useCallback(async (projectId: string, newText: string) => {
@@ -349,18 +400,30 @@ export default function ProjectManagement() {
               </div>
             ) : (
               columns.map(status => (
-                <KanbanColumn
-                  key={status}
-                  status={status}
-                  items={grouped[status]}
-                  subPhases={subPhasesByStatus[status] || null}
-                  onUpdateObservations={onUpdateObservations}
-                  canEditProject={canEditProject}
-                />
+                <Fragment key={status}>
+                  <KanbanColumn
+                    status={status}
+                    items={grouped[status]}
+                    subPhases={subPhasesByStatus[status] || null}
+                    onUpdateObservations={onUpdateObservations}
+                    canEditProject={canEditProject}
+                    pendencyCount={pendencyCount}
+                    onCreateChild={openCreateChild}
+                    onMoveToImplemented={p => void moveProject(p.id, "encerrado", null)}
+                  />
+                  {/* cards filhos logo depois de Implementado */}
+                  {status === "encerrado" && (
+                    <PendencyColumn items={visiblePendencies} projects={projectById} canEditProject={canEditProject} onAction={onPendencyAction} />
+                  )}
+                </Fragment>
               ))
             )}
           </DragDropContext>
         </div>
+        <PendencyDialog mode={pendDialog} onOpenChange={o => { if (!o) setPendDialog(null); }} onDone={() => void loadPendencies()}
+          onMoveParent={id => moveProject(id, "encerrado", null)} />
+        <RequestDialog project={agendaFor?.project ?? null} open={!!agendaFor} existing={agendaFor?.existing ?? []}
+          onOpenChange={o => { if (!o) setAgendaFor(null); }} onCreated={() => toast.info("A solicitação está na Aprovação de agenda.")} />
       </div>
     </div>
   );

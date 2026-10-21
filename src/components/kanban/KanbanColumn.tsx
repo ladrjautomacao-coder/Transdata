@@ -15,10 +15,22 @@ interface Props {
   subPhases: SubPhaseConfig[] | null;
   onUpdateObservations: (projectId: string, text: string) => Promise<void>;
   canEditProject: (p: { manager_id: string | null }) => boolean;
+  /** Cards filhos em aberto por projeto (selo no card pai). */
+  pendencyCount?: Map<string, number>;
+  /** Criar card filho (só nas colunas Implantação e Implementado). */
+  onCreateChild?: (p: ProjectRow) => void;
+  /** Projeto em Implantação com card filho aberto: atalho para finalizar. */
+  onMoveToImplemented?: (p: ProjectRow) => void;
 }
 
-export default function KanbanColumn({ status, items, subPhases, onUpdateObservations, canEditProject }: Props) {
+export default function KanbanColumn({ status, items, subPhases, onUpdateObservations, canEditProject, pendencyCount, onCreateChild, onMoveToImplemented }: Props) {
   const colors = statusColors[status];
+  const allowChild = status === "implantacao" || status === "encerrado";
+  const card = (p: ProjectRow, index: number) => (
+    <KanbanCard key={p.id} project={p} index={index} onUpdateObservations={onUpdateObservations} canEdit={canEditProject(p)}
+      pendencies={pendencyCount?.get(p.id) ?? 0} onCreateChild={allowChild && onCreateChild ? () => onCreateChild(p) : undefined}
+      onMoveToImplemented={status === "implantacao" && onMoveToImplemented ? () => onMoveToImplemented(p) : undefined} />
+  );
 
   const groupedBySubPhase = useMemo(() => {
     if (!subPhases) return null;
@@ -88,7 +100,7 @@ export default function KanbanColumn({ status, items, subPhases, onUpdateObserva
                       >
                         <div className="space-y-2">
                           {spItems.map((p, index) => (
-                            <KanbanCard key={p.id} project={p} index={index} onUpdateObservations={onUpdateObservations} canEdit={canEditProject(p)} />
+                            card(p, index)
                           ))}
                         </div>
                         {provided.placeholder}
@@ -113,7 +125,7 @@ export default function KanbanColumn({ status, items, subPhases, onUpdateObserva
                     <p className="text-xs text-muted-foreground text-center py-8">Nenhum projeto</p>
                   ) : (
                     items.map((p, index) => (
-                      <KanbanCard key={p.id} project={p} index={index} onUpdateObservations={onUpdateObservations} canEdit={canEditProject(p)} />
+                      card(p, index)
                     ))
                   )}
                 </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, AlertTriangle, Clock, CalendarClock, UserX, RotateCcw, Hourglass, FileClock } from "lucide-react";
+import { Bell, AlertTriangle, Clock, CalendarClock, UserX, RotateCcw, Hourglass, FileClock, CornerDownRight, CheckCircle2 } from "lucide-react";
+import { PENDENCY_REMINDER_DAYS, fetchPendencyAlerts, type PendencyAlertRow } from "@/lib/projectPendencies";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -23,14 +24,16 @@ interface AlertProject {
   reached_implemented: boolean;
 }
 
-type Category = "returned" | "dzero" | "impl30" | "contract" | "stuck" | "no_manager";
+type Category = "returned" | "move_parent" | "dzero" | "impl30" | "contract" | "stuck" | "pendencia" | "no_manager";
 
 const CATEGORY_META: Record<Category, { label: string; icon: typeof Bell; color: string }> = {
   returned: { label: "Retornaram de Implementado", icon: RotateCcw, color: "text-red-600" },
+  move_parent: { label: "Card filho criado: mover para Implementado", icon: CheckCircle2, color: "text-emerald-600" },
   dzero: { label: "D-zero vencendo (≤7 dias)", icon: CalendarClock, color: "text-orange-600" },
   impl30: { label: "Prazo de implantação em até 30 dias", icon: Hourglass, color: "text-amber-600" },
   contract: { label: "Contrato termina em até 12 meses", icon: FileClock, color: "text-purple-600" },
   stuck: { label: "Parados há mais de 30 dias", icon: Clock, color: "text-yellow-600" },
+  pendencia: { label: `Implantação pendente há mais de ${PENDENCY_REMINDER_DAYS} dias`, icon: CornerDownRight, color: "text-orange-600" },
   no_manager: { label: "Sem gestor designado", icon: UserX, color: "text-blue-600" },
 };
 
@@ -47,6 +50,7 @@ export function AlertsBell() {
   const [open, setOpen] = useState(false);
   const [projects, setProjects] = useState<AlertProject[]>([]);
   const [deadlines, setDeadlines] = useState<DeadlineAlertRow[]>([]);
+  const [pendencies, setPendencies] = useState<PendencyAlertRow[]>([]);
   const storageKey = user ? `alerts:seen:${user.id}` : "alerts:seen:anon";
   const [seen, setSeen] = useState<Set<string>>(() => {
     try {
@@ -78,16 +82,18 @@ export function AlertsBell() {
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      const [{ data }, dl] = await Promise.all([
+      const [{ data }, dl, pend] = await Promise.all([
         supabase
           .from("projects")
           .select("id, company_name, city, state, status, d_zero_date, updated_at, manager_id, reached_implemented")
           .neq("status", "encerrado"),
         fetchDeadlineAlerts().catch(() => null),
+        fetchPendencyAlerts().catch(() => null),
       ]);
       if (!mounted) return;
       if (data) setProjects(data as AlertProject[]);
       if (dl) setDeadlines(dl);
+      if (pend) setPendencies(pend);
     };
     load();
     const i = setInterval(load, Math.max(5, settings.pollingSeconds) * 1000);
@@ -100,7 +106,7 @@ export function AlertsBell() {
     const today = new Date();
     const todayYmd = format(today, "yyyy-MM-dd");
     const inScope = (m: string | null) => isFullScope || m === managerId;
-    const result: Record<Category, BellItem[]> = { returned: [], dzero: [], impl30: [], contract: [], stuck: [], no_manager: [] };
+    const result: Record<Category, BellItem[]> = { returned: [], move_parent: [], dzero: [], impl30: [], contract: [], stuck: [], pendencia: [], no_manager: [] };
     for (const p of projects) {
       if (!inScope(p.manager_id)) continue;
       const item = (cat: Category, detail: string): BellItem => ({ key: `${cat}:${p.id}`, id: p.id, title: p.company_name, detail });
@@ -126,8 +132,20 @@ export function AlertsBell() {
         detail: `${placeOf(d)} · ${impl ? "prazo" : "fim do contrato"} ${fmtDate(d.due_date)} · ${remainingShort(todayYmd, d.due_date)}`,
       });
     }
+    // cards filhos: o objetivo é o projeto pai ir para Implementado; aberto há muito tempo vira lembrete
+    const moveListed = new Set<string>();
+    for (const x of pendencies) {
+      if (!inScope(x.manager_id)) continue;
+      if (x.status === "implantacao" && !moveListed.has(x.project_id)) {
+        moveListed.add(x.project_id);
+        result.move_parent.push({ key: `move_parent:${x.project_id}`, id: x.project_id, title: x.company_name, detail: `${placeOf(x)} · card filho: ${x.title}` });
+      }
+      if (x.days_open > PENDENCY_REMINDER_DAYS) {
+        result.pendencia.push({ key: `pendencia:${x.pendency_id}`, id: x.project_id, title: x.company_name, detail: `${x.title} · pendente há ${x.days_open} dias` });
+      }
+    }
     return result;
-  }, [projects, deadlines, settings.dzeroWindowDays, settings.stuckDays, isFullScope, managerId]);
+  }, [projects, deadlines, pendencies, settings.dzeroWindowDays, settings.stuckDays, isFullScope, managerId]);
 
   const activeKeys = useMemo(
     () => (Object.keys(grouped) as Category[]).flatMap(cat => grouped[cat].map(it => it.key)),
