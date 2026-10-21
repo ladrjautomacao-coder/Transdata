@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatLocation } from "@/lib/location";
 import {
-  REQUEST_STATUS, colorFor, formatPeriod, initials, mapsUrlFor, periodOf, techniciansOf,
+  REQUEST_STATUS, colorFor, destinationOf, formatPeriod, initials, periodOf, techniciansOf,
   type DestinationParts, type ImplantationRequest, type RequestStatus, type Technician,
 } from "@/lib/implantationScheduling";
 
@@ -73,34 +73,14 @@ export function TechAvatar({ tech, size = "h-7 w-7 text-[10px]" }: { tech: Techn
   );
 }
 
-const meetingHref = (url: string | null | undefined) => (url && /^https?:\/\//i.test(url) ? url : null);
-const hostOf = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; } };
 
 /**
  * Para onde o técnico vai: endereço do treinamento (rua em destaque, bairro e cidade
  * abaixo) ou reunião remota. `action` mostra o botão Rota / Entrar ao lado.
  */
 export function VisitDestination({ visit, action = false, extra }: { visit: DestinationParts; action?: boolean; extra?: ReactNode }) {
-  const remote = visit.visit_format === "remoto";
-  const projectCity = visit.project ? formatLocation(visit.project.city, visit.project.state, visit.project.country_code) : "";
-  let title: string, subtitle: string;
-  if (remote) {
-    const link = meetingHref(visit.meeting_url);
-    title = "Remoto · videochamada";
-    subtitle = link ? hostOf(link) : noLinkText(visit.status === "pendente");
-  } else if (visit.visit_format === "presencial" && visit.address_street?.trim()) {
-    title = visit.address_street.trim();
-    const cityUf = visit.address_city?.trim() ? [visit.address_city.trim(), visit.address_state?.trim()].filter(Boolean).join("/") : projectCity;
-    subtitle = [visit.address_district?.trim(), cityUf].filter(Boolean).join(" · ");
-  } else {
-    // solicitação antiga: só o "Local" livre (às vezes só a cidade)
-    const loc = visit.location?.trim() ?? "";
-    const onlyCity = !loc || loc.toLowerCase() === projectCity.toLowerCase();
-    title = onlyCity ? projectCity || "Local não informado" : loc;
-    subtitle = onlyCity ? "Endereço não informado na solicitação" : projectCity;
-  }
+  const { remote, title, subtitle, href } = destinationOf(visit);
   const Icon = remote ? Video : MapPin;
-  const href = remote ? meetingHref(visit.meeting_url) : mapsUrlFor(visit);
   return (
     <div className="flex items-center gap-2.5">
       <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${remote ? "bg-sky-500/15 text-sky-700 dark:text-sky-300" : "bg-primary/10 text-primary"}`}>

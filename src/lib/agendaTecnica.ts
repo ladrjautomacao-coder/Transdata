@@ -22,6 +22,8 @@ export const WD_SHORT = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 export const WD_LONG = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
 export const MONTH_SHORT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 export const MONTH_LONG = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+/** Semanas que a visão "Por técnico" da agenda pode mostrar. */
+export const WEEK_OPTIONS = [1, 2, 4] as const;
 
 export const p2 = (n: number) => String(n).padStart(2, "0");
 /** 15/10 */

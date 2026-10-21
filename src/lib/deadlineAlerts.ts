@@ -4,7 +4,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { DeadlineKind, DeadlineMilestone } from "../../supabase/functions/_shared/deadlineDates.ts";
 
-export { remainingShort, remainingText, fmtDate } from "../../supabase/functions/_shared/deadlineDates.ts";
+export { daysBetween, remainingShort, remainingText, fmtDate } from "../../supabase/functions/_shared/deadlineDates.ts";
 export type { DeadlineKind, DeadlineMilestone };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -3,6 +3,7 @@
 // As tabelas ainda não estão em src/integrations/supabase/types.ts, por isso
 // o client é usado como `any` aqui, no mesmo padrão de CronogramaTab.
 import { supabase } from "@/integrations/supabase/client";
+import { formatLocation } from "@/lib/location";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -156,6 +157,35 @@ export function mapsUrlFor(v: DestinationParts) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
 }
 
+const meetingHref = (url: string | null | undefined) => (url && /^https?:\/\//i.test(url) ? url : null);
+const hostOf = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; } };
+
+/**
+ * Para onde o técnico vai, em texto: endereço do treinamento (rua no título, bairro e
+ * cidade abaixo) ou reunião remota; `href` abre a rota ou a reunião.
+ */
+export function destinationOf(v: DestinationParts & { status?: string }) {
+  const remote = v.visit_format === "remoto";
+  const projectCity = v.project ? formatLocation(v.project.city, v.project.state, v.project.country_code) : "";
+  let title: string, subtitle: string;
+  if (remote) {
+    const link = meetingHref(v.meeting_url);
+    title = "Remoto · videochamada";
+    subtitle = link ? hostOf(link) : v.status === "pendente" ? "Informado pelo Aprovador na aprovação" : "Link não informado";
+  } else if (v.visit_format === "presencial" && v.address_street?.trim()) {
+    title = v.address_street.trim();
+    const cityUf = v.address_city?.trim() ? [v.address_city.trim(), v.address_state?.trim()].filter(Boolean).join("/") : projectCity;
+    subtitle = [v.address_district?.trim(), cityUf].filter(Boolean).join(" · ");
+  } else {
+    // solicitação antiga: só o "Local" livre (às vezes só a cidade)
+    const loc = v.location?.trim() ?? "";
+    const onlyCity = !loc || loc.toLowerCase() === projectCity.toLowerCase();
+    title = onlyCity ? projectCity || "Local não informado" : loc;
+    subtitle = onlyCity ? "Endereço não informado na solicitação" : projectCity;
+  }
+  return { remote, title, subtitle, href: remote ? meetingHref(v.meeting_url) : mapsUrlFor(v) };
+}
+
 /** Link da reunião normalizado ("meet.google.com/x" vira "https://meet.google.com/x"); null se não for um link válido. */
 export function normalizeMeetingUrl(raw: string): string | null {
   const v = raw.trim();
@@ -304,6 +334,42 @@ export async function fetchTechnicianAgenda(technicianId?: string | null): Promi
   return (data ?? { technician: null, visits: [] }) as TechnicianAgenda;
 }
 
+/** Ficha do projeto para o técnico em campo (Área do Implantador). */
+export interface ProjectBrief {
+  project: {
+    id: string; company_name: string; project_code: string | null; city: string; state: string | null; country_code: string | null;
+    status: string; sub_phase: string | null; project_segment: string | null; project_type: string | null;
+    is_pilot: boolean; pilot_info: string | null;
+    contract_date: string | null; d_zero_date: string | null; executive_project_date: string | null; handover_date: string | null;
+    implementation_deadline_days: number | null;
+    /** Contrato + prazo de implantação (AAAA-MM-DD). */
+    implementation_due: string | null;
+    fleet_size: number | null; fleet_urbano: number | null; fleet_seccionado: number | null;
+    complementary_sale: boolean; complementary_fleet: number | null; implemented_fleet: number | null;
+    installation_transmobile: number | null; installation_client: number | null; embedded_install_training: boolean | null;
+    observations: string | null; updated_at: string | null;
+  };
+  manager: { full_name: string; email: string | null } | null;
+  executive: { full_name: string; email: string | null } | null;
+  products: string[];
+  solutions: { name: string; features: string[] }[];
+  integrations: string[];
+  equipments: { name: string; quantity: number }[];
+  /** Últimas anotações de acompanhamento do GP (mais recente primeiro). */
+  notes: { id: string; content: string; created_at: string; author: string | null }[];
+  /** Visitas pendentes e aprovadas do projeto, de todos os técnicos. */
+  visits: {
+    id: string; status: "pendente" | "aprovada"; start: string; end: string; visit_purpose: string;
+    visit_format: VisitFormat | null; attendance: Attendance | null; technicians: string[];
+  }[];
+}
+
+export async function fetchProjectBrief(projectId: string): Promise<ProjectBrief> {
+  const { data, error } = await db.rpc("get_implantation_project_brief", { _project_id: projectId });
+  if (error) throw error;
+  return data as ProjectBrief;
+}
+
 export async function saveTechnician(input: { id?: string; full_name: string; email: string | null; area: string | null; active?: boolean; photo_url?: string | null }): Promise<Technician> {
   const { id, ...rest } = input;
   const { data, error } = id
@@ -421,7 +487,8 @@ export function colorFor(id: string) {
   return PALETTE[h % PALETTE.length];
 }
 
-export const initials = (name: string) => name.split(" ").filter(Boolean).slice(0, 2).map(p => p[0]?.toUpperCase()).join("");
+// só palavras que começam com letra ou número ("ATV - Associação" vira "AA", não "A-")
+export const initials = (name: string) => name.split(/\s+/).filter(w => /^[\p{L}\d]/u.test(w)).slice(0, 2).map(p => p[0].toUpperCase()).join("");
 
 /** "dd/MM HH:mm → dd/MM HH:mm" ou "dd/MM · HH:mm–HH:mm" no mesmo dia. */
 export function formatPeriod(start: Date, end: Date) {

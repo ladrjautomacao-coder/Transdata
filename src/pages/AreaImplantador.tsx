@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Ban, CalendarCheck, CalendarClock, CalendarDays, ChevronLeft, ChevronRight, FolderKanban, HardHat, List, MapPin, Monitor, RefreshCw,
-  Smartphone, UserRound, UserX, UsersRound, WifiOff,
-} from "lucide-react";
+import { CalendarCheck, CalendarDays, FolderKanban, RefreshCw, Smartphone, UserX, WifiOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -10,29 +7,39 @@ import { useCustomHolidays } from "@/hooks/useCustomHolidays";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { EmptyBlock, Kpi, VisitDestination } from "@/components/agendamento/AgendaShared";
-import { HolidayWarning } from "@/components/agendamento/HolidaysDialog";
+import { EmptyBlock } from "@/components/agendamento/AgendaShared";
 import { InstallAppButton } from "@/pwa/InstallAppButton";
 import { RequestDetailSheet } from "@/components/agendamento/AgendaDialogs";
-import { MonthGrid } from "@/components/agendamento/MonthGrid";
-import { MinhaAgenda, MinhaAgendaHeader } from "@/components/agendamento/MinhaAgenda";
-import { useCityIndex } from "@/hooks/useCityIndex";
+import { DayVisits, MonthGrid } from "@/components/agendamento/MonthGrid";
+import { MonthGantt } from "@/components/agendamento/MonthGantt";
+import { TechnicianTimeline } from "@/components/agendamento/TechnicianTimeline";
+import { AgendaLegend } from "@/components/agendamento/AgendaPanels";
+import { AgendaListView, AgendaToolbar, type AgendaView } from "@/components/agendamento/AgendaViews";
+import { MinhaAgendaHeader } from "@/components/agendamento/MinhaAgenda";
+import { ProjectBriefPanel } from "@/components/agendamento/ProjectBriefPanel";
 import { holidaysByDay } from "@/lib/holidays";
 import { formatLocation } from "@/lib/location";
 import {
-  errorMessage, fetchTechnicianAgenda, fetchTechnicians, formatPeriod,
-  type AgendaVisit, type ImplantationRequest, type Technician, type TechnicianAgenda,
+  MONTH_LONG, VISIT_KIND_ORDER, WEEK_OPTIONS, dayDiff, fmtDM, fmtDayRange, fmtWeekRange, lastWorkdayUntil, mondayOf, plusDays, startOfDay,
+  techLoad, visitDays, visitKindOf,
+} from "@/lib/agendaTecnica";
+import {
+  colorFor, errorMessage, fetchProjectBrief, fetchTechnicianAgenda, fetchTechnicians, initials,
+  type AgendaVisit, type ImplantationRequest, type ProjectBrief, type Technician, type TechnicianAgenda,
 } from "@/lib/implantationScheduling";
 
-type Period = "mes" | "tri" | "ano";
-const PERIODS: [Period, string][] = [["mes", "Este mês"], ["tri", "Últimos 3 meses"], ["ano", "Este ano"]];
-const WD = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
-const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-const MONTHS_FULL = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-const VIEW_KEY = "transdata:area-implantador-view";
-type View = "lista" | "calendario";
+// mesma visão e semanas da Agenda técnica: o técnico vê a agenda dele do jeito padrão
+const VIEW_KEY = "transdata:implantacao-calendario-view";
+const WEEKS_KEY = "transdata:implantacao-calendario-semanas";
+const TAB_KEY = "transdata:area-implantador-aba";
+type Tab = "projeto" | "agenda";
+const firstOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
+const read = <T,>(key: string, ok: (v: string) => boolean, fallback: T): T => {
+  try { const v = localStorage.getItem(key); return v != null && ok(v) ? (v as unknown as T) : fallback; } catch { return fallback; }
+};
+const save = (key: string, v: string) => { try { localStorage.setItem(key, v); } catch { /* ignora */ } };
 
-/** Visita da Área no formato usado pela grade do mês e pelo detalhe. */
+/** Visita da Área no formato usado pela agenda e pelo detalhe. */
 function toRequest(v: AgendaVisit, tech: NonNullable<TechnicianAgenda["technician"]>): ImplantationRequest {
   const t = (id: string, full_name: string, photo_url?: string | null) => ({ technician: { id, full_name, email: null, area: null, active: true, photo_url } });
   return {
@@ -50,29 +57,53 @@ function toRequest(v: AgendaVisit, tech: NonNullable<TechnicianAgenda["technicia
   };
 }
 
-/** Visita presencial com endereço informado pelo GP. */
-const presencialAddress = (v: AgendaVisit) => v.visit_format === "presencial" && !!v.address_city?.trim();
-/** Cidade da visita: a do endereço do treinamento, senão a do projeto. */
-const cityOf = (v: AgendaVisit) => presencialAddress(v)
-  ? [v.address_city, v.address_state].filter(Boolean).join("/")
-  : formatLocation(v.project.city, v.project.state, v.project.country_code);
-
-/** Janela do filtro de período (histórico e KPIs de resultado). */
-function periodRange(p: Period) {
-  const now = new Date();
-  if (p === "ano") return { from: new Date(now.getFullYear(), 0, 1), to: new Date(now.getFullYear() + 1, 0, 1) };
-  if (p === "tri") return { from: new Date(now.getFullYear(), now.getMonth() - 2, 1), to: new Date(now.getFullYear(), now.getMonth() + 1, 1) };
-  return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: new Date(now.getFullYear(), now.getMonth() + 1, 1) };
+/** Marca do projeto na lista: iniciais na cor do projeto e ponto da fase. */
+function ProjectMark({ id, name, phase }: { id: string; name: string; phase: Phase }) {
+  return (
+    <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white" style={{ background: colorFor(id) }}>
+      {initials(name)}
+      <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card ${PHASE[phase].dot}`} />
+    </span>
+  );
 }
 
-/** Situação da visita para o técnico. */
-function resultOf(v: AgendaVisit, now: Date) {
-  if (v.status === "cancelada") return { label: "Cancelada", cls: "bg-muted text-muted-foreground", border: "border-l-muted-foreground/40" };
-  if (v.attendance === "presencial") return { label: "Atendida presencial", cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", border: "border-l-emerald-500" };
-  if (v.attendance === "remoto") return { label: "Atendida remota", cls: "bg-sky-500/15 text-sky-700 dark:text-sky-300", border: "border-l-sky-500" };
-  if (new Date(v.end) < now) return { label: "Aguardando registro", cls: "bg-amber-500/15 text-amber-700 dark:text-amber-300", border: "border-l-amber-400" };
-  if (new Date(v.start) <= now) return { label: "Em andamento", cls: "bg-primary/15 text-primary", border: "border-l-primary" };
-  return { label: "Agendada", cls: "bg-primary/10 text-primary", border: "border-l-primary/60" };
+type Phase = "agora" | "proximo" | "atendido";
+const PHASE: Record<Phase, { title: string; dot: string }> = {
+  agora: { title: "Em atendimento", dot: "bg-emerald-500" },
+  proximo: { title: "Próximos", dot: "bg-primary" },
+  atendido: { title: "Já atendidos", dot: "bg-muted-foreground/40" },
+};
+interface ProjectEntry { id: string; name: string; place: string; phase: Phase; visit: AgendaVisit; when: string }
+
+/** Projetos do técnico com a visita que importa agora: a em andamento, senão a próxima, senão a última. */
+function projectsOf(visits: AgendaVisit[], now: Date): ProjectEntry[] {
+  const today = startOfDay(now);
+  const byProject = new Map<string, AgendaVisit[]>();
+  for (const v of visits) if (v.status === "aprovada") byProject.set(v.project.id, [...(byProject.get(v.project.id) ?? []), v]);
+  const days = (v: AgendaVisit) => {
+    const s = new Date(v.start), e = new Date(v.end);
+    return { first: startOfDay(s), last: startOfDay(e > s ? new Date(+e - 1) : s) };
+  };
+  const out: (ProjectEntry & { sort: number })[] = [];
+  for (const list of byProject.values()) {
+    list.sort((a, b) => +new Date(a.start) - +new Date(b.start));
+    const cur = list.find(v => +days(v).first <= +today && +today <= +days(v).last);
+    const next = list.find(v => +days(v).first > +today);
+    const last = [...list].reverse().find(v => +days(v).last < +today);
+    const visit = cur ?? next ?? last!;
+    const phase: Phase = cur ? "agora" : next ? "proximo" : "atendido";
+    const { first, last: end } = days(visit);
+    const range = fmtDayRange(first, end);
+    const d = dayDiff(today, first);
+    out.push({
+      id: visit.project.id, name: visit.project.company_name, visit, phase,
+      place: formatLocation(visit.project.city, visit.project.state, visit.project.country_code),
+      when: phase === "agora" ? `até ${fmtDM(end)}` : phase === "proximo" ? `${range} · ${d === 1 ? "amanhã" : `em ${d} dias`}` : range,
+      sort: phase === "atendido" ? -+end : +first,
+    });
+  }
+  const order: Phase[] = ["agora", "proximo", "atendido"];
+  return out.sort((a, b) => order.indexOf(a.phase) - order.indexOf(b.phase) || a.sort - b.sort);
 }
 
 export default function AreaImplantador() {
@@ -86,20 +117,20 @@ export default function AreaImplantador() {
   const [agenda, setAgenda] = useState<TechnicianAgenda | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [period, setPeriod] = useState<Period>("mes");
-  const [view, setViewState] = useState<View>(() => {
-    try { return (localStorage.getItem(VIEW_KEY) as View) || "lista"; } catch { return "lista"; }
-  });
-  const setView = (v: View) => { setViewState(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* ignora */ } };
-  const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
-  const [pickedDay, setPickedDay] = useState<Date | null>(null);
   const [detail, setDetail] = useState<ImplantationRequest | null>(null);
   const { custom: customHolidays } = useCustomHolidays();
-  const cityIndex = useCityIndex();
+
+  const [tab, setTabState] = useState<Tab>(() => read<Tab>(TAB_KEY, v => v === "agenda" || v === "projeto", "projeto"));
+  const setTab = (t: Tab) => { setTabState(t); save(TAB_KEY, t); };
+
+  // ficha do projeto escolhido (guardada por projeto até o próximo "Atualizar")
+  const [picked, setPicked] = useState<string | null>(null);
+  const [briefs, setBriefs] = useState<Record<string, { data?: ProjectBrief; error?: string }>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setBriefs({});
     try {
       setAgenda(await fetchTechnicianAgenda(techId));
     } catch (e) {
@@ -115,68 +146,75 @@ export default function AreaImplantador() {
 
   const now = useMemo(() => new Date(), [agenda]); // eslint-disable-line react-hooks/exhaustive-deps
   const visits = useMemo(() => agenda?.visits ?? [], [agenda]);
-  const { from, to } = periodRange(period);
-  const inPeriod = visits.filter(v => new Date(v.start) >= from && new Date(v.start) < to);
-  const upcoming = visits.filter(v => v.status === "aprovada" && new Date(v.end) >= now)
-    .sort((a, b) => +new Date(a.start) - +new Date(b.start));
-  const history = inPeriod.filter(v => v.status === "cancelada" || new Date(v.end) < now)
-    .sort((a, b) => +new Date(b.start) - +new Date(a.start));
-  const count = {
-    presencial: inPeriod.filter(v => v.status === "aprovada" && v.attendance === "presencial").length,
-    remoto: inPeriod.filter(v => v.status === "aprovada" && v.attendance === "remoto").length,
-    canceladas: inPeriod.filter(v => v.status === "cancelada").length,
-    pendentes: inPeriod.filter(v => v.status === "aprovada" && !v.attendance && new Date(v.end) < now).length,
+  const projects = useMemo(() => projectsOf(visits, now), [visits, now]);
+  const current = projects.find(p => p.id === picked) ?? projects[0] ?? null;
+
+  const loadBrief = useCallback((projectId: string) => {
+    setBriefs(b => ({ ...b, [projectId]: {} }));
+    fetchProjectBrief(projectId)
+      .then(data => setBriefs(b => ({ ...b, [projectId]: { data } })))
+      .catch(e => setBriefs(b => ({ ...b, [projectId]: { error: errorMessage(e) } })));
+  }, []);
+  const currentId = current?.id;
+  useEffect(() => {
+    if (tab === "projeto" && currentId && !(currentId in briefs)) loadBrief(currentId);
+  }, [tab, currentId, briefs, loadBrief]);
+
+  /* ─── agenda no padrão da Agenda técnica ─── */
+  const [view, setViewState] = useState<AgendaView>(() => read<AgendaView>(VIEW_KEY, v => v === "mes" || v === "lista" || v === "tecnico", "tecnico"));
+  const [weeks, setWeeksState] = useState<number>(() => {
+    const n = Number(read<string>(WEEKS_KEY, () => true, "1"));
+    return (WEEK_OPTIONS as readonly number[]).includes(n) ? n : 1;
+  });
+  const [anchor, setAnchor] = useState(() => (view === "mes" ? firstOfMonth(new Date()) : mondayOf(new Date())));
+  const [pickedDay, setPickedDay] = useState<Date | null>(null);
+  const setView = (v: AgendaView) => {
+    setViewState(v); save(VIEW_KEY, v);
+    const t = new Date();
+    if (v === "mes") setAnchor(a => (view === "mes" ? a : firstOfMonth(a)));
+    else if (view === "mes") setAnchor(a => (a.getFullYear() === t.getFullYear() && a.getMonth() === t.getMonth() ? mondayOf(t) : mondayOf(a)));
   };
-  const periodLabel = PERIODS.find(p => p[0] === period)![1].toLowerCase();
+  const setWeeks = (n: number) => { setWeeksState(n); save(WEEKS_KEY, String(n)); };
+  const nav = (n: number) => setAnchor(a => (view === "mes" ? new Date(a.getFullYear(), a.getMonth() + n, 1) : plusDays(a, 7 * weeks * n)));
+  const goToday = () => { const t = new Date(); setAnchor(view === "mes" ? firstOfMonth(t) : mondayOf(t)); setPickedDay(null); };
 
-  // Projetos: em atendimento (visita futura/em andamento) e já atendidos
-  const projects = useMemo(() => {
-    const map = new Map<string, { p: AgendaVisit["project"]; visits: number; active: boolean; last: Date }>();
-    for (const v of visits) {
-      if (v.status === "cancelada") continue;
-      const cur = map.get(v.project.id) ?? { p: v.project, visits: 0, active: false, last: new Date(0) };
-      cur.visits++;
-      if (new Date(v.end) >= now) cur.active = true;
-      if (new Date(v.start) > cur.last) cur.last = new Date(v.start);
-      map.set(v.project.id, cur);
-    }
-    const all = [...map.values()].sort((a, b) => +b.last - +a.last);
-    return { active: all.filter(x => x.active), done: all.filter(x => !x.active) };
-  }, [visits, now]);
-
-  // Calendário: só as visitas aprovadas (ativas) do técnico, com feriados
+  const today = startOfDay(now);
+  const rangeStart = view === "mes" ? firstOfMonth(anchor) : startOfDay(anchor);
+  const rangeEnd = view === "mes" ? new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0) : plusDays(anchor, weeks * 7 - 1);
+  const holidayMap = useMemo(() => {
+    const y = rangeStart.getFullYear();
+    return holidaysByDay([y - 1, y, y + 1], customHolidays);
+  }, [rangeStart.getFullYear(), customHolidays]); // eslint-disable-line react-hooks/exhaustive-deps
   const calendarList = useMemo(() => agenda?.technician
     ? visits.filter(v => v.status === "aprovada").map(v => toRequest(v, agenda.technician!)) : [], [visits, agenda]);
-  const holidayMap = useMemo(() => holidaysByDay([month.getFullYear() - 1, month.getFullYear(), month.getFullYear() + 1], customHolidays), [month, customHolidays]);
-  const todayHolidays = useMemo(() => holidaysByDay([now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1], customHolidays), [now, customHolidays]);
-  const sameMonth = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
-  const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const selectedDay = pickedDay && sameMonth(pickedDay, month) ? pickedDay : sameMonth(today0, month) ? today0 : month;
-  const dayVisits = visits.filter(v => v.status === "aprovada" && new Date(v.start) < new Date(+selectedDay + 864e5) && selectedDay < new Date(v.end))
-    .sort((a, b) => +new Date(a.start) - +new Date(b.start));
+  const inRange = (r: ImplantationRequest) => +visitDays(r).first <= +rangeEnd && +visitDays(r).last >= +rangeStart;
+  const spanLabel = view === "mes"
+    ? `${MONTH_LONG[anchor.getMonth()].replace(/^./, c => c.toUpperCase())} ${anchor.getFullYear()}`
+    : `${fmtWeekRange(rangeStart, rangeEnd)} ${rangeEnd.getFullYear()}`;
 
   const isStandalone = typeof window !== "undefined" && window.matchMedia?.("(display-mode: standalone)").matches;
   const techName = agenda?.technician?.full_name;
 
+  const techPicker = canPickOther && (
+    <Select value={techId ?? "me"} onValueChange={v => { setTechId(v === "me" ? null : v); setPicked(null); }}>
+      <SelectTrigger className={`h-9 text-xs ${isMobile ? "flex-1" : "w-[220px]"}`} aria-label="Técnico"><SelectValue /></SelectTrigger>
+      <SelectContent>
+        <SelectItem value="me">Minha agenda</SelectItem>
+        {technicians.map(t => <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
   const header = (
     <div className="flex flex-wrap items-end gap-4">
       <div className="min-w-0 flex-1 basis-64">
         <span className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Implantação</span>
         <h1 className="text-2xl font-bold tracking-tight">Área do Implantador</h1>
         <p className="text-sm text-muted-foreground">
-          {techName ? <>Agenda de visitas técnicas de <b className="text-foreground">{techName}</b>.</> : "Sua agenda de visitas técnicas, para se programar e consultar em campo."}
+          {techName ? <>Projetos e agenda de <b className="text-foreground">{techName}</b>.</> : "Seus projetos e sua agenda de visitas técnicas."}
         </p>
       </div>
       <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
-        {canPickOther && (
-          <Select value={techId ?? "me"} onValueChange={v => setTechId(v === "me" ? null : v)}>
-            <SelectTrigger className="h-9 w-full text-xs sm:w-[220px]" aria-label="Técnico"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="me">Minha agenda</SelectItem>
-              {technicians.map(t => <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        )}
+        {techPicker}
         <Button variant="outline" size="sm" className="h-9" onClick={() => void load()}><RefreshCw className="mr-1.5 h-4 w-4" />Atualizar</Button>
       </div>
     </div>
@@ -186,8 +224,8 @@ export default function AreaImplantador() {
     return (
       <div className="flex flex-col gap-5">
         {header}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{[0, 1, 2, 3].map(i => <Skeleton key={i} className="h-[88px] rounded-xl" />)}</div>
-        <div className="space-y-3">{[0, 1, 2].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}</div>
+        <Skeleton className="h-10 w-64 rounded-xl" />
+        <div className="grid gap-5 lg:grid-cols-[260px_1fr]"><Skeleton className="h-64 rounded-xl" /><Skeleton className="h-80 rounded-2xl" /></div>
       </div>
     );
   }
@@ -214,7 +252,117 @@ export default function AreaImplantador() {
     );
   }
 
-  const tech = { ...agenda.technician, active: true };
+  const tech: Technician = { ...agenda.technician, active: true };
+  const brief = current ? briefs[current.id] : undefined;
+
+  /* ─── aba Projeto ─── */
+  const projectTab = projects.length === 0 ? (
+    <div className="rounded-xl border border-border/60 bg-card shadow-sm">
+      <EmptyBlock icon={CalendarCheck} title="Nenhuma visita agendada"
+        text="Quando o Aprovador alocar você numa visita, o projeto aparece aqui com todas as informações para o atendimento." />
+    </div>
+  ) : (
+    <div className="grid items-start gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+      <nav aria-label="Seus projetos" className="min-w-0 lg:sticky lg:top-4">
+        {/* celular: projetos lado a lado; computador: lista agrupada */}
+        <div className="-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 lg:hidden">
+          {projects.map(p => {
+            const on = p.id === current?.id;
+            return (
+              <button key={p.id} type="button" onClick={() => setPicked(p.id)} aria-current={on ? "true" : undefined}
+                className={`flex w-[230px] shrink-0 items-center gap-3 rounded-2xl border p-3 text-left transition-colors ${on ? "border-primary bg-primary/10 ring-1 ring-primary" : "border-border/60 bg-card"}`}>
+                <ProjectMark id={p.id} name={p.name} phase={p.phase} />
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold">{p.name}</span>
+                  <span className="block truncate text-[11px] text-muted-foreground">{PHASE[p.phase].title} · {p.when}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="hidden overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm lg:block">
+          <p className="border-b border-border/60 px-4 py-3 text-sm font-semibold">Seus projetos <span className="ml-1 font-normal text-muted-foreground">{projects.length}</span></p>
+          {(["agora", "proximo", "atendido"] as const).filter(ph => projects.some(p => p.phase === ph)).map(ph => (
+            <div key={ph} className="px-2 pb-2 pt-3">
+              <p className="flex items-center gap-1.5 px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <span className={`h-1.5 w-1.5 rounded-full ${PHASE[ph].dot}`} />{PHASE[ph].title}
+              </p>
+              <ul className="flex flex-col gap-1">
+                {projects.filter(p => p.phase === ph).map(p => {
+                  const on = p.id === current?.id;
+                  return (
+                    <li key={p.id}>
+                      <button type="button" onClick={() => setPicked(p.id)} aria-current={on ? "true" : undefined}
+                        className={`flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors ${on ? "bg-primary/10 ring-1 ring-primary/40" : "hover:bg-muted/60"}`}>
+                        <ProjectMark id={p.id} name={p.name} phase={p.phase} />
+                        <span className="min-w-0 flex-1">
+                          <span className={`block truncate text-sm ${on ? "font-semibold text-primary" : "font-medium"}`}>{p.name}</span>
+                          <span className="block truncate text-[11px] text-muted-foreground">{p.place} · {p.when}</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </nav>
+      {current && (
+        <ProjectBriefPanel key={current.id} visit={current.visit} tech={tech} brief={brief?.data ?? null}
+          loading={!brief || (!brief.data && !brief.error)} error={brief?.error ?? null} onRetry={() => loadBrief(current.id)}
+          onOpenVisit={() => setDetail(toRequest(current.visit, agenda.technician!))} now={now} custom={customHolidays} />
+      )}
+    </div>
+  );
+
+  /* ─── aba Agenda (mesma visualização da Agenda técnica) ─── */
+  let agendaBody;
+  if (view === "tecnico") {
+    const winFrom = +today > +rangeStart ? today : rangeStart;
+    const winTo = lastWorkdayUntil(rangeEnd, holidayMap);
+    const loadUntil = +winTo >= +winFrom ? winTo : null;
+    const loads = new Map([[tech.id, techLoad(tech, calendarList, winFrom, loadUntil ?? plusDays(winFrom, -1), holidayMap, today)]]);
+    const kinds = VISIT_KIND_ORDER.filter(k => calendarList.some(r => inRange(r) && visitKindOf(r.visit_purpose) === k));
+    agendaBody = (
+      <section aria-label={`Linha do tempo, ${spanLabel}`} className="min-w-0 overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+        <TechnicianTimeline start={rangeStart} weeks={weeks} techs={[tech]} approved={calendarList}
+          loads={loads} loadUntil={loadUntil} holidays={holidayMap} alertsByRequest={new Map()} highlightId={null} onOpen={setDetail} />
+        <AgendaLegend kinds={kinds} />
+      </section>
+    );
+  } else if (view === "mes") {
+    const selectedDay = pickedDay && pickedDay.getMonth() === anchor.getMonth() && pickedDay.getFullYear() === anchor.getFullYear()
+      ? pickedDay : today.getMonth() === anchor.getMonth() && today.getFullYear() === anchor.getFullYear() ? today : anchor;
+    const winTo = lastWorkdayUntil(rangeEnd, holidayMap);
+    const loads = new Map([[tech.id, techLoad(tech, calendarList, rangeStart, winTo, holidayMap, today)]]);
+    agendaBody = isMobile ? (
+      <div className="flex flex-col gap-4">
+        <MonthGrid month={anchor} list={calendarList} onOpen={setDetail} highlightId={null} selected={selectedDay}
+          holidays={holidayMap} custom={customHolidays} onSelect={setPickedDay} />
+        <DayVisits list={calendarList} selected={selectedDay} holidays={holidayMap} onOpen={setDetail} />
+      </div>
+    ) : (
+      <MonthGantt month={anchor} techs={[tech]} approved={calendarList} loads={loads} loadUntil={winTo}
+        holidays={holidayMap} alertsByRequest={new Map()} highlightId={null} onOpen={setDetail} />
+    );
+  } else {
+    agendaBody = <AgendaListView list={calendarList.filter(inRange)} onOpen={setDetail} highlightId={null} alertsByRequest={new Map()} />;
+  }
+
+  const upcoming = calendarList.filter(r => +visitDays(r).last >= +today).length;
+  const tabs = (
+    <div role="tablist" aria-label="Área do Implantador" className="flex h-12 w-full items-center gap-1 rounded-2xl bg-muted p-1 sm:w-fit">
+      {([["projeto", "Projetos", FolderKanban, projects.length], ["agenda", "Minha agenda", CalendarDays, upcoming]] as const).map(([k, l, Icon, n]) => (
+        <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+          className={`flex h-10 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3 text-sm transition-colors sm:flex-none sm:px-4 ${tab === k ? "bg-card font-semibold text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+          <Icon className={`h-4 w-4 ${tab === k ? "text-primary" : ""}`} />{l}
+          {n > 0 && <span className={`rounded-full px-1.5 text-[11px] font-semibold tabular-nums ${tab === k ? "bg-primary text-primary-foreground" : "bg-foreground/10"}`}>{n}</span>}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-5">
       {isMobile ? (
@@ -222,21 +370,21 @@ export default function AreaImplantador() {
           <MinhaAgendaHeader tech={tech} today={now} title={techId ? `Agenda de ${tech.full_name.split(" ")[0]}` : "Minha agenda"} />
           {canPickOther && (
             <div className="-mt-2 flex items-center gap-2">
-              <Select value={techId ?? "me"} onValueChange={v => setTechId(v === "me" ? null : v)}>
-                <SelectTrigger className="h-9 flex-1 text-xs" aria-label="Técnico"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="me">Minha agenda</SelectItem>
-                  {technicians.map(t => <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              {techPicker}
               <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => void load()} aria-label="Atualizar"><RefreshCw className="h-4 w-4" /></Button>
             </div>
           )}
         </>
       ) : header}
 
-      <MinhaAgenda visits={calendarList} today={now} holidays={todayHolidays} index={cityIndex} onOpen={setDetail}
-        compactList={isMobile} layout={isMobile ? "stack" : "row"} />
+      {tabs}
+
+      {tab === "projeto" ? projectTab : (
+        <div className="flex flex-col gap-4">
+          <AgendaToolbar view={view} onView={setView} weeks={weeks} onWeeks={setWeeks} spanLabel={spanLabel} onToday={goToday} onNav={nav} />
+          {agendaBody}
+        </div>
+      )}
 
       {isMobile && !isStandalone && (
         <div className="flex items-start gap-2.5 rounded-lg bg-sky-500/10 px-3.5 py-3 text-xs text-sky-800 dark:text-sky-200">
@@ -245,172 +393,7 @@ export default function AreaImplantador() {
           <InstallAppButton variant="inline" />
         </div>
       )}
-
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg border border-border/60 bg-card p-0.5 shadow-sm" role="group" aria-label="Visão">
-          {([["lista", "Lista", List], ["calendario", "Calendário", CalendarDays]] as const).map(([k, l, Icon]) => (
-            <button key={k} type="button" onClick={() => setView(k)} aria-pressed={view === k}
-              className={`flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors ${view === k ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-              <Icon className="h-3.5 w-3.5" />{l}
-            </button>
-          ))}
-        </div>
-        <div className="flex rounded-lg border border-border/60 bg-muted/50 p-0.5" role="group" aria-label="Período">
-          {PERIODS.map(([k, l]) => (
-            <button key={k} type="button" onClick={() => setPeriod(k)} aria-pressed={period === k}
-              className={`h-8 rounded-md px-3 text-xs font-medium transition-colors ${period === k ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-              {l}
-            </button>
-          ))}
-        </div>
-        {count.pendentes > 0 && (
-          <span className="text-[11px] text-amber-700 dark:text-amber-300">{count.pendentes} visita(s) aguardando o Aprovador registrar o atendimento</span>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi icon={CalendarClock} label="Próximas" value={upcoming.length} caption="agendadas e em andamento" tone="bg-primary/10 text-primary"
-          info="Visitas aprovadas que ainda não terminaram, independentemente do período escolhido." />
-        <Kpi icon={MapPin} label="Presencial" value={count.presencial} caption={`atendidas · ${periodLabel}`} tone="bg-emerald-500/15 text-emerald-600 dark:text-emerald-300"
-          info="Visitas do período que o Aprovador registrou como atendidas presencialmente." />
-        <Kpi icon={Monitor} label="Remota" value={count.remoto} caption={`atendidas · ${periodLabel}`} tone="bg-sky-500/15 text-sky-600 dark:text-sky-300"
-          info="Visitas do período que o Aprovador registrou como atendidas de forma remota." />
-        <Kpi icon={Ban} label="Canceladas" value={count.canceladas} caption={periodLabel} tone="bg-red-500/15 text-red-600 dark:text-red-300"
-          info="Visitas do período que já estavam aprovadas e foram canceladas, com motivo." />
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[1fr_360px] xl:items-start">
-        <div className="flex min-w-0 flex-col gap-5">
-          {view === "calendario" ? (
-            <>
-              <div className="flex items-center gap-1 self-start rounded-xl border border-border/60 bg-card p-1 shadow-sm">
-                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Mês anterior" onClick={() => setMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}><ChevronLeft className="h-4 w-4" /></Button>
-                <Button variant="ghost" size="sm" className="h-8" onClick={() => { const d = new Date(); setMonth(new Date(d.getFullYear(), d.getMonth(), 1)); setPickedDay(null); }}>Hoje</Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Próximo mês" onClick={() => setMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}><ChevronRight className="h-4 w-4" /></Button>
-                <span className="px-2 text-sm font-semibold">{MONTHS_FULL[month.getMonth()]} de {month.getFullYear()}</span>
-              </div>
-              <MonthGrid month={month} list={calendarList} onOpen={setDetail} highlightId={null}
-                selected={selectedDay} onSelect={setPickedDay} holidays={holidayMap} custom={customHolidays}
-                hint={isMobile ? "Toque num dia para ver a agenda dele" : "Clique numa visita para ver os detalhes · clique num dia para ver a agenda dele"} />
-              <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-                <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
-                  <CalendarDays className="h-4 w-4 text-primary" />
-                  <h2 className="text-sm font-semibold">{WD[selectedDay.getDay()].replace(/^./, c => c.toUpperCase())}, {selectedDay.getDate()} de {MONTHS_FULL[selectedDay.getMonth()]}</h2>
-                  <span className="ml-auto text-[11px] text-muted-foreground">{dayVisits.length ? `${dayVisits.length} visita${dayVisits.length > 1 ? "s" : ""}` : ""}</span>
-                </div>
-                {dayVisits.length === 0 ? (
-                  <p className="px-4 py-6 text-center text-sm text-muted-foreground">Nenhuma visita neste dia.</p>
-                ) : (
-                  <ul>{dayVisits.map(v => <VisitCard key={v.id} v={v} now={now} customHolidays={customHolidays} />)}</ul>
-                )}
-              </section>
-            </>
-          ) : (<>
-          {!isMobile && <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-            <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
-              <CalendarClock className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold">Próximas visitas</h2>
-              <span className="ml-auto text-[11px] text-muted-foreground">{upcoming.length}</span>
-            </div>
-            {upcoming.length === 0 ? (
-              <EmptyBlock icon={CalendarCheck} title="Nenhuma visita agendada" text="Quando o Aprovador alocar você numa visita, ela aparece aqui." />
-            ) : (
-              <ul>{upcoming.map(v => <VisitCard key={v.id} v={v} now={now} customHolidays={customHolidays} />)}</ul>
-            )}
-          </section>}
-
-          <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-            <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
-              <CalendarCheck className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold">Histórico · {periodLabel}</h2>
-              <span className="ml-auto text-[11px] text-muted-foreground">{history.length}</span>
-            </div>
-            {history.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-muted-foreground">Nenhuma visita realizada ou cancelada neste período.</p>
-            ) : (
-              <ul>{history.map(v => <VisitCard key={v.id} v={v} now={now} compact customHolidays={customHolidays} />)}</ul>
-            )}
-          </section>
-          </>)}
-        </div>
-
-        <aside className="flex min-w-0 flex-col gap-5">
-          <ProjectsCard title="Em atendimento" icon={FolderKanban} items={projects.active} empty="Nenhum projeto com visita agendada." />
-          <ProjectsCard title="Já atendidos" icon={CalendarCheck} items={projects.done} empty="Ainda não há projetos atendidos." />
-        </aside>
-      </div>
       <RequestDetailSheet request={detail} open={!!detail} onOpenChange={o => { if (!o) setDetail(null); }} mode="cal" />
     </div>
-  );
-}
-
-function VisitCard({ v, now, compact = false, customHolidays }: {
-  v: AgendaVisit; now: Date; compact?: boolean; customHolidays: Parameters<typeof HolidayWarning>[0]["custom"];
-}) {
-  const start = new Date(v.start), end = new Date(v.end);
-  const r = resultOf(v, now);
-  const today = start <= now && end >= now;
-  return (
-    <li className={`border-l-[3px] border-t border-border/60 px-4 py-3 first:border-t-0 ${r.border} ${today ? "bg-primary/[0.04]" : ""}`}>
-      <div className="flex gap-3">
-        <span className="w-11 shrink-0 text-center">
-          <span className="block text-[10px] uppercase text-muted-foreground">{WD[start.getDay()]}</span>
-          <span className="block text-xl font-bold leading-none">{start.getDate()}</span>
-          <span className="block text-[10px] uppercase text-muted-foreground">{MONTHS[start.getMonth()]}</span>
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="min-w-0 truncate text-sm font-semibold">{v.project.company_name}</p>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${r.cls}`}>{today && v.status === "aprovada" && !v.attendance ? "Hoje" : r.label}</span>
-          </div>
-          <p className="text-xs text-muted-foreground">{v.visit_purpose}</p>
-          <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1"><CalendarClock className="h-3 w-3" />{formatPeriod(start, end)}</span>
-            {compact && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{v.visit_format === "remoto" ? "Remoto" : cityOf(v)}</span>}
-            <span className="flex items-center gap-1"><UserRound className="h-3 w-3" />GP: <b className="font-medium text-foreground/80">{v.project.manager_name ?? "—"}</b></span>
-          </p>
-          {!compact && (
-            <>
-              <div className="mt-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2"><VisitDestination visit={v} action /></div>
-              {v.notes && <p className="mt-1.5 whitespace-pre-line text-[11px] text-muted-foreground">“{v.notes}”</p>}
-              {v.colleagues.length > 0 && (
-                <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground"><UsersRound className="h-3 w-3" />Com {v.colleagues.map(c => c.full_name).join(", ")}</p>
-              )}
-              <div className="mt-2"><HolidayWarning start={start} end={end} custom={customHolidays} place={presencialAddress(v) ? { city: v.address_city, state: v.address_state } : { city: v.project.city, state: v.project.state }} /></div>
-            </>
-          )}
-          {v.status === "cancelada" && v.cancel_reason && <p className="mt-1 text-[11px] text-muted-foreground"><b className="font-medium">Motivo:</b> {v.cancel_reason}</p>}
-          {v.attendance && v.attendance_note && <p className="mt-1 text-[11px] text-muted-foreground"><b className="font-medium">Obs.:</b> {v.attendance_note}</p>}
-        </div>
-      </div>
-    </li>
-  );
-}
-
-function ProjectsCard({ title, icon: Icon, items, empty }: {
-  title: string; icon: typeof HardHat; items: { p: AgendaVisit["project"]; visits: number }[]; empty: string;
-}) {
-  return (
-    <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-      <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
-        <Icon className="h-4 w-4 text-primary" />
-        <h2 className="text-sm font-semibold">{title}</h2>
-        <span className="ml-auto text-[11px] text-muted-foreground">{items.length}</span>
-      </div>
-      {items.length === 0 ? (
-        <p className="px-4 py-5 text-center text-xs text-muted-foreground">{empty}</p>
-      ) : (
-        <ul>
-          {items.map(({ p, visits }) => (
-            <li key={p.id} className="border-t border-border/60 px-4 py-2.5 first:border-t-0">
-              <p className="truncate text-xs font-semibold">{p.company_name}</p>
-              <p className="truncate text-[11px] text-muted-foreground">
-                {formatLocation(p.city, p.state, p.country_code)} · GP: {p.manager_name ?? "—"} · {visits} visita{visits !== 1 ? "s" : ""}
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
   );
 }
