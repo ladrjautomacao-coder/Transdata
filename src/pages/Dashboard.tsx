@@ -74,6 +74,7 @@ interface ProjectRow {
   d_zero_date: string | null;
   handover_date: string | null;
   status: ProjectStatus;
+  sub_phase: string | null;
   fleet_size: number | null;
   contractual_deadline_days: number | null;
   implementation_deadline_days: number | null;
@@ -99,6 +100,15 @@ const getProjectFleet = (p: ProjectRow): number => {
 // permanecem contados como "encerrado" mesmo se forem movidos para outras colunas.
 const effectiveStatus = (p: ProjectRow): ProjectStatus =>
   p.reached_implemented ? "encerrado" : p.status;
+
+// Outros › Cancelado e Outros › Piloto reprovado não entram em nenhum número do Dashboard
+// (cards filhos de Implantação pendente não são projetos e já ficam de fora).
+const isDiscarded = (p: ProjectRow) =>
+  p.status === "suspenso" && (p.sub_phase === "cancelado" || p.sub_phase === "piloto_reprovado");
+
+// Projetos por Gerente mede a carga atual do GP pela coluna do Kanban: Comercial, Planejamento,
+// Implantação e Outros › Suspenso (inclusive Outros sem subitem); Implementado não entra.
+const isInProgress = (p: ProjectRow) => p.status !== "encerrado";
 
 function AnimatedNumber({ value, duration = 1200 }: { value: number; duration?: number }) {
   const [display, setDisplay] = useState(0);
@@ -275,7 +285,7 @@ export default function Dashboard() {
         .from("projects")
         .select(`
           id, company_name, city, state, contract_date, d_zero_date, handover_date,
-          status, fleet_size, contractual_deadline_days, implementation_deadline_days, is_pilot, complementary_sale, complementary_fleet, implemented_fleet,
+          status, sub_phase, fleet_size, contractual_deadline_days, implementation_deadline_days, is_pilot, complementary_sale, complementary_fleet, implemented_fleet,
           reached_implemented, reached_implemented_at,
           executive:team_members!projects_executive_id_fkey(full_name),
           manager:team_members!projects_manager_id_fkey(full_name),
@@ -289,7 +299,7 @@ export default function Dashboard() {
       if (error) {
         setProjects([]);
       } else {
-        setProjects((data as unknown as ProjectRow[]) || []);
+        setProjects(((data as unknown as ProjectRow[]) || []).filter(p => !isDiscarded(p)));
       }
 
       setLoading(false);
@@ -442,14 +452,19 @@ export default function Dashboard() {
     return [...names].sort();
   }, [filteredProjects]);
 
+  const managerProjects = useMemo(() => filteredProjects.filter(isInProgress), [filteredProjects]);
+
   const managerData = useMemo(() => {
     const counts: Record<string, number> = {};
-    filteredProjects.forEach(p => {
+    managerProjects.forEach(p => {
       const name = p.manager?.full_name || "Sem gerente";
       counts[name] = (counts[name] || 0) + 1;
     });
-    return Object.entries(counts).map(([name, value]) => ({ name, value }));
-  }, [filteredProjects]);
+    // quem tem mais projetos primeiro, para dimensionar os novos
+    return Object.entries(counts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "pt-BR"));
+  }, [managerProjects]);
 
   const totalProjects = filteredProjects.length;
   const avgFleet = filteredProjects.filter(p => getProjectFleet(p) > 0).reduce((a, p) => a + getProjectFleet(p), 0) / (filteredProjects.filter(p => getProjectFleet(p) > 0).length || 1);
@@ -1232,12 +1247,18 @@ export default function Dashboard() {
             <div key={chartId} {...dragProps} className={`transition-all duration-200 h-[420px] ${dragStyle}`}>
               <GlowCard delay={0.4} className={`cursor-pointer transition-all h-full ${expandedSection === "gerente-chart" ? "ring-2 ring-primary/50" : ""}`}>
                 <div className="p-6 h-full flex flex-col">
-                  <div className="flex items-center gap-2 mb-5">
+                  <div className="flex items-center gap-2 mb-1">
                     {gripHandle}
                     <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
                     <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Projetos por Gerente</h3>
                     {selectedBarManager && <Badge variant="secondary" className="text-xs ml-2">{selectedBarManager}</Badge>}
                   </div>
+                  <p className="mb-4 text-xs text-muted-foreground">
+                    Em andamento: {statusLabels.comercial}, {statusLabels.planejamento}, {statusLabels.implantacao} e {statusLabels.suspenso} › Suspenso.
+                  </p>
+                  {managerData.length === 0 ? (
+                    <p className="flex flex-1 items-center justify-center text-center text-xs text-muted-foreground">Nenhum projeto em andamento com estes filtros.</p>
+                  ) : (
                   <ChartContainer config={genericConfig} className="flex-1 min-h-[280px] w-full min-w-0 !aspect-auto">
                     <BarChart data={managerData} barCategoryGap="30%" onClick={(data) => {
                       if (data?.activePayload?.[0]?.payload?.name) {
@@ -1273,6 +1294,7 @@ export default function Dashboard() {
                       </Bar>
                     </BarChart>
                   </ChartContainer>
+                  )}
                 </div>
               </GlowCard>
             </div>
@@ -1295,7 +1317,7 @@ export default function Dashboard() {
       <ExpandableProjectTable
         sectionKey="gerente-chart"
         title={selectedBarManager ? `Projetos de ${selectedBarManager}` : "Projetos por Gerente"}
-        projectList={selectedBarManager ? filteredProjects.filter(p => (p.manager?.full_name || "Sem gerente") === selectedBarManager) : filteredProjects}
+        projectList={selectedBarManager ? managerProjects.filter(p => (p.manager?.full_name || "Sem gerente") === selectedBarManager) : managerProjects}
       />
 
       {/* Detail card for single project */}
