@@ -23,6 +23,8 @@ interface NavGroupDef {
   label: string;
   icon: LucideIcon;
   items: NavItem[];
+  /** Título recolhível; os demais grupos ficam sempre abertos. */
+  collapsible?: boolean;
 }
 
 /** Badges are driven by state so they can be wired to live counters later. */
@@ -77,6 +79,7 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
     {
       label: "Administração",
       icon: Settings,
+      collapsible: true,
       items: [
         { title: "Equipe", url: "/admin/equipe", icon: Users, module: "admin_team" },
         { title: "Usuários", url: "/admin/usuarios", icon: ShieldCheck, module: "admin_users" },
@@ -170,13 +173,14 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
         </div>
       )}
 
-      <SidebarContent className="bg-white dark:bg-sidebar">
+      <SidebarContent className="gap-0 bg-white px-1 dark:bg-sidebar">
         {visibleGroups.map(g => (
           <SidebarNavGroup
             key={g.label}
             label={g.label}
             icon={g.icon}
             items={g.items}
+            collapsible={g.collapsible}
             forceExpanded={query.trim() !== ""}
           />
         ))}

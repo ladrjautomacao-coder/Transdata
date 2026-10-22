@@ -1,6 +1,7 @@
 import { NavLink } from "@/components/NavLink";
-import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { useId, useState } from "react";
+import { matchPath, useLocation } from "react-router-dom";
+import { ChevronRight } from "lucide-react";
 import {
   SidebarGroup as UISidebarGroup,
   SidebarGroupContent,
@@ -39,10 +40,10 @@ export function SidebarItem({ item }: { item: NavItem }) {
         <NavLink
           to={item.url}
           end={item.end}
-          className="group/nav flex items-center gap-2 rounded-md px-3 py-2 text-slate-700 border-l-[3px] border-transparent transition-colors duration-150 hover:bg-slate-100 hover:text-slate-950 dark:text-sidebar-foreground dark:hover:bg-sidebar-accent dark:hover:text-sidebar-foreground"
+          className="group/nav flex items-center gap-2 rounded-md px-3 py-1.5 text-slate-700 border-l-[3px] border-transparent transition-colors duration-150 hover:bg-slate-100 hover:text-slate-950 dark:text-sidebar-foreground dark:hover:bg-sidebar-accent dark:hover:text-sidebar-foreground"
           activeClassName="!bg-[#f1e8f6] !text-[#4b1768] font-semibold !border-[#4b1768] dark:!bg-primary/15 dark:!text-primary dark:!border-primary"
         >
-          <item.icon className="h-4 w-4 shrink-0 transition-colors group-hover/nav:text-[#4b1768] group-[.font-semibold]/nav:text-[#4b1768] dark:group-hover/nav:text-primary dark:group-[.font-semibold]/nav:text-primary" />
+          <item.icon aria-hidden="true" className="h-4 w-4 shrink-0 transition-colors group-hover/nav:text-[#4b1768] group-[.font-semibold]/nav:text-[#4b1768] dark:group-hover/nav:text-primary dark:group-[.font-semibold]/nav:text-primary" />
           <span className="truncate">{item.title}</span>
           {typeof item.badge === "number" && item.badge > 0 && (
             <span
@@ -67,17 +68,24 @@ export function SidebarNavGroup({
   label,
   icon: Icon,
   items,
+  collapsible = false,
   forceExpanded = false,
 }: {
   label: string;
   icon: LucideIcon;
   items: NavItem[];
+  /** Grupo pode ser recolhido pelo título (ex.: Administração). Os demais ficam sempre abertos. */
+  collapsible?: boolean;
   forceExpanded?: boolean;
 }) {
+  const { pathname } = useLocation();
+  // Grupo da tela atual: destaca o título e abre o grupo recolhível.
+  const hasActive = items.some((item) => matchPath({ path: item.url, end: item.end ?? false }, pathname) !== null);
   const [expanded, setExpanded] = useState(false);
   const { state, isMobile } = useSidebar();
+  const contentId = useId();
   if (items.length === 0) return null;
-  const isExpanded = expanded || forceExpanded;
+  const isOpen = !collapsible || expanded || hasActive || forceExpanded;
 
   // Barra recolhida: não cabe a lista dentro dela — os itens abrem num menu
   // flutuante ao lado do ícone do grupo.
@@ -90,9 +98,14 @@ export function SidebarNavGroup({
               type="button"
               aria-label={label}
               title={label}
-              className="flex h-10 w-full items-center justify-center rounded-md border border-slate-200 bg-[#f8f4fb] text-[#4b1768] shadow-sm transition-colors hover:bg-[#f1e8f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4b1768] data-[state=open]:bg-[#f1e8f6] dark:border-sidebar-border dark:bg-sidebar-accent dark:text-primary dark:hover:bg-primary/15 dark:focus-visible:ring-primary dark:data-[state=open]:bg-primary/15"
+              className={cn(
+                "flex h-10 w-full items-center justify-center rounded-md border shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4b1768] dark:focus-visible:ring-primary",
+                hasActive
+                  ? "border-[#4b1768] bg-[#4b1768] text-white hover:bg-[#5c1f7f] dark:border-primary dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+                  : "border-slate-200 bg-[#f8f4fb] text-[#4b1768] hover:bg-[#f1e8f6] data-[state=open]:bg-[#f1e8f6] dark:border-sidebar-border dark:bg-sidebar-accent dark:text-primary dark:hover:bg-primary/15 dark:data-[state=open]:bg-primary/15",
+              )}
             >
-              <Icon className="h-5 w-5 shrink-0" />
+              <Icon aria-hidden="true" className="h-5 w-5 shrink-0" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="start" sideOffset={8} className="w-56">
@@ -106,7 +119,7 @@ export function SidebarNavGroup({
                   className="flex items-center gap-2 text-slate-700 dark:text-foreground"
                   activeClassName="!bg-[#f1e8f6] !text-[#4b1768] font-semibold dark:!bg-primary/15 dark:!text-primary"
                 >
-                  <item.icon className="h-4 w-4 shrink-0" />
+                  <item.icon aria-hidden="true" className="h-4 w-4 shrink-0" />
                   <span className="truncate">{item.title}</span>
                   {typeof item.badge === "number" && item.badge > 0 && (
                     <span className="ml-auto min-w-[20px] rounded-full bg-slate-200 px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-slate-700 dark:bg-muted dark:text-foreground">
@@ -122,31 +135,62 @@ export function SidebarNavGroup({
     );
   }
 
+  // Título do grupo em destaque, como item de menu: ícone em quadrado + nome em negrito.
+  const title = (
+    <>
+      <span
+        className={cn(
+          "flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors",
+          hasActive
+            ? "bg-[#4b1768] text-white dark:bg-primary dark:text-primary-foreground"
+            : "bg-[#f1e8f6] text-[#4b1768] dark:bg-primary/15 dark:text-primary",
+        )}
+      >
+        <Icon aria-hidden="true" className="h-4 w-4" />
+      </span>
+      <span className="truncate text-[15px] font-bold leading-tight">{label}</span>
+    </>
+  );
+  const titleClassName =
+    "flex min-h-9 w-full items-center gap-2.5 rounded-md px-1.5 text-left text-[#4b1768] dark:text-primary";
+
   return (
-    <UISidebarGroup className="py-[3px]">
-      <div className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm dark:border-sidebar-border dark:bg-sidebar">
+    <UISidebarGroup className="border-t border-slate-200 py-2.5 first:border-t-0 dark:border-sidebar-border">
+      {collapsible ? (
         <button
           type="button"
-          aria-expanded={isExpanded}
+          aria-expanded={isOpen}
+          aria-controls={contentId}
           onClick={() => setExpanded((value) => !value)}
-          className={`group/folder flex min-h-11 w-full items-center px-3 text-left text-[#4b1768] ${isExpanded ? "border-b" : ""} border-[#4b1768]/15 bg-[#f8f4fb] transition-colors hover:bg-[#f1e8f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4b1768] dark:border-sidebar-border dark:bg-sidebar-accent dark:text-sidebar-accent-foreground dark:hover:bg-primary/15 dark:focus-visible:ring-primary group-data-[collapsible=icon]:min-h-10 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:border-b-0 group-data-[collapsible=icon]:px-0`}
+          className={cn(
+            titleClassName,
+            "transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4b1768] dark:hover:bg-sidebar-accent dark:focus-visible:ring-primary",
+          )}
         >
-          <span className="flex w-full items-center gap-2.5 group-data-[collapsible=icon]:justify-center">
-            <Icon className="h-5 w-5 shrink-0" />
-            <span className="text-[15px] font-semibold leading-tight group-data-[collapsible=icon]:hidden">{label}</span>
-            <ChevronDown className={`ml-auto h-3.5 w-3.5 shrink-0 transition-transform group-data-[collapsible=icon]:hidden ${isExpanded ? "rotate-180" : ""}`} />
-          </span>
+          {title}
+          <ChevronRight
+            aria-hidden="true"
+            className={cn("ml-auto h-4 w-4 shrink-0 transition-transform", isOpen && "rotate-90")}
+          />
         </button>
-        {isExpanded && (
-          <SidebarGroupContent className="p-2 group-data-[collapsible=icon]:p-1">
-            <SidebarMenu>
-              {items.map((item) => (
-                <SidebarItem key={item.url} item={item} />
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        )}
-      </div>
+      ) : (
+        <div className={titleClassName}>{title}</div>
+      )}
+      {isOpen && (
+        <SidebarGroupContent
+          id={contentId}
+          className={cn(
+            "ml-[19px] mt-1 border-l-2 pl-2",
+            hasActive ? "border-[#4b1768] dark:border-primary" : "border-slate-200 dark:border-sidebar-border",
+          )}
+        >
+          <SidebarMenu className="gap-0.5">
+            {items.map((item) => (
+              <SidebarItem key={item.url} item={item} />
+            ))}
+          </SidebarMenu>
+        </SidebarGroupContent>
+      )}
     </UISidebarGroup>
   );
 }
