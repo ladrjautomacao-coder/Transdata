@@ -97,6 +97,13 @@ export async function resolvePendency(id: string, note: string) {
   if (error) throw error;
 }
 
+/** Card filho aberto por engano: sai do quadro sem ficar no histórico (só enquanto está aberto). */
+export async function deletePendency(id: string) {
+  const { data, error } = await db.from("project_pendencies").delete().eq("id", id).select("id");
+  if (error) throw error;
+  if (!data?.length) throw new Error("Só é possível excluir card filho em aberto, no projeto em que você é o GP.");
+}
+
 /** Cliente desistiu da solução: a pendência é cancelada (com motivo) e fica no histórico. */
 export async function cancelPendency(id: string, reason: string) {
   const { error } = await db.from("project_pendencies").update({ status: "cancelada", resolution_note: reason.trim() }).eq("id", id);

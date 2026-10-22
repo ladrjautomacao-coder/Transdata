@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, CornerDownRight, Puzzle, RefreshCw, XCircle } from "lucide-react";
+import { CheckCircle2, CornerDownRight, Puzzle, RefreshCw, Trash2, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -121,6 +121,10 @@ export default function ProjectPendenciesSection({ project, onProjectChanged }: 
                           <Button size="sm" variant="outline" className="h-8 border-destructive/40 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
                             onClick={() => setDialog({ kind: "cancelar", pendency: x, projectName: project.company_name })}>
                             <XCircle className="mr-1.5 h-3.5 w-3.5" />Cliente desistiu
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground" title="Card filho aberto por engano"
+                            onClick={() => setDialog({ kind: "excluir", pendency: x, projectName: project.company_name })}>
+                            <Trash2 className="mr-1.5 h-3.5 w-3.5" />Excluir
                           </Button>
                         </div>
                       )}

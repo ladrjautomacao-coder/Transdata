@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowRight, Building2, CheckCircle2, CornerDownRight, History, Hourglass, Info, Loader2, MoreHorizontal, Puzzle, UserX, XCircle, type LucideIcon } from "lucide-react";
+import { AlertTriangle, ArrowRight, Building2, CalendarClock, CheckCircle2, CornerDownRight, History, Hourglass, Info, Loader2, MoreHorizontal, Puzzle, Trash2, UserX, XCircle, type LucideIcon } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ChoiceCard } from "@/components/agendamento/AgendaDialogs";
 import { errorMessage } from "@/lib/implantationScheduling";
 import {
-  PENDENCY_REASONS, cancelPendency, createPendency, resolvePendency,
+  PENDENCY_REASONS, PENDENCY_REASON_LABEL, cancelPendency, createPendency, deletePendency, resolvePendency,
   type PendencyReason, type ProjectPendency,
 } from "@/lib/projectPendencies";
 
@@ -27,7 +27,7 @@ type Draft = { choice: string; other: string; reasonKind: PendencyReason | ""; r
 
 export type PendencyDialogMode =
   | { kind: "criar"; project: { id: string; company_name: string; status: string; solutions: { id: string; name: string }[] }; openTitles: string[] }
-  | { kind: "implantada" | "cancelar"; pendency: ProjectPendency; projectName: string };
+  | { kind: "implantada" | "cancelar" | "excluir"; pendency: ProjectPendency; projectName: string };
 
 /**
  * Criar o card filho (solução pendente), marcar como implantada ou registrar a desistência
@@ -49,17 +49,19 @@ export default function PendencyDialog({ mode, onOpenChange, onDone, onMoveParen
   const [errors, setErrors] = useState<{ item?: string; reason?: string; note?: string }>({});
   const [saving, setSaving] = useState(false);
   const [restoredAt, setRestoredAt] = useState<Date | null>(null);
+  /** Revisão antes de gravar: o GP confere o card filho e confirma. */
+  const [reviewing, setReviewing] = useState(false);
   const { user } = useAuth();
 
   // Rascunho: o que o GP digitou volta se ele fechar a janela ou sair da tela para buscar uma informação.
-  const draftKey = !mode || !user?.id ? null
+  const draftKey = !mode || !user?.id || mode.kind === "excluir" ? null
     : mode.kind === "criar" ? `transdata:card-filho:${user.id}:${mode.project.id}`
       : `transdata:card-filho-nota:${user.id}:${mode.pendency.id}:${mode.kind}`;
   const dirty = !!(choice || other.trim() || reasonKind || reason.trim() || expected || note.trim());
 
   useEffect(() => {
     if (!mode) return;
-    setErrors({}); setCreated(null); setRestoredAt(null);
+    setErrors({}); setCreated(null); setRestoredAt(null); setReviewing(false);
     let d: Partial<Draft> = {};
     try {
       const raw = draftKey ? localStorage.getItem(draftKey) : null;
@@ -98,6 +100,40 @@ export default function PendencyDialog({ mode, onOpenChange, onDone, onMoveParen
       <button type="button" onClick={discard} className="font-semibold hover:underline">Descartar</button>
     </div>
   );
+
+  // card filho aberto por engano: confirma e exclui (não fica no histórico)
+  if (mode.kind === "excluir") {
+    const remove = async () => {
+      setSaving(true);
+      try {
+        await deletePendency(mode.pendency.id);
+        toast.success(`Card filho excluído: ${mode.pendency.title}.`);
+        done();
+      } catch (err) {
+        toast.error("Não foi possível excluir", { description: errorMessage(err) });
+      } finally { setSaving(false); }
+    };
+    return (
+      <Dialog open onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-destructive" />Excluir card filho?</DialogTitle>
+            <DialogDescription>{mode.projectName} · {mode.pendency.title}</DialogDescription>
+          </DialogHeader>
+          <div className="flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/5 px-3.5 py-3 text-sm">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+            <span>Use só quando o card filho foi <b>aberto por engano</b>. Ele sai do quadro e <b>não fica no histórico</b> do projeto. Se o cliente desistiu da solução, use <b>Cliente desistiu</b>: assim o registro fica guardado.</span>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={close}>Voltar</Button>
+            <Button variant="destructive" onClick={remove} disabled={saving}>
+              {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Trash2 className="mr-1.5 h-4 w-4" />}Excluir card filho
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   if (mode.kind !== "criar") {
     const resolve = mode.kind === "implantada";
@@ -183,15 +219,22 @@ export default function PendencyDialog({ mode, onOpenChange, onDone, onMoveParen
   }
 
   const pending = (name: string) => openTitles.some(t => norm(t) === norm(name));
-  const submit = async () => {
-    const sol = project.solutions.find(s => s.id === choice);
-    const title = choice === OTHER ? other.trim() : sol?.name ?? "";
+  const sol = project.solutions.find(s => s.id === choice);
+  const title = choice === OTHER ? other.trim() : sol?.name ?? "";
+
+  // 1º passo: valida e mostra a revisão (nada é gravado ainda)
+  const submit = () => {
     const next: typeof errors = {
       item: !choice ? "Escolha a solução que ficou pendente." : choice === OTHER && title.length < 2 ? "Descreva o item pendente." : pending(title) ? "Este item já tem um card filho em aberto." : undefined,
       reason: !reasonKind ? "Escolha o motivo." : reasonKind === "outro" && reason.trim().length < 5 ? "Descreva o motivo no detalhe." : undefined,
     };
     setErrors(next);
     if (next.item || next.reason) return;
+    setReviewing(true);
+  };
+
+  // 2º passo: o GP conferiu e confirmou
+  const confirm = async () => {
     setSaving(true);
     try {
       await createPendency({
@@ -200,12 +243,51 @@ export default function PendencyDialog({ mode, onOpenChange, onDone, onMoveParen
       });
       clearDraft();
       onDone();
+      setReviewing(false);
       if (project.status !== "encerrado" && onMoveParent) setCreated(title);
       else { toast.success(`Card filho criado: ${title}`, { description: "Ele fica na coluna Implantação pendente." }); close(); }
     } catch (err) {
       toast.error("Não foi possível criar o card filho", { description: errorMessage(err) });
     } finally { setSaving(false); }
   };
+
+  if (reviewing) {
+    const rows: [string, string][] = [
+      ["Projeto", project.company_name],
+      ["Item pendente", title],
+      ["Motivo", reasonKind ? PENDENCY_REASON_LABEL[reasonKind] : "—"],
+      ["Detalhe", reason.trim() || "—"],
+      ["Previsão de retomada", expected ? expected.split("-").reverse().join("/") : "Não informada"],
+    ];
+    return (
+      <Dialog open onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md" onInteractOutside={keepOpen}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-500" />Confira antes de criar</DialogTitle>
+            <DialogDescription>O card filho registra que o cliente deixou esta solução para depois.</DialogDescription>
+          </DialogHeader>
+          <dl className="divide-y divide-border/60 rounded-lg border border-border/60">
+            {rows.map(([k, v]) => (
+              <div key={k} className="grid grid-cols-[130px_minmax(0,1fr)] gap-3 px-3.5 py-2 text-sm">
+                <dt className="text-muted-foreground">{k}</dt>
+                <dd className={`min-w-0 break-words ${k === "Item pendente" ? "font-semibold" : ""}`}>{v}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3.5 py-3 text-xs text-amber-900 dark:text-amber-100">
+            <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>Depois de criado, o card filho aparece no Kanban para a equipe e entra nos lembretes até ser implantado. <b>Confira se é mesmo uma solução que ficou para depois.</b></span>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setReviewing(false)} disabled={saving}>Voltar e corrigir</Button>
+            <Button onClick={confirm} disabled={saving}>
+              {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-1.5 h-4 w-4" />}Confirmar e criar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
@@ -268,7 +350,7 @@ export default function PendencyDialog({ mode, onOpenChange, onDone, onMoveParen
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={close}>{dirty ? "Fechar e continuar depois" : "Cancelar"}</Button>
-          <Button onClick={submit} disabled={saving}>{saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <CornerDownRight className="mr-1.5 h-4 w-4" />}Criar card filho</Button>
+          <Button onClick={submit}><CornerDownRight className="mr-1.5 h-4 w-4" />Revisar e criar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

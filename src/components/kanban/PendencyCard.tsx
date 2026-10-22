@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { CalendarClock, CalendarPlus, CheckCircle2, Clock, CornerDownRight, ExternalLink, MapPin, MoreHorizontal, Puzzle, Users, XCircle } from "lucide-react";
+import { CalendarClock, CalendarPlus, CheckCircle2, Clock, CornerDownRight, ExternalLink, MapPin, MoreHorizontal, Puzzle, Trash2, Users, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { formatLocation } from "@/lib/location";
@@ -7,7 +7,7 @@ import { fmtDate } from "@/lib/deadlineAlerts";
 import { PENDENCY_AGE_STYLE, PENDENCY_REASON_LABEL, pendencyAge, type ProjectPendency } from "@/lib/projectPendencies";
 import type { ProjectRow } from "@/pages/ProjectManagement";
 
-export type PendencyAction = "agenda" | "implantada" | "cancelar";
+export type PendencyAction = "agenda" | "implantada" | "cancelar" | "excluir";
 
 /**
  * Card filho: a solução que ficou pendente, ligada ao projeto pai. Não é arrastável;
@@ -68,6 +68,10 @@ export default function PendencyCard({ pendency: x, project, canEdit, onAction }
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onAction("cancelar", x)} className="text-destructive focus:text-destructive">
                   <XCircle className="mr-2 h-4 w-4" />Cliente desistiu
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => onAction("excluir", x)} className="text-muted-foreground">
+                  <Trash2 className="mr-2 h-4 w-4" />Excluir (aberto por engano)
                 </DropdownMenuItem>
               </>
             )}
