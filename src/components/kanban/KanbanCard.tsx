@@ -8,7 +8,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Building2, MapPin, Calendar, Users, Pencil, Clock, Lock, CornerDownRight } from "lucide-react";
+import { Building2, MapPin, Calendar, Users, Pencil, Clock, Lock, CornerDownRight, Ticket } from "lucide-react";
+import { dsvCountLabel } from "@/lib/dsvCases";
 import { pendencyLabel } from "@/lib/projectPendencies";
 import { format } from "date-fns";
 import type { ProjectRow } from "@/pages/ProjectManagement";
@@ -36,9 +37,12 @@ interface Props {
   onCreateChild?: () => void;
   /** Em Implantação com card filho aberto: aviso para mover o projeto para Implementado. */
   onMoveToImplemented?: () => void;
+  /** Casos DSV do projeto (o botão só aparece quando há algum). */
+  dsv?: { open: number; total: number };
+  onViewDsv?: () => void;
 }
 
-export default function KanbanCard({ project: p, index, onUpdateObservations, canEdit = true, pendencies = 0, onCreateChild, onMoveToImplemented }: Props) {
+export default function KanbanCard({ project: p, index, onUpdateObservations, canEdit = true, pendencies = 0, onCreateChild, onMoveToImplemented, dsv, onViewDsv }: Props) {
   const navigate = useNavigate();
   const { settings } = useSettings();
   const [open, setOpen] = useState(false);
@@ -244,6 +248,14 @@ export default function KanbanCard({ project: p, index, onUpdateObservations, ca
                     <Badge key={i} variant="secondary" className="text-[10px] h-4 px-1.5">{ps.solution?.name}</Badge>
                   ))}
                 </div>
+              )}
+              {dsv && dsv.total > 0 && onViewDsv && (
+                // casos abertos no suporte/desenvolvimento (Azure DevOps): azul enquanto houver caso aberto
+                <button type="button" onClick={e => { e.stopPropagation(); onViewDsv(); }}
+                  className={`flex w-full items-center justify-center gap-1.5 rounded-md border py-1 text-[11px] font-semibold transition-colors ${dsv.open > 0 ? "border-sky-500/45 bg-sky-500/10 text-sky-800 hover:bg-sky-500/20 dark:text-sky-300" : "border-border text-muted-foreground hover:bg-muted"}`}>
+                  <Ticket className="h-3 w-3" />Visualizar Casos DSV
+                  <span className={`rounded-full px-1.5 tabular-nums ${dsv.open > 0 ? "bg-sky-600 text-white" : "bg-muted"}`}>{dsvCountLabel(dsv)}</span>
+                </button>
               )}
               {canEdit && onMoveToImplemented && pendencies > 0 && (
                 // o objetivo do card filho: liberar o projeto pai para Implementado

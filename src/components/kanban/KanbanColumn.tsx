@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { statusLabels, statusColors, statusDescriptions, type SubPhaseConfig, type ProjectRow } from "@/pages/ProjectManagement";
 import type { Database } from "@/integrations/supabase/types";
 import { childCardsLabel, type ProjectPendency } from "@/lib/projectPendencies";
+import type { DsvSummary } from "@/lib/dsvCases";
 import KanbanCard from "./KanbanCard";
 import PendencyCard from "./PendencyCard";
 
@@ -29,11 +30,14 @@ interface Props {
   childSubPhase?: string;
   /** Projetos pais dos cards filhos. */
   projectsById?: Map<string, ProjectRow>;
+  /** Casos DSV por projeto (botão "Visualizar Casos DSV"). */
+  dsvSummary?: DsvSummary;
+  onViewDsv?: (p: ProjectRow) => void;
 }
 
 export default function KanbanColumn({
   status, items, subPhases, onUpdateObservations, canEditProject, pendencyCount, onCreateChild, onMoveToImplemented,
-  childCards = [], childSubPhase, projectsById,
+  childCards = [], childSubPhase, projectsById, dsvSummary, onViewDsv,
 }: Props) {
   // cards filhos ficam fora do arrastar e soltar, depois dos projetos
   const children = childCards.length > 0 && (
@@ -46,7 +50,8 @@ export default function KanbanColumn({
   const card = (p: ProjectRow, index: number) => (
     <KanbanCard key={p.id} project={p} index={index} onUpdateObservations={onUpdateObservations} canEdit={canEditProject(p)}
       pendencies={pendencyCount?.get(p.id) ?? 0} onCreateChild={allowChild && onCreateChild ? () => onCreateChild(p) : undefined}
-      onMoveToImplemented={status === "implantacao" && onMoveToImplemented ? () => onMoveToImplemented(p) : undefined} />
+      onMoveToImplemented={status === "implantacao" && onMoveToImplemented ? () => onMoveToImplemented(p) : undefined}
+      dsv={dsvSummary?.get(p.id)} onViewDsv={onViewDsv ? () => onViewDsv(p) : undefined} />
   );
 
   const groupedBySubPhase = useMemo(() => {

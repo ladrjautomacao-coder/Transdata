@@ -27,6 +27,8 @@ import type { PendencyAction } from "@/components/kanban/PendencyCard";
 import { RequestDialog } from "@/components/agendamento/AgendaDialogs";
 import { countByProject, fetchBoardPendencies, pendenciesOfProjects, splitByStatus, type ProjectPendency } from "@/lib/projectPendencies";
 import { fetchProjectRequests, type EligibleProject, type ImplantationRequest } from "@/lib/implantationScheduling";
+import { fetchDsvSummary, type DsvSummary } from "@/lib/dsvCases";
+import DsvCasesDialog from "@/components/dsv/DsvCasesDialog";
 
 export { statusLabels };
 
@@ -127,10 +129,15 @@ export default function ProjectManagement() {
   const loadPendencies = useCallback(() => fetchBoardPendencies().then(setPendencies).catch(() => setPendencies([])), []);
   const [pendDialog, setPendDialog] = useState<PendencyDialogMode | null>(null);
   const [agendaFor, setAgendaFor] = useState<{ project: EligibleProject; existing: ImplantationRequest[] } | null>(null);
+  // casos DSV (Azure DevOps) por projeto: botão "Visualizar Casos DSV" no card; falha na leitura não derruba o quadro
+  const [dsvSummary, setDsvSummary] = useState<DsvSummary>(new Map());
+  const loadDsv = useCallback(() => fetchDsvSummary().then(setDsvSummary).catch(() => setDsvSummary(new Map())), []);
+  const [dsvFor, setDsvFor] = useState<ProjectRow | null>(null);
 
   const loadProjects = useCallback(async () => {
     setLoading(true);
     void loadPendencies();
+    void loadDsv();
     const { data } = await supabase
       .from("projects")
       .select("id, company_name, project_code, city, state, country_code, contract_date, d_zero_date, handover_date, status, sub_phase, is_pilot, complementary_sale, complementary_fleet, implemented_fleet, observations, reached_implemented, reached_implemented_at, updated_at, manager_id, executive:team_members!projects_executive_id_fkey(full_name), manager:team_members!projects_manager_id_fkey(full_name), project_solutions(solution:solutions(id, name)), project_integrations(integration:integrations(name))")
@@ -152,7 +159,7 @@ export default function ProjectManagement() {
     }));
     setProjects(rows);
     setLoading(false);
-  }, [loadPendencies]);
+  }, [loadPendencies, loadDsv]);
 
   useEffect(() => { loadProjects(); }, [loadProjects]);
 
@@ -412,6 +419,8 @@ export default function ProjectManagement() {
                     onCreateChild={openCreateChild}
                     onMoveToImplemented={p => void moveProject(p.id, "encerrado", null)}
                     childCards={status === "encerrado" ? childCards.done : status === "suspenso" ? childCards.cancelled : undefined}
+                    dsvSummary={dsvSummary}
+                    onViewDsv={setDsvFor}
                     childSubPhase="cancelado"
                     projectsById={projectById}
                   />
@@ -426,6 +435,7 @@ export default function ProjectManagement() {
         </div>
         <PendencyDialog mode={pendDialog} onOpenChange={o => { if (!o) setPendDialog(null); }} onDone={() => void loadPendencies()}
           onMoveParent={id => moveProject(id, "encerrado", null)} />
+        <DsvCasesDialog project={dsvFor} onOpenChange={o => { if (!o) setDsvFor(null); }} onChanged={() => void loadDsv()} />
         <RequestDialog project={agendaFor?.project ?? null} open={!!agendaFor} existing={agendaFor?.existing ?? []}
           onOpenChange={o => { if (!o) setAgendaFor(null); }} onCreated={() => toast.info("A solicitação está na Aprovação de agenda.")} />
       </div>

@@ -42,6 +42,9 @@ import { subPhasesByStatus } from "@/pages/ProjectManagement";
 import { teamRoleLabels } from "@/lib/teamRoleLabels";
 import { useNoteDraft } from "@/hooks/useNoteDraft";
 import ProjectPendenciesSection from "@/components/kanban/ProjectPendenciesSection";
+import ProjectDsvPanel from "@/components/dsv/ProjectDsvPanel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useCanEditProject, useProjectDsvCases } from "@/hooks/useProjectDsvCases";
 
 type ProjectStatus = Database["public"]["Enums"]["project_status"];
 type BrazilianState = Database["public"]["Enums"]["brazilian_state"];
@@ -64,6 +67,11 @@ export default function ProjectDetail() {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Card de acompanhamento: aba das anotações ou dos casos DSV (?aba=dsv abre direto nos casos)
+  const [followTab, setFollowTab] = useState(() => (new URLSearchParams(location.search).get("aba") === "dsv" ? "dsv" : "acompanhamento"));
+  const dsv = useProjectDsvCases(id);
+  const canEditDsv = useCanEditProject(project?.manager?.id ?? project?.manager_id ?? null);
+  const dsvOpen = (dsv.cases ?? []).filter(c => c.status === "aberto").length;
 
   // Edit state - existing
   const [companyName, setCompanyName] = useState("");
@@ -765,13 +773,28 @@ export default function ProjectDetail() {
         onProjectChanged={loadProject}
       />
 
-      {/* Acompanhamento do Projeto */}
+      {/* Acompanhamento do Projeto e Casos DSV (duas abas no mesmo card) */}
       <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-lg">Acompanhamento do Projeto</CardTitle>
-          <CardDescription>Cada registro guarda automaticamente o autor, a data e a hora. Sem limite de caracteres.</CardDescription>
+        <Tabs value={followTab} onValueChange={setFollowTab}>
+        <CardHeader className="space-y-2.5">
+          <TabsList className="h-auto w-full flex-wrap justify-start gap-1 bg-muted p-1 sm:w-fit">
+            <TabsTrigger value="acompanhamento" className="px-3 py-1.5 text-sm font-semibold sm:text-base">Acompanhamento do Projeto</TabsTrigger>
+            <TabsTrigger value="dsv" className="gap-1.5 px-3 py-1.5 text-sm font-semibold sm:text-base">
+              <PlusCircle className="h-4 w-4 text-sky-600 dark:text-sky-400" />Inserir caso DSV
+              {dsvOpen > 0 && <span className="rounded-full bg-sky-600 px-1.5 text-[11px] font-semibold tabular-nums text-white" title={`${dsvOpen} caso(s) aberto(s)`}>{dsvOpen}</span>}
+            </TabsTrigger>
+          </TabsList>
+          <CardDescription>
+            {followTab === "dsv"
+              ? "Tickets abertos no suporte técnico e no desenvolvimento (Azure DevOps) para este projeto."
+              : "Cada registro guarda automaticamente o autor, a data e a hora. Sem limite de caracteres."}
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
+          <TabsContent value="dsv" className="mt-0">
+            <ProjectDsvPanel projectId={project.id} cases={dsv.cases} error={dsv.error} canEdit={canEditDsv} onChanged={dsv.reload} />
+          </TabsContent>
+          <TabsContent value="acompanhamento" className="mt-0 space-y-4">
           <div className="space-y-2">
             {noteDraftSavedAt && (
               <div className="flex items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5">
@@ -858,7 +881,9 @@ export default function ProjectDetail() {
               })}
             </div>
           )}
+          </TabsContent>
         </CardContent>
+        </Tabs>
       </Card>
 
       <AlertDialog open={!!noteToDelete} onOpenChange={open => { if (!open && !deletingNote) setNoteToDelete(null); }}>
