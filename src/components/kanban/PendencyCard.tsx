@@ -31,9 +31,18 @@ export default function PendencyCard({ pendency: x, project, canEdit, onAction }
       ? { border: "border-muted-foreground/30", icon: "bg-muted text-muted-foreground", link: "text-muted-foreground" }
       : { border: "border-orange-500/45", icon: "bg-orange-500/15 text-orange-600 dark:text-orange-300", link: "text-orange-500" };
 
+  const pending = !done && !cancelled;
   return (
     <div role="button" tabIndex={0} onClick={open} onKeyDown={e => { if (e.key === "Enter") open(); }}
-      className={`group relative cursor-pointer rounded-lg border-2 border-dashed bg-card p-3 text-left shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${tone.border} ${cancelled ? "opacity-85" : ""}`}>
+      className={`group relative cursor-pointer rounded-lg border-2 bg-card p-3 text-left shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pending ? "border-transparent" : `border-dashed ${tone.border}`} ${cancelled ? "opacity-85" : ""}`}>
+      {pending && (
+        // aberto: a borda tracejada "anda" para lembrar o GP de implantar (mais rápida e vermelha após 60 dias)
+        // o traço fica no meio da borda de 2px: svg 1px para fora da área interna, em cada lado
+        <svg aria-hidden className="pointer-events-none absolute -left-px -top-px h-[calc(100%+2px)] w-[calc(100%+2px)] overflow-visible">
+          <rect width="100%" height="100%" rx="7" ry="7" fill="none" strokeWidth="2" strokeDasharray="8 4"
+            className={`card-filho-ants ${age.level === "late" ? "card-filho-ants-fast stroke-red-500" : "stroke-orange-500"}`} />
+        </svg>
+      )}
       <div className="flex items-start gap-2">
         {done ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300" title={`Implantada em ${closedOn}`}>
