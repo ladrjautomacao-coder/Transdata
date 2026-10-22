@@ -1,5 +1,5 @@
 import { PROJECT_SEGMENTS, projectSegmentLabel } from "@/lib/projectSegments";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,6 +52,19 @@ type BrazilianState = Database["public"]["Enums"]["brazilian_state"];
 const statusLabels: Record<ProjectStatus, string> = {
   comercial: "Comercial", planejamento: "Planejamento", implantacao: "Implantação", encerrado: "Implementado", suspenso: "Outros",
 };
+
+/** Faixa da linha do tempo com rolagem lateral; abre já mostrando a etapa atual no centro. */
+function TimelineScroller({ currentIndex, children }: { currentIndex: number; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const box = ref.current;
+    const step = box?.querySelector<HTMLElement>(`[data-step="${currentIndex}"]`);
+    if (!box || !step || box.scrollWidth <= box.clientWidth) return;
+    box.scrollLeft = step.offsetLeft - (box.clientWidth - step.offsetWidth) / 2;
+  }, [currentIndex]);
+  // pt/pb: espaço para o anel pulsante da etapa atual e para a barra de rolagem
+  return <div ref={ref} className="-mx-2 overflow-x-auto px-2 pb-2 pt-3">{children}</div>;
+}
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -698,12 +711,14 @@ export default function ProjectDetail() {
               </span>
             </div>
           )}
-          <div className="flex items-center justify-between relative">
+          {/* Muitas idas e voltas no Kanban: as etapas rolam para o lado dentro do card, sem encavalar os nomes */}
+          <TimelineScroller currentIndex={currentMilestoneIndex}>
+          <div className="relative flex w-max min-w-full items-start justify-between">
             <div className="absolute top-4 left-0 right-0 h-0.5 bg-border" />
             {timeline.map((t, i) => {
               const isCurrentStep = i === currentMilestoneIndex;
               return (
-                <div key={i} className="relative flex flex-col items-center z-10">
+                <div key={i} data-step={i} className="relative z-10 flex w-[88px] shrink-0 flex-col items-center text-center sm:w-24">
                   <div className="relative">
                     {isCurrentStep && (
                       <>
@@ -737,9 +752,9 @@ export default function ProjectDetail() {
                       {i + 1}
                     </motion.div>
                   </div>
-                  <span className={cn("text-xs font-medium mt-2", isCurrentStep && "text-primary font-bold")}>{t.label}</span>
+                  <span className={cn("mt-2 whitespace-nowrap text-[11px] font-medium sm:text-xs", isCurrentStep && "text-primary font-bold")}>{t.label}</span>
                   {t.date ? (
-                    <span className="text-xs text-muted-foreground">{fmtDate(t.date)}</span>
+                    <span className="text-[11px] tabular-nums text-muted-foreground sm:text-xs">{fmtDate(t.date)}</span>
                   ) : t.done ? (
                     <span className="text-xs text-primary font-semibold">✓</span>
                   ) : (
@@ -760,6 +775,7 @@ export default function ProjectDetail() {
               );
             })}
           </div>
+          </TimelineScroller>
         </CardContent>
       </Card>
 
