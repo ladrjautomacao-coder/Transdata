@@ -50,6 +50,29 @@ export async function fetchOpenPendencies(): Promise<ProjectPendency[]> {
   return (data ?? []) as ProjectPendency[];
 }
 
+/** Todos os cards filhos do quadro: abertos, implantados e cancelados. */
+export async function fetchBoardPendencies(): Promise<ProjectPendency[]> {
+  const { data, error } = await db.from("project_pendencies").select(COLS).order("created_at");
+  if (error) throw error;
+  return (data ?? []) as ProjectPendency[];
+}
+
+/**
+ * Onde cada card filho aparece no Kanban: aberto em "Implantação pendente", implantado em
+ * "Implementado" e cancelado (cliente desistiu) em "Outros › Cancelado". Os concluídos vêm
+ * do mais recente para o mais antigo. Nenhum deles conta como projeto.
+ */
+export function splitByStatus(list: ProjectPendency[]) {
+  const recent = (a: ProjectPendency, b: ProjectPendency) => (b.resolved_at ?? "").localeCompare(a.resolved_at ?? "");
+  return {
+    open: list.filter(p => p.status === "aberta"),
+    done: list.filter(p => p.status === "implantada").sort(recent),
+    cancelled: list.filter(p => p.status === "cancelada").sort(recent),
+  };
+}
+
+export const childCardsLabel = (n: number) => `+${n} ${n === 1 ? "card filho" : "cards filhos"}`;
+
 /** Todas as pendências de um projeto (abertas primeiro, depois o histórico). */
 export async function fetchProjectPendencies(projectId: string): Promise<ProjectPendency[]> {
   const { data, error } = await db.from("project_pendencies").select(COLS).eq("project_id", projectId).order("created_at", { ascending: false });

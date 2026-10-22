@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countByProject, pendenciesOfProjects, pendencyAge, pendencyLabel, type ProjectPendency } from "@/lib/projectPendencies";
+import { childCardsLabel, countByProject, pendenciesOfProjects, pendencyAge, pendencyLabel, splitByStatus, type ProjectPendency } from "@/lib/projectPendencies";
 
 const p = (id: string, project_id: string, status: ProjectPendency["status"] = "aberta"): ProjectPendency => ({
   id, project_id, solution_id: null, title: id, reason_kind: "decisao_cliente", reason: null, expected_date: null, status,
@@ -22,5 +22,15 @@ describe("cards filhos", () => {
   });
   it("segue os filtros do quadro pelo projeto pai", () => {
     expect(pendenciesOfProjects([p("a", "x"), p("b", "y")], new Set(["y"])).map(x => x.id)).toEqual(["b"]);
+  });
+  it("concluídos vão para Implementado ou Cancelado, do mais recente para o mais antigo", () => {
+    const done1 = { ...p("d1", "x", "implantada"), resolved_at: "2026-10-01T10:00:00Z" };
+    const done2 = { ...p("d2", "y", "implantada"), resolved_at: "2026-10-20T10:00:00Z" };
+    const s = splitByStatus([p("a", "x"), done1, p("c", "z", "cancelada"), done2]);
+    expect(s.open.map(x => x.id)).toEqual(["a"]);
+    expect(s.done.map(x => x.id)).toEqual(["d2", "d1"]);
+    expect(s.cancelled.map(x => x.id)).toEqual(["c"]);
+    expect(childCardsLabel(1)).toBe("+1 card filho");
+    expect(childCardsLabel(3)).toBe("+3 cards filhos");
   });
 });

@@ -25,7 +25,7 @@ import PendencyColumn from "@/components/kanban/PendencyColumn";
 import PendencyDialog, { type PendencyDialogMode } from "@/components/kanban/PendencyDialog";
 import type { PendencyAction } from "@/components/kanban/PendencyCard";
 import { RequestDialog } from "@/components/agendamento/AgendaDialogs";
-import { countByProject, fetchOpenPendencies, pendenciesOfProjects, type ProjectPendency } from "@/lib/projectPendencies";
+import { countByProject, fetchBoardPendencies, pendenciesOfProjects, splitByStatus, type ProjectPendency } from "@/lib/projectPendencies";
 import { fetchProjectRequests, type EligibleProject, type ImplantationRequest } from "@/lib/implantationScheduling";
 
 export { statusLabels };
@@ -124,7 +124,7 @@ export default function ProjectManagement() {
 
   // cards filhos (Implantação pendente); falha na leitura não derruba o quadro
   const [pendencies, setPendencies] = useState<ProjectPendency[]>([]);
-  const loadPendencies = useCallback(() => fetchOpenPendencies().then(setPendencies).catch(() => setPendencies([])), []);
+  const loadPendencies = useCallback(() => fetchBoardPendencies().then(setPendencies).catch(() => setPendencies([])), []);
   const [pendDialog, setPendDialog] = useState<PendencyDialogMode | null>(null);
   const [agendaFor, setAgendaFor] = useState<{ project: EligibleProject; existing: ImplantationRequest[] } | null>(null);
 
@@ -193,8 +193,9 @@ export default function ProjectManagement() {
     [filteredAnyStatus, filters.status],
   );
   const projectById = useMemo(() => new Map(projects.map(p => [p.id, p])), [projects]);
-  const visiblePendencies = useMemo(
-    () => pendenciesOfProjects(pendencies, new Set(filteredAnyStatus.map(p => p.id))),
+  // cards filhos por coluna: abertos em Implantação pendente, implantados em Implementado, cancelados em Outros › Cancelado
+  const childCards = useMemo(
+    () => splitByStatus(pendenciesOfProjects(pendencies, new Set(filteredAnyStatus.map(p => p.id)))),
     [pendencies, filteredAnyStatus],
   );
   const pendencyCount = useMemo(() => countByProject(pendencies), [pendencies]);
@@ -205,7 +206,7 @@ export default function ProjectManagement() {
       id: p.id, company_name: p.company_name, status: p.status,
       solutions: p.project_solutions.flatMap(ps => (ps.solution ? [ps.solution] : [])),
     },
-    openTitles: pendencies.filter(x => x.project_id === p.id).map(x => x.title),
+    openTitles: pendencies.filter(x => x.project_id === p.id && x.status === "aberta").map(x => x.title),
   }), [pendencies]);
 
   const onPendencyAction = useCallback(async (kind: PendencyAction, x: ProjectPendency) => {
@@ -410,10 +411,13 @@ export default function ProjectManagement() {
                     pendencyCount={pendencyCount}
                     onCreateChild={openCreateChild}
                     onMoveToImplemented={p => void moveProject(p.id, "encerrado", null)}
+                    childCards={status === "encerrado" ? childCards.done : status === "suspenso" ? childCards.cancelled : undefined}
+                    childSubPhase="cancelado"
+                    projectsById={projectById}
                   />
                   {/* cards filhos logo depois de Implementado */}
                   {status === "encerrado" && (
-                    <PendencyColumn items={visiblePendencies} projects={projectById} canEditProject={canEditProject} onAction={onPendencyAction} />
+                    <PendencyColumn items={childCards.open} projects={projectById} canEditProject={canEditProject} onAction={onPendencyAction} />
                   )}
                 </Fragment>
               ))

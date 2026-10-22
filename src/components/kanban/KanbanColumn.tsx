@@ -5,7 +5,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { statusLabels, statusColors, statusDescriptions, type SubPhaseConfig, type ProjectRow } from "@/pages/ProjectManagement";
 import type { Database } from "@/integrations/supabase/types";
+import { childCardsLabel, type ProjectPendency } from "@/lib/projectPendencies";
 import KanbanCard from "./KanbanCard";
+import PendencyCard from "./PendencyCard";
 
 type ProjectStatus = Database["public"]["Enums"]["project_status"];
 
@@ -21,9 +23,24 @@ interface Props {
   onCreateChild?: (p: ProjectRow) => void;
   /** Projeto em Implantação com card filho aberto: atalho para finalizar. */
   onMoveToImplemented?: (p: ProjectRow) => void;
+  /** Cards filhos concluídos que moram nesta coluna (não contam como projetos). */
+  childCards?: ProjectPendency[];
+  /** Etapa da coluna onde os cards filhos aparecem (ex.: "cancelado" em Outros). */
+  childSubPhase?: string;
+  /** Projetos pais dos cards filhos. */
+  projectsById?: Map<string, ProjectRow>;
 }
 
-export default function KanbanColumn({ status, items, subPhases, onUpdateObservations, canEditProject, pendencyCount, onCreateChild, onMoveToImplemented }: Props) {
+export default function KanbanColumn({
+  status, items, subPhases, onUpdateObservations, canEditProject, pendencyCount, onCreateChild, onMoveToImplemented,
+  childCards = [], childSubPhase, projectsById,
+}: Props) {
+  // cards filhos ficam fora do arrastar e soltar, depois dos projetos
+  const children = childCards.length > 0 && (
+    <div className="space-y-2 px-2 pb-2">
+      {childCards.map(x => <PendencyCard key={x.id} pendency={x} project={projectsById?.get(x.project_id)} canEdit={false} onAction={() => {}} />)}
+    </div>
+  );
   const colors = statusColors[status];
   const allowChild = status === "implantacao" || status === "encerrado";
   const card = (p: ProjectRow, index: number) => (
@@ -60,10 +77,18 @@ export default function KanbanColumn({ status, items, subPhases, onUpdateObserva
             )}
           </Tooltip>
         </TooltipProvider>
-        <Badge variant="secondary" className="ml-auto text-xs h-5 px-1.5">{items.length}</Badge>
+        <div className="ml-auto flex items-center gap-1.5">
+          {childCards.length > 0 && (
+            <span className="whitespace-nowrap text-[11px] text-muted-foreground" title="Cards filhos são só para acompanhamento e não contam como projetos">
+              {childCardsLabel(childCards.length)}
+            </span>
+          )}
+          <Badge variant="secondary" className="text-xs h-5 px-1.5" title={`${items.length} projeto${items.length === 1 ? "" : "s"}`}>{items.length}</Badge>
+        </div>
       </div>
 
-      <ScrollArea className="flex-1">
+      {/* conteúdo em bloco (não "table"): texto longo dos cards filhos trunca em vez de alargar a coluna */}
+      <ScrollArea className="flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
         {subPhases && groupedBySubPhase ? (
           <div className="flex flex-col">
             {subPhases.map((sp) => {
@@ -107,6 +132,7 @@ export default function KanbanColumn({ status, items, subPhases, onUpdateObserva
                       </div>
                     )}
                   </Droppable>
+                  {sp.id === childSubPhase && children}
                   <div className="mx-3 border-b border-border/20 last:border-0" />
                 </div>
               );
@@ -134,6 +160,7 @@ export default function KanbanColumn({ status, items, subPhases, onUpdateObserva
             )}
           </Droppable>
         )}
+        {!subPhases && children}
       </ScrollArea>
     </div>
   );
