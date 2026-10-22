@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowRight, Building2, CheckCircle2, CornerDownRight, Hourglass, Info, Loader2, MoreHorizontal, Puzzle, UserX, XCircle, type LucideIcon } from "lucide-react";
+import { ArrowRight, Building2, CheckCircle2, CornerDownRight, History, Hourglass, Info, Loader2, MoreHorizontal, Puzzle, UserX, XCircle, type LucideIcon } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +20,10 @@ const REASON_ICON: Record<PendencyReason, LucideIcon> = {
 };
 const FieldError = ({ msg }: { msg?: string }) => msg ? <p className="mt-1 text-[11px] font-medium text-destructive">{msg}</p> : null;
 const norm = (s: string) => s.trim().toLowerCase();
+const p2 = (n: number) => String(n).padStart(2, "0");
+
+/** Rascunho do formulário (localStorage, por usuário e por projeto ou card filho). */
+type Draft = { choice: string; other: string; reasonKind: PendencyReason | ""; reason: string; expected: string; note: string; savedAt: string };
 
 export type PendencyDialogMode =
   | { kind: "criar"; project: { id: string; company_name: string; status: string; solutions: { id: string; name: string }[] }; openTitles: string[] }
@@ -43,15 +48,56 @@ export default function PendencyDialog({ mode, onOpenChange, onDone, onMoveParen
   const [note, setNote] = useState("");
   const [errors, setErrors] = useState<{ item?: string; reason?: string; note?: string }>({});
   const [saving, setSaving] = useState(false);
+  const [restoredAt, setRestoredAt] = useState<Date | null>(null);
+  const { user } = useAuth();
+
+  // Rascunho: o que o GP digitou volta se ele fechar a janela ou sair da tela para buscar uma informação.
+  const draftKey = !mode || !user?.id ? null
+    : mode.kind === "criar" ? `transdata:card-filho:${user.id}:${mode.project.id}`
+      : `transdata:card-filho-nota:${user.id}:${mode.pendency.id}:${mode.kind}`;
+  const dirty = !!(choice || other.trim() || reasonKind || reason.trim() || expected || note.trim());
 
   useEffect(() => {
     if (!mode) return;
-    setChoice(""); setOther(""); setReasonKind(""); setReason(""); setExpected(""); setNote(""); setErrors({}); setCreated(null);
-  }, [mode]);
+    setErrors({}); setCreated(null); setRestoredAt(null);
+    let d: Partial<Draft> = {};
+    try {
+      const raw = draftKey ? localStorage.getItem(draftKey) : null;
+      if (raw) d = JSON.parse(raw) as Partial<Draft>;
+    } catch { d = {}; }
+    setChoice(d.choice ?? ""); setOther(d.other ?? ""); setReasonKind(d.reasonKind ?? ""); setReason(d.reason ?? "");
+    setExpected(d.expected ?? ""); setNote(d.note ?? "");
+    if (d.savedAt) setRestoredAt(new Date(d.savedAt));
+  }, [mode, draftKey]);
+
+  useEffect(() => {
+    if (!draftKey || created) return;
+    const t = setTimeout(() => {
+      try {
+        if (!dirty) localStorage.removeItem(draftKey);
+        else localStorage.setItem(draftKey, JSON.stringify({ choice, other, reasonKind, reason, expected, note, savedAt: new Date().toISOString() } satisfies Draft));
+      } catch { /* sem armazenamento no navegador: segue sem rascunho */ }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [draftKey, created, dirty, choice, other, reasonKind, reason, expected, note]);
 
   if (!mode) return null;
   const close = () => onOpenChange(false);
   const done = () => { close(); onDone(); };
+  const clearDraft = () => { try { if (draftKey) localStorage.removeItem(draftKey); } catch { /* ignora */ } };
+  const discard = () => {
+    clearDraft();
+    setChoice(""); setOther(""); setReasonKind(""); setReason(""); setExpected(""); setNote(""); setErrors({}); setRestoredAt(null);
+  };
+  // preenchido, a janela não fecha com um clique fora dela (o X e o Cancelar continuam fechando)
+  const keepOpen = (e: Event) => { if (dirty) e.preventDefault(); };
+  const draftBanner = restoredAt && (
+    <div className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-800 dark:text-amber-200">
+      <History className="h-3.5 w-3.5 shrink-0" />
+      <span className="min-w-0 flex-1">Rascunho recuperado de {p2(restoredAt.getDate())}/{p2(restoredAt.getMonth() + 1)} às {p2(restoredAt.getHours())}:{p2(restoredAt.getMinutes())}.</span>
+      <button type="button" onClick={discard} className="font-semibold hover:underline">Descartar</button>
+    </div>
+  );
 
   if (mode.kind !== "criar") {
     const resolve = mode.kind === "implantada";
@@ -61,6 +107,7 @@ export default function PendencyDialog({ mode, onOpenChange, onDone, onMoveParen
       try {
         if (resolve) await resolvePendency(mode.pendency.id, note);
         else await cancelPendency(mode.pendency.id, note);
+        clearDraft();
         toast.success(resolve ? `${mode.pendency.title} implantada em ${mode.projectName}.` : `Desistência registrada: ${mode.pendency.title}.`);
         done();
       } catch (err) {
@@ -69,11 +116,12 @@ export default function PendencyDialog({ mode, onOpenChange, onDone, onMoveParen
     };
     return (
       <Dialog open onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" onInteractOutside={keepOpen}>
           <DialogHeader>
             <DialogTitle>{resolve ? "Marcar como implantada" : "Cliente desistiu"}</DialogTitle>
             <DialogDescription>{mode.projectName} · {mode.pendency.title}</DialogDescription>
           </DialogHeader>
+          {draftBanner}
           <div>
             <Label className="text-xs" htmlFor="pend-note">{resolve ? "Como ficou? (opcional)" : "Motivo da desistência *"}</Label>
             <Textarea id="pend-note" className="mt-1.5" rows={3} maxLength={1000} value={note} onChange={e => setNote(e.target.value)}
@@ -150,6 +198,7 @@ export default function PendencyDialog({ mode, onOpenChange, onDone, onMoveParen
         project_id: project.id, solution_id: choice === OTHER ? null : choice, title,
         reason_kind: reasonKind as PendencyReason, reason: reason.trim() || null, expected_date: expected || null,
       });
+      clearDraft();
       onDone();
       if (project.status !== "encerrado" && onMoveParent) setCreated(title);
       else { toast.success(`Card filho criado: ${title}`, { description: "Ele fica na coluna Implantação pendente." }); close(); }
@@ -160,11 +209,12 @@ export default function PendencyDialog({ mode, onOpenChange, onDone, onMoveParen
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg" onInteractOutside={keepOpen}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><CornerDownRight className="h-5 w-5 text-orange-500" />Criar card filho</DialogTitle>
           <DialogDescription>{project.company_name} · registre o que ficou para depois e finalize o projeto sem perder o rastro.</DialogDescription>
         </DialogHeader>
+        {draftBanner}
         <div className="space-y-4">
           <div>
             <Label className="text-xs" id="pend-item">Item pendente *</Label>
@@ -212,9 +262,12 @@ export default function PendencyDialog({ mode, onOpenChange, onDone, onMoveParen
             <Info className="mt-0.5 h-4 w-4 shrink-0" />
             <span>O card filho fica na coluna <b>Implantação pendente</b> e o projeto pode ir para <b>Implementado</b>: logo depois de criar, o portal oferece mover o projeto. Quando o cliente ativar, marque o card filho como implantado.</span>
           </div>
+          <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <History className="h-3 w-3 shrink-0" />O que você preencher fica salvo como rascunho neste navegador: pode fechar e voltar depois.
+          </p>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={close}>Cancelar</Button>
+          <Button variant="outline" onClick={close}>{dirty ? "Fechar e continuar depois" : "Cancelar"}</Button>
           <Button onClick={submit} disabled={saving}>{saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <CornerDownRight className="mr-1.5 h-4 w-4" />}Criar card filho</Button>
         </DialogFooter>
       </DialogContent>
