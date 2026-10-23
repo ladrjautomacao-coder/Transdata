@@ -1,7 +1,7 @@
 import { CalendarRange, CheckCircle2, Circle, Hourglass, UserRoundCog } from "lucide-react";
 import {
-  colorFor, dateOfYmd, fmtVacation, formatPeriod, isAvailable, periodOf, techniciansOf, vacationFor,
-  type ImplantationRequest, type Technician,
+  colorFor, dateOfYmd, fmtVacation, formatPeriod, intervalsOverlap, isAvailable, occupiedBy, occupiedIntervals, periodOf, techniciansOf, vacationFor,
+  type ImplantationRequest, type Technician, type VisitFormat,
 } from "@/lib/implantationScheduling";
 import { HATCH } from "@/lib/agendaTecnica";
 import { TechAvatar } from "./AgendaShared";
@@ -19,8 +19,10 @@ const dayIdx = (d: Date, s0: Date) => Math.round((+startOfDay(d) - +s0) / DAY);
  * Mostra o que já está aprovado, destaca o período pedido e resume quem está livre,
  * para o Aprovador decidir sem precisar abrir o Calendário.
  */
-export function AvailabilityPreview({ start, end, technicians, requests, ignoreId, selectedIds = [], onManageTechnicians, onPickTechnician, compact }: {
+export function AvailabilityPreview({ start, end, format, technicians, requests, ignoreId, selectedIds = [], onManageTechnicians, onPickTechnician, compact }: {
   start: Date; end: Date; technicians: Technician[]; requests: ImplantationRequest[];
+  /** Formato do pedido: no remoto, só o turno de cada dia conta como ocupado. */
+  format?: VisitFormat | null;
   ignoreId?: string; selectedIds?: string[]; onManageTechnicians?: () => void;
   /** Torna o nome do técnico clicável (escolher/remover da demanda). */
   onPickTechnician?: (technicianId: string) => void;
@@ -38,7 +40,8 @@ export function AvailabilityPreview({ start, end, technicians, requests, ignoreI
 
   const approved = requests.filter(r => r.status === "aprovada" && r.id !== ignoreId && periodOf(r).start < sEnd && s0 < periodOf(r).end);
   const otherPending = requests.filter(r => r.status === "pendente" && r.id !== ignoreId && periodOf(r).start < end && start < periodOf(r).end);
-  const free = technicians.filter(t => isAvailable(t, start, end, requests, ignoreId));
+  const free = technicians.filter(t => isAvailable(t, start, end, requests, ignoreId, format));
+  const asked = occupiedIntervals(start, end, format);
   // férias de cada técnico dentro da faixa exibida
   const vacationsShown = (t: Technician) => (t.vacations ?? [])
     .map(v => ({ v, a: dayIdx(dateOfYmd(v.start_date), s0), b: dayIdx(dateOfYmd(v.end_date), s0) }))
@@ -125,7 +128,7 @@ export function AvailabilityPreview({ start, end, technicians, requests, ignoreI
                     {mine.map(r => {
                       const p = periodOf(r);
                       const a = Math.max(0, dayIdx(p.start, s0)), b = Math.min(total - 1, dayIdx(p.end, s0));
-                      const clash = p.start < end && start < p.end;
+                      const clash = p.start < end && start < p.end && intervalsOverlap(asked, occupiedBy(r));
                       return (
                         <div key={r.id} title={`${r.project?.company_name} · ${formatPeriod(p.start, p.end)}`}
                           className={`absolute top-1 bottom-1 flex items-center overflow-hidden rounded-md px-1.5 text-[10px] font-medium text-white shadow-sm ${clash ? "ring-2 ring-destructive ring-offset-1 ring-offset-background" : "opacity-80"}`}

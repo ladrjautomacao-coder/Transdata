@@ -375,7 +375,7 @@ export default function SolicitacaoAgenda({ view = "gp" }: { view?: Mode }) {
                           </> : undefined} />
                         {showAvail && (
                           <li className={`border-l-[3px] bg-muted/20 px-4 pb-3 pt-1 ${REQUEST_STATUS.pendente.border}`}>
-                            <AvailabilityPreview start={new Date(r.requested_start)} end={new Date(r.requested_end)}
+                            <AvailabilityPreview start={new Date(r.requested_start)} end={new Date(r.requested_end)} format={r.visit_format}
                               technicians={technicians} requests={requests} ignoreId={r.id} compact onManageTechnicians={canManageTechs ? () => setTechOpen(true) : undefined}
                               onPickTechnician={techId => { setApproveInitial([techId]); setApproving(r); }} />
                           </li>

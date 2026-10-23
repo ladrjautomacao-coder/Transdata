@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { holidaysByDay } from "@/lib/holidays";
-import { vacationFor, type ImplantationRequest, type Technician } from "@/lib/implantationScheduling";
+import { occupiedIntervals, vacationFor, type ImplantationRequest, type Technician } from "@/lib/implantationScheduling";
 import {
   candidatesFor, checksFor, computeAlerts, distanceKm, fmtDayRange, fmtWeekRange, loadCityIndex, placeLabel, placeOf, techLoad,
   visitKindOf, visitOrdinal, workdaysIn,
@@ -106,6 +106,35 @@ describe("alertas e recomendação", () => {
     const rec = cands.find(c => c.recommended);
     expect(rec?.free).toBe(true);
     expect(rec?.tech.id).not.toBe("ma");
+  });
+});
+
+describe("remoto por turno", () => {
+  const remote = (company: string, start: string, end: string, techs: Technician[], status: "aprovada" | "pendente" = "aprovada") =>
+    ({ ...visit(company, "Tubarão", "SC", "Treinamento", start, end, techs, status), visit_format: "remoto" as const });
+
+  it("remoto ocupa só a janela de cada dia; presencial ocupa o período corrido", () => {
+    const slots = occupiedIntervals(new Date(2026, 10, 3, 9), new Date(2026, 10, 4, 12), "remoto");
+    expect(slots.map(([a, b]) => `${a.getDate()} ${a.getHours()}-${b.getHours()}`)).toEqual(["3 9-12", "4 9-12"]);
+    expect(occupiedIntervals(new Date(2026, 10, 3, 8), new Date(2026, 10, 4, 18), "presencial")).toHaveLength(1);
+  });
+
+  it("técnico com remoto de manhã fica livre para remoto à tarde nos mesmos dias, mas não para integral", () => {
+    const manha = remote("Viação A", at(3, 11, 9), at(4, 11, 12), [AP]);
+    const tarde = remote("Viação B", at(3, 11, 14), at(4, 11, 17), [], "pendente");
+    const integral = remote("Viação C", at(3, 11, 9), at(4, 11, 17), [], "pendente");
+    const cTarde = candidatesFor({ request: tarde, start: new Date(tarde.requested_start), end: new Date(tarde.requested_end), techs: [AP], requests: [manha, tarde], holidays, index: null });
+    expect(cTarde[0].free).toBe(true);
+    expect(cTarde[0].sameDay.map(r => r.id)).toEqual([manha.id]);
+    const cInt = candidatesFor({ request: integral, start: new Date(integral.requested_start), end: new Date(integral.requested_end), techs: [AP], requests: [manha, integral], holidays, index: null });
+    expect(cInt[0].free).toBe(false);
+  });
+
+  it("manhã e tarde aprovadas do mesmo técnico não viram alerta de conflito", () => {
+    const manha = remote("Viação A", at(3, 11, 9), at(4, 11, 12), [AP]);
+    const tarde = remote("Viação B", at(3, 11, 14), at(4, 11, 17), [AP]);
+    const alerts = computeAlerts({ techs: [AP], approved: [manha, tarde], from: new Date(2026, 10, 2), to: new Date(2026, 10, 8), today, holidays, custom: [], index: null });
+    expect(alerts.filter(a => a.kind === "conflito" || a.kind === "sem_folga")).toHaveLength(0);
   });
 });
 

@@ -157,7 +157,7 @@ export function PendingPanel({ pending, techs, requests, holidays, today, canApp
             const { start, end } = periodOf(r);
             const d = dayDiff(today, first);
             const wd = workdaysIn(first, last, holidays).length;
-            const free = techs.filter(t => isAvailable(t, start, end, requests, r.id));
+            const free = techs.filter(t => isAvailable(t, start, end, requests, r.id, r.visit_format));
             const names = free.map(t => t.full_name.trim().split(/\s+/)[0]);
             const urgency = d < 0
               ? { text: `Começou ${fmtWdDM(first)} e ainda não foi avaliada`, tone: "text-red-600 dark:text-red-400" }

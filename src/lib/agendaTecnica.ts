@@ -6,7 +6,7 @@
 import { dateKey, holidaysForVisit, type Holiday } from "@/lib/holidays";
 import { formatLocation } from "@/lib/location";
 import {
-  conflictsFor, currentOrNextVacation, fmtVacation, isAvailable, onVacation, periodOf, techniciansOf, vacationFor,
+  conflictsFor, currentOrNextVacation, fmtVacation, intervalsOverlap, isAvailable, occupiedBy, onVacation, periodOf, techniciansOf, vacationFor,
   type ImplantationRequest, type Technician, type TechnicianVacation,
 } from "@/lib/implantationScheduling";
 
@@ -391,7 +391,8 @@ export function computeAlerts(opts: {
       if (!inRange(a) && !inRange(b)) continue;
       const pa = periodOf(a), pb = periodOf(b);
       const da = visitDays(a), db = visitDays(b);
-      if (pb.start < pa.end) {
+      // remotos em turnos diferentes (manhã e tarde) dividem os mesmos dias sem conflito
+      if (pb.start < pa.end && intervalsOverlap(occupiedBy(a), occupiedBy(b))) {
         alerts.push({
           id: `conf-${a.id}-${b.id}`, kind: "conflito", techId: t.id,
           title: `Conflito de horário: ${short(t)}`,
@@ -401,6 +402,8 @@ export function computeAlerts(opts: {
         });
         continue;
       }
+      // visita remota não tem deslocamento
+      if (a.visit_format === "remoto" || b.visit_format === "remoto") continue;
       const gap = dayDiff(da.last, db.first) - 1;
       if (gap > 0) continue;
       const km = distanceKm(index, placeOf(a), placeOf(b));
@@ -458,7 +461,7 @@ export function computeAlerts(opts: {
       for (const r of win.filter(x => +visitDays(x).first > +startOfDay(today))) {
         const { start, end } = periodOf(r);
         const options = techs
-          .filter(o => o.id !== t.id && isAvailable(o, start, end, approved, r.id)
+          .filter(o => o.id !== t.id && isAvailable(o, start, end, approved, r.id, r.visit_format)
             && !reserved.some(x => x.techId === o.id && x.start < end && start < x.end))
           .map(o => ({ o, busy: busyWorkdays(o.id, approved, winFrom, to, holidays) }))
           .sort((x, y) => x.busy - y.busy || x.o.full_name.localeCompare(y.o.full_name));
@@ -517,6 +520,8 @@ export interface Candidate {
   tightBefore: { visit: ImplantationRequest; km: number | null } | null;
   /** Férias que tocam o período pedido (técnico indisponível). */
   vacation: TechnicianVacation | null;
+  /** Visitas aprovadas nos mesmos dias sem conflito de horário (ex.: remoto de manhã quando o pedido é à tarde). */
+  sameDay: ImplantationRequest[];
   recommended: boolean;
 }
 
@@ -535,14 +540,17 @@ export function candidatesFor(opts: {
   const monthWorkdays = workdaysIn(m0, m1, holidays).length;
   const dest = placeOf(request);
   const list: Candidate[] = techs.map(tech => {
-    const conflicts = conflictsFor(tech.id, start, end, requests, request.id);
+    const conflicts = conflictsFor(tech.id, start, end, requests, request.id, request.visit_format);
     const vacation = vacationFor(tech, start, end);
+    const firstDay = startOfDay(start), lastDay = startOfDay(end > start ? new Date(+end - 1) : start);
+    const sameDay = visitsOfTech(tech.id, approved)
+      .filter(r => !conflicts.includes(r) && +visitDays(r).first <= +lastDay && +visitDays(r).last >= +firstDay);
     const before = visitsOfTech(tech.id, approved).filter(r => periodOf(r).end <= start);
     const last = before.length ? before[before.length - 1] : null;
     const kmFromLast = last ? distanceKm(index, placeOf(last), dest) : null;
     const tight = last && dayDiff(visitDays(last).last, startOfDay(start)) <= 1 ? { visit: last, km: kmFromLast } : null;
     return {
-      tech, free: conflicts.length === 0 && !vacation, conflicts, vacation,
+      tech, free: conflicts.length === 0 && !vacation, conflicts, vacation, sameDay,
       monthBusy: busyWorkdays(tech.id, approved, m0, m1, holidays),
       monthWorkdays, last, kmFromLast, tightBefore: tight, recommended: false,
     };

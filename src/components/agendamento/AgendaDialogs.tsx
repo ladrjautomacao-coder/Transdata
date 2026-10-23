@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import {
-  AlertTriangle, Ban, CalendarRange, Camera, Check, CheckCircle2, History, Info, Loader2,
+  AlertTriangle, Ban, CalendarRange, Camera, Check, CheckCircle2, Clock, History, Info, Loader2,
   MapPin, MessageSquareWarning, Monitor, Palmtree, Pencil, Plus, RotateCcw, Send, Sun, Sunset, Trash2, Video, X, type LucideIcon,
 } from "lucide-react";
 import { Constants } from "@/integrations/supabase/types";
@@ -50,7 +50,10 @@ const FORMAT_OPTIONS: { value: VisitFormat; icon: LucideIcon; hint: string }[] =
 const PERIOD_OPTIONS: { value: RemotePeriod; icon: LucideIcon }[] = [
   { value: "manha", icon: Sun },
   { value: "tarde", icon: Sunset },
+  { value: "integral", icon: Clock },
 ];
+/** "de manhã", "à tarde", "o dia todo (09h às 17h)" para o texto de ajuda das datas. */
+const PERIOD_WHEN: Record<RemotePeriod, string> = { manha: "de manhã", tarde: "à tarde", integral: "o dia todo, das 09h às 17h," };
 const joinPt = (xs: string[]) => xs.length > 1 ? `${xs.slice(0, -1).join(", ")} e ${xs[xs.length - 1]}` : xs[0] ?? "";
 /** Dia de um valor de datetime-local ("AAAA-MM-DDTHH:mm") na hora h, horário local. */
 const atHour = (local: string, h: number) => new Date(`${local.slice(0, 10)}T${String(h).padStart(2, "0")}:00`);
@@ -130,7 +133,7 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
 
   const submit = async () => {
     const finalPurpose = purpose === OTHER ? custom.trim() : purpose;
-    // remoto: o horário vem do turno escolhido (manhã 09h–12h, tarde 14h–17h)
+    // remoto: o horário vem do turno escolhido (manhã 09h–12h, tarde 14h–17h, integral 09h–17h)
     const turn = remote && period ? REMOTE_PERIODS[period] : null;
     const s = turn ? atHour(start, turn.from) : new Date(start), e = turn ? atHour(end, turn.to) : new Date(end);
     const presencial = format === "presencial";
@@ -143,7 +146,7 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
         : e <= s ? (remote ? "O último dia não pode ser antes do primeiro." : "O fim deve ser depois do início.")
         : s < new Date() ? "O início não pode ser no passado." : undefined,
       format: !format ? "Escolha se o treinamento é presencial ou remoto." : undefined,
-      period: remote && !period ? "Escolha o período: manhã ou tarde." : undefined,
+      period: remote && !period ? "Escolha o período: manhã, tarde ou integral." : undefined,
       address: missing.length ? `Informe ${joinPt(missing)}.` : undefined,
     };
     setErrors(next);
@@ -246,7 +249,7 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
           {remote && (
             <div>
               <Label className="text-xs" id="req-period-label">Período *</Label>
-              <div role="radiogroup" aria-labelledby="req-period-label" className="mt-1.5 grid grid-cols-2 gap-2">
+              <div role="radiogroup" aria-labelledby="req-period-label" className="mt-1.5 grid gap-2 sm:grid-cols-3">
                 {PERIOD_OPTIONS.map(o => (
                   <ChoiceCard key={o.value} on={period === o.value} icon={o.icon} title={REMOTE_PERIODS[o.value].label} hint={REMOTE_PERIODS[o.value].hours}
                     onSelect={() => { setPeriod(o.value); setErrors(er => ({ ...er, period: undefined })); }} />
@@ -263,7 +266,7 @@ export function RequestDialog({ project, open, onOpenChange, onCreated, existing
               </div>
               {errors.dates ? <FieldError msg={errors.dates} /> : (
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Encontro único: o mesmo dia nos dois campos. Em mais dias, o treinamento acontece {period === "manha" ? "de manhã" : period === "tarde" ? "à tarde" : "no mesmo período"} em todos eles.
+                  Encontro único: o mesmo dia nos dois campos. Em mais dias, o treinamento acontece {period ? PERIOD_WHEN[period] : "no mesmo período"} em todos eles.
                 </p>
               )}
             </div>

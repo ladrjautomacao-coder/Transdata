@@ -117,13 +117,14 @@ export type VisitFormat = "presencial" | "remoto";
 export const VISIT_FORMAT_LABEL: Record<VisitFormat, string> = { presencial: "Presencial", remoto: "Remoto" };
 
 /** Turnos do treinamento remoto (horário local). */
-export type RemotePeriod = "manha" | "tarde";
+export type RemotePeriod = "manha" | "tarde" | "integral";
 export const REMOTE_PERIODS: Record<RemotePeriod, { label: string; hours: string; from: number; to: number }> = {
   manha: { label: "Manhã", hours: "09h às 12h", from: 9, to: 12 },
   tarde: { label: "Tarde", hours: "14h às 17h", from: 14, to: 17 },
+  integral: { label: "Integral", hours: "09h às 17h", from: 9, to: 17 },
 };
 
-/** Turno pelo horário (09h–12h ou 14h–17h); null se for outro horário. */
+/** Turno pelo horário (09h–12h, 14h–17h ou 09h–17h); null se for outro horário. */
 export function remotePeriodOf(start: Date, end: Date): RemotePeriod | null {
   const at = (d: Date, h: number) => d.getHours() === h && d.getMinutes() === 0;
   return (Object.keys(REMOTE_PERIODS) as RemotePeriod[]).find(k => at(start, REMOTE_PERIODS[k].from) && at(end, REMOTE_PERIODS[k].to)) ?? null;
@@ -477,12 +478,39 @@ export async function removeTechnician(id: string, photoUrl?: string | null): Pr
   return "arquivado";
 }
 
+/**
+ * Horários que a visita ocupa. Remoto: a mesma janela em cada dia (manhã de 03 a 04/11 =
+ * 03/11 09h–12h e 04/11 09h–12h), deixando a tarde livre para outro remoto. Presencial:
+ * o período corrido, do início ao fim.
+ */
+export function occupiedIntervals(start: Date, end: Date, format?: VisitFormat | null): [Date, Date][] {
+  const minutes = (d: Date) => d.getHours() * 60 + d.getMinutes();
+  if (format !== "remoto" || end <= start || minutes(end) <= minutes(start)) return [[start, end]];
+  const out: [Date, Date][] = [];
+  const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  for (let d = new Date(start.getFullYear(), start.getMonth(), start.getDate()); +d <= +last; d.setDate(d.getDate() + 1)) {
+    out.push([
+      new Date(d.getFullYear(), d.getMonth(), d.getDate(), start.getHours(), start.getMinutes()),
+      new Date(d.getFullYear(), d.getMonth(), d.getDate(), end.getHours(), end.getMinutes()),
+    ]);
+  }
+  return out;
+}
+
+/** Algum horário em comum entre as duas listas? */
+export const intervalsOverlap = (a: [Date, Date][], b: [Date, Date][]) => a.some(([s1, e1]) => b.some(([s2, e2]) => s1 < e2 && s2 < e1));
+
+/** Horários ocupados por uma solicitação/visita (período aprovado ou pedido). */
+export const occupiedBy = (r: ImplantationRequest) => occupiedIntervals(periodOf(r).start, periodOf(r).end, r.visit_format);
+
 /** Conflitos de um técnico com agendamentos aprovados (exceto a própria solicitação). */
-export function conflictsFor(techId: string, start: Date, end: Date, requests: ImplantationRequest[], ignoreId?: string) {
+export function conflictsFor(techId: string, start: Date, end: Date, requests: ImplantationRequest[], ignoreId?: string, format?: VisitFormat | null) {
+  const mine = occupiedIntervals(start, end, format);
   return requests.filter(r =>
     r.id !== ignoreId && r.status === "aprovada" &&
     techniciansOf(r).some(t => t.id === techId) &&
-    start < periodOf(r).end && periodOf(r).start < end);
+    start < periodOf(r).end && periodOf(r).start < end &&
+    intervalsOverlap(mine, occupiedBy(r)));
 }
 
 /* ─── Férias ─── */
@@ -506,8 +534,8 @@ export const onVacation = (tech: Pick<Technician, "vacations">, d: Date) => {
 };
 
 /** Livre para a visita: sem conflito com visita aprovada e sem férias no período. */
-export const isAvailable = (tech: Technician, start: Date, end: Date, requests: ImplantationRequest[], ignoreId?: string) =>
-  !vacationFor(tech, start, end) && conflictsFor(tech.id, start, end, requests, ignoreId).length === 0;
+export const isAvailable = (tech: Technician, start: Date, end: Date, requests: ImplantationRequest[], ignoreId?: string, format?: VisitFormat | null) =>
+  !vacationFor(tech, start, end) && conflictsFor(tech.id, start, end, requests, ignoreId, format).length === 0;
 
 /** "03/11 a 14/11" (ou "03/11" num dia só). */
 export function fmtVacation(v: Pick<TechnicianVacation, "start_date" | "end_date">) {

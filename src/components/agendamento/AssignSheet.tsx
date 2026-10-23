@@ -9,7 +9,7 @@ import { useCustomHolidays } from "@/hooks/useCustomHolidays";
 import { useCityIndex } from "@/hooks/useCityIndex";
 import { holidaysByDay } from "@/lib/holidays";
 import {
-  VISIT_FORMAT_LABEL, approveRequest, errorMessage, fmtVacation, normalizeMeetingUrl, remotePeriodText, saveTechnician, toLocalInput, visitFormatText,
+  VISIT_FORMAT_LABEL, approveRequest, errorMessage, fmtVacation, normalizeMeetingUrl, periodOf, remotePeriodText, saveTechnician, toLocalInput, visitFormatText,
   type ImplantationRequest, type Technician,
 } from "@/lib/implantationScheduling";
 import {
@@ -264,6 +264,15 @@ export function AssignSheet({ request, open, onOpenChange, technicians, allReque
                               {c.last ? `Última visita em ${placeLabel(placeOf(c.last))}, até ${fmtDM(visitDays(c.last).last)}` : "Nenhuma visita anterior"}
                               {c.kmFromLast ? ` · ${fmtKm(c.kmFromLast)} até o local` : ""}
                             </span>
+                            {c.sameDay.map(r => {
+                              const p = periodOf(r);
+                              return (
+                                <span key={r.id} className="mt-1 flex items-start gap-1.5 text-[13px] text-sky-800 dark:text-sky-200">
+                                  <Video className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                  <span>Nos mesmos dias: {r.project?.company_name ?? "Projeto removido"}, {(remotePeriodText(r.visit_format, p.start, p.end) ?? `${fmtHM(p.start)} às ${fmtHM(p.end)}`).toLowerCase()}</span>
+                                </span>
+                              );
+                            })}
                           </>
                         ) : c.vacation ? (
                           <span className="mt-0.5 block text-[13px] text-muted-foreground">
