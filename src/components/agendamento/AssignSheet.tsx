@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, CheckCircle2, Clock3, Info, Loader2, Plus, UserRoundCog, Video, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock3, Info, Loader2, Palmtree, Plus, UserRoundCog, Video, XCircle } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { useCustomHolidays } from "@/hooks/useCustomHolidays";
 import { useCityIndex } from "@/hooks/useCityIndex";
 import { holidaysByDay } from "@/lib/holidays";
 import {
-  VISIT_FORMAT_LABEL, approveRequest, errorMessage, normalizeMeetingUrl, remotePeriodText, saveTechnician, toLocalInput, visitFormatText,
+  VISIT_FORMAT_LABEL, approveRequest, errorMessage, fmtVacation, normalizeMeetingUrl, remotePeriodText, saveTechnician, toLocalInput, visitFormatText,
   type ImplantationRequest, type Technician,
 } from "@/lib/implantationScheduling";
 import {
@@ -230,7 +230,7 @@ export function AssignSheet({ request, open, onOpenChange, technicians, allReque
                   </Button>
                 )}
               </div>
-              <p className="mb-3 text-[13px] text-muted-foreground">Disponibilidade em {range}. A recomendação considera quem está livre e a carga do mês.</p>
+              <p className="mb-3 text-[13px] text-muted-foreground">Disponibilidade em {range}. A recomendação considera quem está livre, as férias e a carga do mês.</p>
               {technicians.length === 0 && (
                 <p className="mb-3 rounded-lg bg-amber-500/10 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-200">
                   Nenhum técnico cadastrado{onManageTechnicians ? ". Cadastre o primeiro abaixo: ele já entra selecionado." : ". Peça a quem gerencia os técnicos da agenda para cadastrá-los."}
@@ -252,7 +252,9 @@ export function AssignSheet({ request, open, onOpenChange, technicians, allReque
                           <span className="font-semibold">{c.tech.full_name}</span>
                           {c.free
                             ? <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">{days > 1 ? `Livre nos ${days} dias` : "Livre no dia"}</span>
-                            : <span className="text-xs font-semibold text-red-600 dark:text-red-400">Ocupado</span>}
+                            : c.vacation
+                              ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 dark:text-sky-300"><Palmtree className="h-3.5 w-3.5" />De férias</span>
+                              : <span className="text-xs font-semibold text-red-600 dark:text-red-400">Ocupado</span>}
                           {c.recommended && <span className="rounded-full bg-primary/10 px-2 py-px text-[11px] font-semibold text-primary">Recomendado</span>}
                         </span>
                         {c.free ? (
@@ -263,6 +265,10 @@ export function AssignSheet({ request, open, onOpenChange, technicians, allReque
                               {c.kmFromLast ? ` · ${fmtKm(c.kmFromLast)} até o local` : ""}
                             </span>
                           </>
+                        ) : c.vacation ? (
+                          <span className="mt-0.5 block text-[13px] text-muted-foreground">
+                            Férias de {fmtVacation(c.vacation)}{c.vacation.note ? ` · ${c.vacation.note}` : ""}
+                          </span>
                         ) : conflict && (
                           <>
                             <span className="mt-0.5 block truncate text-[13px] text-muted-foreground">{conflict.project?.company_name}, em {placeLabel(placeOf(conflict))}</span>

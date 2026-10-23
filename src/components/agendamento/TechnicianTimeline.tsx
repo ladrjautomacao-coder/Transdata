@@ -1,10 +1,10 @@
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { AlertTriangle, Check, UserRoundCog } from "lucide-react";
-import { periodOf, techniciansOf, type ImplantationRequest, type Technician } from "@/lib/implantationScheduling";
+import { AlertTriangle, Check, Palmtree, UserRoundCog } from "lucide-react";
+import { dateOfYmd, fmtVacation, periodOf, techniciansOf, type ImplantationRequest, type Technician, type TechnicianVacation } from "@/lib/implantationScheduling";
 import { dateKey, type Holiday } from "@/lib/holidays";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
-  VISIT_KIND, WD_SHORT, dayDiff, fmtDM, fmtDayRange, fmtHM, fmtWeekRange, isWeekend, loadTone,
+  HATCH, VISIT_KIND, WD_SHORT, dayDiff, fmtDM, fmtDayRange, fmtHM, fmtWeekRange, isWeekend, loadTone,
   placeLabel, placeOf, plusDays, startOfDay, visitDays, visitKindOf, visitOrdinal,
   type AgendaAlert, type CityIndex, type TechLoad,
 } from "@/lib/agendaTecnica";
@@ -89,6 +89,23 @@ export function TechnicianTimeline({
   };
   const weightOf = (a: number, b: number) => weights.slice(a, b + 1).reduce((x, y) => x + y, 0);
 
+  /* ─── férias: faixa listrada atrás das visitas ─── */
+  const vacationSpans = (t: Technician) => (t.vacations ?? [])
+    .map(v => ({ v, a: dayDiff(s0, dateOfYmd(v.start_date)), b: dayDiff(s0, dateOfYmd(v.end_date)) }))
+    .filter(x => x.b >= 0 && x.a <= N - 1)
+    .map(x => ({ v: x.v, a: Math.max(0, x.a), b: Math.min(N - 1, x.b) }));
+  /** `underVisits`: há visita por cima; o rótulo vai para a faixa de cima, sem ficar atrás da barra. */
+  const vacationBlock = (v: TechnicianVacation, a: number, b: number, underVisits: boolean) => {
+    const wide = weightOf(a, b) * pxPerFr > 90;
+    return (
+      <div key={`vac-${v.id}`} role="img" aria-label={`Férias de ${fmtVacation(v)}`} title={`Férias de ${fmtVacation(v)}${v.note ? ` · ${v.note}` : ""}`}
+        className={`relative z-[5] flex gap-1 overflow-hidden border-x border-sky-500/40 font-semibold text-sky-800 dark:text-sky-200 ${underVisits ? "items-start justify-start px-1.5 text-[9.5px] leading-[11px]" : "items-center justify-center text-[11px]"}`}
+        style={{ gridColumn: `${a + 2} / ${b + 3}`, gridRow: "1 / -1", ...HATCH.vacation }}>
+        <Palmtree className={underVisits ? "h-2.5 w-2.5 shrink-0" : "h-3.5 w-3.5 shrink-0"} />{wide && <span className="truncate">Férias {fmtVacation(v)}</span>}
+      </div>
+    );
+  };
+
   /* ─── fundo das colunas (fim de semana, feriado, hoje, divisão de semana) ─── */
   const background = days.map((d, i) => {
     const hol = holidays.get(dateKey(d));
@@ -170,7 +187,10 @@ export function TechnicianTimeline({
     const load = loads.get(t.id);
     const tone = load ? loadTone(load.busy, load.workdays) : null;
 
-    const location = load?.current ? placeLabel(placeOf(load.current))
+    const away = load?.vacation?.now ? load.vacation.vacation : null;
+    const vacs = vacationSpans(t);
+    const location = away ? `Até ${fmtDM(dateOfYmd(away.end_date))}`
+      : load?.current ? placeLabel(placeOf(load.current))
       : load?.next ? `Próxima em ${fmtDM(visitDays(load.next).first)}` : "Sem visitas agendadas";
     return (
       <div key={t.id} className="relative grid border-b border-border/70 last:border-b-0" style={rowStyle(lanes)}>
@@ -180,7 +200,9 @@ export function TechnicianTimeline({
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold leading-[18px]">{t.full_name}</p>
             <p className="flex min-w-0 items-center gap-1.5 text-xs leading-[18px] text-muted-foreground">
-              {!isMobile && (load?.current
+              {!isMobile && (away
+                ? <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-sky-800 dark:text-sky-200"><Palmtree aria-hidden className="h-3 w-3" />De férias</span>
+                : load?.current
                 ? <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-sky-800 dark:text-sky-200"><span aria-hidden className="h-1.5 w-1.5 rounded-full bg-sky-500" />Em campo</span>
                 : <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300"><span aria-hidden className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Livre hoje</span>)}
               <span className="min-w-0 truncate">{location}</span>
@@ -195,8 +217,9 @@ export function TechnicianTimeline({
             )}
           </div>
         </div>
+        {vacs.map(x => vacationBlock(x.v, x.a, x.b, placed.some(p => p.a <= x.b && p.b >= x.a)))}
         {placed.map(p => bar(p.r, p.a, p.b, p.lane, p.contL, p.contR))}
-        {placed.length === 0 && (
+        {placed.length === 0 && vacs.length === 0 && (
           <p className="pointer-events-none self-center px-3 text-[11px] italic text-muted-foreground" style={{ gridColumn: "2 / -1", gridRow: 2 }}>Livre no período</p>
         )}
       </div>

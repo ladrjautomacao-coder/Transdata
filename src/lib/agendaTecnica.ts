@@ -5,7 +5,10 @@
 // nada aqui grava no banco.
 import { dateKey, holidaysForVisit, type Holiday } from "@/lib/holidays";
 import { formatLocation } from "@/lib/location";
-import { conflictsFor, periodOf, techniciansOf, type ImplantationRequest, type Technician } from "@/lib/implantationScheduling";
+import {
+  conflictsFor, currentOrNextVacation, fmtVacation, isAvailable, onVacation, periodOf, techniciansOf, vacationFor,
+  type ImplantationRequest, type Technician, type TechnicianVacation,
+} from "@/lib/implantationScheduling";
 
 /* ─── Datas ──────────────────────────────────────────────────────────────── */
 export const DAY_MS = 864e5;
@@ -80,6 +83,8 @@ export const HATCH = {
   pending: { backgroundImage: "repeating-linear-gradient(135deg, rgb(245 158 11 / 0.16) 0 6px, rgb(245 158 11 / 0.04) 6px 12px)" },
   /** Trecho da visita que cai em fim de semana ou feriado. */
   special: { backgroundImage: "repeating-linear-gradient(135deg, rgb(132 204 22 / 0.45) 0 5px, rgb(132 204 22 / 0.10) 5px 10px)" },
+  /** Férias do técnico na linha do tempo. */
+  vacation: { backgroundImage: "repeating-linear-gradient(135deg, rgb(14 165 233 / 0.18) 0 6px, rgb(14 165 233 / 0.05) 6px 12px)" },
 } as const;
 
 /* ─── Feriados e dias úteis ──────────────────────────────────────────────── */
@@ -291,11 +296,17 @@ export interface TechLoad {
   current: ImplantationRequest | null;
   /** Próxima visita aprovada depois de hoje. */
   next: ImplantationRequest | null;
+  /** Dias úteis de férias no período (fora de `workdays`). */
+  off: number;
+  /** Férias em andamento hoje (`now`) ou as próximas. */
+  vacation: { vacation: TechnicianVacation; now: boolean } | null;
 }
 
 export function techLoad(tech: Technician, approved: ImplantationRequest[], from: Date, to: Date, holidays: Map<string, Holiday[]>, today: Date): TechLoad {
   const mine = visitsOfTech(tech.id, approved);
-  const days = +startOfDay(to) >= +startOfDay(from) ? workdaysIn(from, to, holidays) : [];
+  const all = +startOfDay(to) >= +startOfDay(from) ? workdaysIn(from, to, holidays) : [];
+  // dias de férias não contam como disponíveis
+  const days = all.filter(d => !onVacation(tech, d));
   const busy = days.filter(d => mine.some(r => coversDay(r, d))).length;
   return {
     tech,
@@ -304,6 +315,8 @@ export function techLoad(tech: Technician, approved: ImplantationRequest[], from
     free: days.length - busy,
     current: mine.find(r => coversDay(r, today)) ?? null,
     next: mine.find(r => +visitDays(r).first > +startOfDay(today)) ?? null,
+    off: all.length - days.length,
+    vacation: currentOrNextVacation(tech, today),
   };
 }
 
@@ -317,7 +330,7 @@ export function loadTone(busy: number, total: number) {
 }
 
 /* ─── Alertas ────────────────────────────────────────────────────────────── */
-export type AlertKind = "conflito" | "sem_folga" | "sem_dia_livre" | "fim_de_semana";
+export type AlertKind = "conflito" | "ferias" | "sem_folga" | "sem_dia_livre" | "fim_de_semana";
 export interface AgendaAlert {
   id: string;
   kind: AlertKind;
@@ -404,9 +417,24 @@ export function computeAlerts(opts: {
       });
     }
 
-    // 2) sem nenhum dia útil livre até o fim do período
+    // 1b) visita aprovada que cai nas férias do técnico
+    for (const r of visible) {
+      const { start, end } = periodOf(r);
+      const v = vacationFor(t, start, end);
+      if (!v) continue;
+      const { first, last } = visitDays(r);
+      alerts.push({
+        id: `ferias-${r.id}-${t.id}`, kind: "ferias", techId: t.id,
+        title: `${short(t)} está de férias`,
+        when: fmtDayRange(first, last),
+        text: `${client(r)} (${fmtDayRange(first, last)}) cai nas férias de ${fmtVacation(v)}. Troque o técnico ou o período da visita.`,
+        sortKey: +first, requestIds: [r.id],
+      });
+    }
+
+    // 2) sem nenhum dia útil livre até o fim do período (dias de férias não entram)
     const winFrom = +startOfDay(today) > +startOfDay(from) ? startOfDay(today) : startOfDay(from);
-    const workdays = +winFrom <= +startOfDay(to) ? workdaysIn(winFrom, to, holidays) : [];
+    const workdays = +winFrom <= +startOfDay(to) ? workdaysIn(winFrom, to, holidays).filter(d => !onVacation(t, d)) : [];
     if (workdays.length >= 3 && workdays.every(d => mine.some(r => coversDay(r, d)))) {
       const lastWd = workdays[workdays.length - 1];
       const win = mine.filter(r => +visitDays(r).last >= +winFrom && +visitDays(r).first <= +startOfDay(to));
@@ -430,7 +458,7 @@ export function computeAlerts(opts: {
       for (const r of win.filter(x => +visitDays(x).first > +startOfDay(today))) {
         const { start, end } = periodOf(r);
         const options = techs
-          .filter(o => o.id !== t.id && conflictsFor(o.id, start, end, approved, r.id).length === 0
+          .filter(o => o.id !== t.id && isAvailable(o, start, end, approved, r.id)
             && !reserved.some(x => x.techId === o.id && x.start < end && start < x.end))
           .map(o => ({ o, busy: busyWorkdays(o.id, approved, winFrom, to, holidays) }))
           .sort((x, y) => x.busy - y.busy || x.o.full_name.localeCompare(y.o.full_name));
@@ -487,6 +515,8 @@ export interface Candidate {
   kmFromLast: number | null;
   /** Visita que termina no dia anterior (ou no mesmo dia) do início. */
   tightBefore: { visit: ImplantationRequest; km: number | null } | null;
+  /** Férias que tocam o período pedido (técnico indisponível). */
+  vacation: TechnicianVacation | null;
   recommended: boolean;
 }
 
@@ -506,12 +536,13 @@ export function candidatesFor(opts: {
   const dest = placeOf(request);
   const list: Candidate[] = techs.map(tech => {
     const conflicts = conflictsFor(tech.id, start, end, requests, request.id);
+    const vacation = vacationFor(tech, start, end);
     const before = visitsOfTech(tech.id, approved).filter(r => periodOf(r).end <= start);
     const last = before.length ? before[before.length - 1] : null;
     const kmFromLast = last ? distanceKm(index, placeOf(last), dest) : null;
     const tight = last && dayDiff(visitDays(last).last, startOfDay(start)) <= 1 ? { visit: last, km: kmFromLast } : null;
     return {
-      tech, free: conflicts.length === 0, conflicts,
+      tech, free: conflicts.length === 0 && !vacation, conflicts, vacation,
       monthBusy: busyWorkdays(tech.id, approved, m0, m1, holidays),
       monthWorkdays, last, kmFromLast, tightBefore: tight, recommended: false,
     };
@@ -541,9 +572,10 @@ export function checksFor(opts: {
   const { request, start, end, chosen, custom, index } = opts;
   const out: Check[] = [];
   const range = fmtDayRange(startOfDay(start), end > start ? startOfDay(new Date(+end - 1)) : startOfDay(start));
-  const conflicted = chosen.filter(c => c.conflicts.length);
+  const conflicted = chosen.filter(c => c.conflicts.length || c.vacation);
   if (conflicted.length) {
     for (const c of conflicted) {
+      if (c.vacation) { out.push({ level: "error", text: `${c.tech.full_name} está de férias de ${fmtVacation(c.vacation)}.` }); continue; }
       const r = c.conflicts[0];
       out.push({ level: "error", text: `${c.tech.full_name} já está em ${client(r)} de ${fmtDayRange(visitDays(r).first, visitDays(r).last)}.` });
     }

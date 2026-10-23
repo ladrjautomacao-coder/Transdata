@@ -1,9 +1,9 @@
 import { useMemo, type CSSProperties } from "react";
-import { AlertTriangle, Check, Palmtree, UserRoundCog } from "lucide-react";
-import { periodOf, techniciansOf, type ImplantationRequest, type Technician } from "@/lib/implantationScheduling";
+import { AlertTriangle, CalendarCheck, Check, Palmtree, UserRoundCog } from "lucide-react";
+import { dateOfYmd, fmtVacation, periodOf, techniciansOf, type ImplantationRequest, type Technician } from "@/lib/implantationScheduling";
 import { dateKey, type Holiday } from "@/lib/holidays";
 import {
-  VISIT_KIND, WD_SHORT, dayDiff, fmtDM, fmtDayRange, fmtHM, isWeekend, loadTone, placeLabel, placeOf, plusDays,
+  HATCH, VISIT_KIND, WD_SHORT, dayDiff, fmtDM, fmtDayRange, fmtHM, isWeekend, loadTone, placeLabel, placeOf, plusDays,
   startOfDay, visitDays, visitKindOf, visitOrdinal,
   type AgendaAlert, type TechLoad,
 } from "@/lib/agendaTecnica";
@@ -157,7 +157,12 @@ export function MonthGantt({
     const lanes = Math.max(1, ...placed.map(p => p.lane + 1));
     const load = loads.get(t.id);
     const tone = load ? loadTone(load.busy, load.workdays) : null;
-    const freeAll = load && load.workdays > 0 && load.busy === 0;
+    const freeAll = load && load.workdays > 0 && load.busy === 0 && load.off === 0;
+    // férias que caem no mês: faixa listrada atrás das visitas
+    const vacs = (t.vacations ?? [])
+      .map(v => ({ v, a: dayDiff(m0, dateOfYmd(v.start_date)), b: dayDiff(m0, dateOfYmd(v.end_date)) }))
+      .filter(x => x.b >= 0 && x.a <= daysInMonth - 1)
+      .map(x => ({ v: x.v, a: Math.max(0, x.a), b: Math.min(daysInMonth - 1, x.b) }));
 
     return (
       <div key={t.id} className="relative grid border-b border-border/70 last:border-b-0"
@@ -173,7 +178,7 @@ export function MonthGantt({
                 <div className="mt-1 flex items-center gap-2">
                   <span className={`text-[11.5px] leading-4 ${freeAll ? "text-emerald-700 dark:text-emerald-300 font-medium" : tone?.text ?? "text-muted-foreground"}`}
                     title={`${load.busy} de ${load.workdays} dias úteis em campo até ${fmtDM(loadUntil)} · ${load.free} livre${load.free === 1 ? "" : "s"}`}>
-                    {freeAll ? "Livre no mês" : `${load.busy} de ${load.workdays} dias`}
+                    {freeAll ? "Livre no mês" : load.workdays === 0 && load.off > 0 ? "Sem dias disponíveis" : `${load.busy} de ${load.workdays} dias`}
                   </span>
                   {tone && load.workdays > 0 && !freeAll && (
                     <span aria-hidden className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
@@ -183,14 +188,26 @@ export function MonthGantt({
                 </div>
               )
               : <p className="text-[11.5px] leading-4 text-muted-foreground">Sem visitas no mês</p>}
+            {vacs.length > 0 && (
+              <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium leading-4 text-sky-800 dark:text-sky-200">
+                <Palmtree aria-hidden className="h-3 w-3 shrink-0" /><span className="truncate">Férias {vacs.map(x => fmtVacation(x.v)).join(", ")}</span>
+              </p>
+            )}
           </div>
         </div>
+        {vacs.map(({ v, a, b }) => (
+          <div key={`vac-${v.id}`} role="img" aria-label={`Férias de ${fmtVacation(v)}`} title={`Férias de ${fmtVacation(v)}${v.note ? ` · ${v.note}` : ""}`}
+            className="relative z-[5] flex items-center justify-center overflow-hidden border-x border-sky-500/40 text-sky-800 dark:text-sky-200"
+            style={{ gridColumn: `${a + 2} / ${b + 3}`, gridRow: "1 / -1", ...HATCH.vacation }}>
+            <Palmtree className="h-3.5 w-3.5 shrink-0" />
+          </div>
+        ))}
         {placed.map(p => bar(p.r, p.a, p.b, p.lane, p.contL, p.contR))}
-        {placed.length === 0 && load && loadUntil && (
+        {placed.length === 0 && vacs.length === 0 && load && loadUntil && (
           <p className="pointer-events-none self-center px-3 text-[11px] italic text-muted-foreground"
             style={{ gridColumn: "2 / -1", gridRow: 1 }}>
             {freeAll
-              ? <span className="inline-flex items-center gap-1.5"><Palmtree className="h-3.5 w-3.5" />Mês inteiro livre</span>
+              ? <span className="inline-flex items-center gap-1.5"><CalendarCheck className="h-3.5 w-3.5" />Mês inteiro livre</span>
               : "Livre no período exibido"}
           </p>
         )}

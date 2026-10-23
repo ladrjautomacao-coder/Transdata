@@ -1,8 +1,9 @@
 import { CalendarRange, CheckCircle2, Circle, Hourglass, UserRoundCog } from "lucide-react";
 import {
-  colorFor, conflictsFor, formatPeriod, periodOf, techniciansOf,
+  colorFor, dateOfYmd, fmtVacation, formatPeriod, isAvailable, periodOf, techniciansOf, vacationFor,
   type ImplantationRequest, type Technician,
 } from "@/lib/implantationScheduling";
+import { HATCH } from "@/lib/agendaTecnica";
 import { TechAvatar } from "./AgendaShared";
 
 const DAY = 864e5;
@@ -37,7 +38,13 @@ export function AvailabilityPreview({ start, end, technicians, requests, ignoreI
 
   const approved = requests.filter(r => r.status === "aprovada" && r.id !== ignoreId && periodOf(r).start < sEnd && s0 < periodOf(r).end);
   const otherPending = requests.filter(r => r.status === "pendente" && r.id !== ignoreId && periodOf(r).start < end && start < periodOf(r).end);
-  const free = technicians.filter(t => conflictsFor(t.id, start, end, requests, ignoreId).length === 0);
+  const free = technicians.filter(t => isAvailable(t, start, end, requests, ignoreId));
+  // férias de cada técnico dentro da faixa exibida
+  const vacationsShown = (t: Technician) => (t.vacations ?? [])
+    .map(v => ({ v, a: dayIdx(dateOfYmd(v.start_date), s0), b: dayIdx(dateOfYmd(v.end_date), s0) }))
+    .filter(x => x.b >= 0 && x.a <= total - 1)
+    .map(x => ({ ...x, a: Math.max(0, x.a), b: Math.min(total - 1, x.b) }));
+  const anyVacation = technicians.some(t => vacationsShown(t).length > 0);
   const busy = technicians.filter(t => !free.includes(t));
   const pct = (i: number) => `${(i / total) * 100}%`;
 
@@ -87,6 +94,7 @@ export function AvailabilityPreview({ start, end, technicians, requests, ignoreI
               const mine = approved.filter(r => techniciansOf(r).some(x => x.id === t.id));
               const isFree = free.includes(t);
               const isSel = selectedIds.includes(t.id);
+              const away = vacationFor(t, start, end);
               return (
                 <div key={t.id} className={`flex border-b last:border-0 ${isSel ? "bg-primary/5" : ""}`} style={{ height: compact ? 34 : 40 }}>
                   <button
@@ -99,7 +107,7 @@ export function AvailabilityPreview({ start, end, technicians, requests, ignoreI
                     <TechAvatar tech={t} size="h-6 w-6 text-[9px]" />
                     <div className="min-w-0 flex-1 leading-tight">
                       <p className={`truncate text-xs ${isSel ? "font-semibold text-primary" : "font-medium"}`}>{t.full_name}</p>
-                      <p className={`text-[9px] font-semibold uppercase ${isFree ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>{isFree ? "livre" : "ocupado"}</p>
+                      <p className={`text-[9px] font-semibold uppercase ${isFree ? "text-emerald-600 dark:text-emerald-400" : away ? "text-sky-700 dark:text-sky-300" : "text-destructive"}`}>{isFree ? "livre" : away ? "de férias" : "ocupado"}</p>
                     </div>
                     {onPickTechnician && (isSel
                       ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-primary" />
@@ -108,6 +116,12 @@ export function AvailabilityPreview({ start, end, technicians, requests, ignoreI
                   <div className="relative flex flex-1">
                     <div className="pointer-events-none absolute inset-y-0 border-x border-dashed border-primary/40 bg-primary/[0.07]" style={{ left: pct(reqA), width: pct(reqB - reqA + 1) }} />
                     {days.map(d => <div key={+d} className={`flex-1 border-l ${d.getDay() === 0 || d.getDay() === 6 ? "bg-muted/40" : ""}`} />)}
+                    {vacationsShown(t).map(({ v, a, b }) => (
+                      <div key={v.id} title={`Férias de ${fmtVacation(v)}`} style={{ left: pct(a), width: pct(b - a + 1), ...HATCH.vacation }}
+                        className="absolute inset-y-0 flex items-center justify-center overflow-hidden border-x border-sky-500/40 text-[9px] font-semibold uppercase tracking-wide text-sky-800 dark:text-sky-200">
+                        <span className="truncate px-1">Férias</span>
+                      </div>
+                    ))}
                     {mine.map(r => {
                       const p = periodOf(r);
                       const a = Math.max(0, dayIdx(p.start, s0)), b = Math.min(total - 1, dayIdx(p.end, s0));
@@ -131,6 +145,7 @@ export function AvailabilityPreview({ start, end, technicians, requests, ignoreI
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm border border-dashed border-primary/50 bg-primary/10" />Período solicitado</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm bg-slate-500" />Já alocado (aprovado)</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm bg-slate-500 ring-2 ring-destructive" />Conflita com o pedido</span>
+        {anyVacation && <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm border border-sky-500/40" style={HATCH.vacation} />Férias</span>}
         {total >= MAX_DAYS && <span>Mostrando os primeiros {MAX_DAYS} dias do período.</span>}
       </div>
     </div>

@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  AlertTriangle, CalendarDays, CheckCircle2, Clock3, Inbox, Info, UserCheck, UserX, UsersRound, XCircle,
+  AlertTriangle, CalendarDays, CheckCircle2, Clock3, Inbox, Info, Palmtree, UserCheck, UserX, UsersRound, XCircle,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { conflictsFor, periodOf, type ImplantationRequest, type Technician } from "@/lib/implantationScheduling";
+import { isAvailable, periodOf, type ImplantationRequest, type Technician } from "@/lib/implantationScheduling";
 import type { Holiday } from "@/lib/holidays";
 import {
   MONTH_SHORT, VISIT_KIND, dayDiff, fmtDayRange, fmtDM, fmtWdDM, p2, placeLabel, placeOf,
@@ -157,7 +157,7 @@ export function PendingPanel({ pending, techs, requests, holidays, today, canApp
             const { start, end } = periodOf(r);
             const d = dayDiff(today, first);
             const wd = workdaysIn(first, last, holidays).length;
-            const free = techs.filter(t => conflictsFor(t.id, start, end, requests, r.id).length === 0);
+            const free = techs.filter(t => isAvailable(t, start, end, requests, r.id));
             const names = free.map(t => t.full_name.trim().split(/\s+/)[0]);
             const urgency = d < 0
               ? { text: `Começou ${fmtWdDM(first)} e ainda não foi avaliada`, tone: "text-red-600 dark:text-red-400" }
@@ -213,8 +213,8 @@ export function AlertsPanel({ alerts, conflicts, onPick, onSuggestion }: {
       ) : (
         <ul className="px-5">
           {alerts.map(a => {
-            const Icon = a.kind === "conflito" ? XCircle : a.kind === "fim_de_semana" ? CalendarDays : AlertTriangle;
-            const tone = a.kind === "conflito" ? "bg-destructive/10 text-destructive" : a.kind === "fim_de_semana" ? "bg-primary/10 text-primary" : "bg-amber-500/15 text-amber-700 dark:text-amber-300";
+            const Icon = a.kind === "conflito" ? XCircle : a.kind === "ferias" ? Palmtree : a.kind === "fim_de_semana" ? CalendarDays : AlertTriangle;
+            const tone = a.kind === "conflito" || a.kind === "ferias" ? "bg-destructive/10 text-destructive" : a.kind === "fim_de_semana" ? "bg-primary/10 text-primary" : "bg-amber-500/15 text-amber-700 dark:text-amber-300";
             return (
               <li key={a.id} className="border-t border-border/60 first:border-t-0">
                 <div className="flex gap-3 py-3.5">

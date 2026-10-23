@@ -49,6 +49,16 @@ export interface Technician {
   photo_url?: string | null;
   /** Preenchido quando o técnico foi removido do cadastro (só vem nos membros das visitas). */
   removed_at?: string | null;
+  /** Férias cadastradas (só vêm no cadastro de técnicos, não nos membros das visitas). */
+  vacations?: TechnicianVacation[];
+}
+
+/** Período de férias: o técnico fica indisponível de start_date a end_date (dias inteiros, AAAA-MM-DD). */
+export interface TechnicianVacation {
+  id: string;
+  start_date: string;
+  end_date: string;
+  note: string | null;
 }
 
 export interface EligibleProject {
@@ -210,7 +220,7 @@ const REQUEST_COLS =
   "visit_format, address_street, address_district, address_city, address_state, meeting_url, notes, status, approved_start, approved_end, reviewer_name, reviewed_at, rejection_reason, attendance, attendance_note, attended_by_name, attended_at, cancel_reason, created_at, " +
   "project:projects(id, company_name, project_code, city, state, country_code, manager:team_members!projects_manager_id_fkey(full_name)), " +
   "members:implantation_request_members(technician:implantation_technicians(id, full_name, email, area, active, photo_url, removed_at))";
-const TECH_COLS = "id, full_name, email, area, active, photo_url";
+const TECH_COLS = "id, full_name, email, area, active, photo_url, vacations:implantation_technician_vacations(id, start_date, end_date, note)";
 
 /** Período efetivo: o aprovado, se houver; senão o solicitado. */
 export const periodOf = (r: ImplantationRequest) => ({
@@ -371,7 +381,10 @@ export async function fetchProjectBrief(projectId: string): Promise<ProjectBrief
 }
 
 export async function saveTechnician(input: { id?: string; full_name: string; email: string | null; area: string | null; active?: boolean; photo_url?: string | null }): Promise<Technician> {
-  const { id, ...rest } = input;
+  const { id } = input;
+  // só as colunas do cadastro: o técnico vindo da lista também traz as férias
+  const rest = Object.fromEntries((["full_name", "email", "area", "active", "photo_url"] as const)
+    .filter(k => input[k] !== undefined).map(k => [k, input[k]]));
   const { data, error } = id
     ? await db.from("implantation_technicians").update(rest).eq("id", id).select(TECH_COLS).single()
     : await db.from("implantation_technicians").insert(rest).select(TECH_COLS).single();
@@ -470,6 +483,69 @@ export function conflictsFor(techId: string, start: Date, end: Date, requests: I
     r.id !== ignoreId && r.status === "aprovada" &&
     techniciansOf(r).some(t => t.id === techId) &&
     start < periodOf(r).end && periodOf(r).start < end);
+}
+
+/* ─── Férias ─── */
+/** "AAAA-MM-DD" de uma data local. */
+export const ymdOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** "AAAA-MM-DD" → Date local (meia-noite). */
+export const dateOfYmd = (s: string) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+
+/** Férias que tocam algum dia do período (fim à meia-noite não ocupa o dia seguinte); a primeira, se houver. */
+export function vacationFor(tech: Pick<Technician, "vacations">, start: Date, end: Date): TechnicianVacation | null {
+  const first = ymdOf(start);
+  const last = ymdOf(end > start ? new Date(+end - 1) : start);
+  return [...(tech.vacations ?? [])].sort((a, b) => a.start_date.localeCompare(b.start_date))
+    .find(v => v.start_date <= last && v.end_date >= first) ?? null;
+}
+
+/** O técnico está de férias no dia d? */
+export const onVacation = (tech: Pick<Technician, "vacations">, d: Date) => {
+  const k = ymdOf(d);
+  return (tech.vacations ?? []).some(v => v.start_date <= k && k <= v.end_date);
+};
+
+/** Livre para a visita: sem conflito com visita aprovada e sem férias no período. */
+export const isAvailable = (tech: Technician, start: Date, end: Date, requests: ImplantationRequest[], ignoreId?: string) =>
+  !vacationFor(tech, start, end) && conflictsFor(tech.id, start, end, requests, ignoreId).length === 0;
+
+/** "03/11 a 14/11" (ou "03/11" num dia só). */
+export function fmtVacation(v: Pick<TechnicianVacation, "start_date" | "end_date">) {
+  const f = (s: string) => `${s.slice(8, 10)}/${s.slice(5, 7)}`;
+  return v.start_date === v.end_date ? f(v.start_date) : `${f(v.start_date)} a ${f(v.end_date)}`;
+}
+
+/** Férias em andamento hoje ou a próxima (as que já passaram não contam). */
+export function currentOrNextVacation(tech: Pick<Technician, "vacations">, today: Date) {
+  const k = ymdOf(today);
+  const list = [...(tech.vacations ?? [])].filter(v => v.end_date >= k).sort((a, b) => a.start_date.localeCompare(b.start_date));
+  const v = list[0];
+  return v ? { vacation: v, now: v.start_date <= k } : null;
+}
+
+export async function saveTechnicianVacation(input: { technician_id: string; start_date: string; end_date: string; note: string | null }): Promise<TechnicianVacation> {
+  const { data, error } = await db.from("implantation_technician_vacations").insert(input).select("id, start_date, end_date, note").single();
+  if (error) throw error;
+  return data as TechnicianVacation;
+}
+
+export async function deleteTechnicianVacation(id: string) {
+  const { error } = await db.from("implantation_technician_vacations").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/** Visitas aprovadas do técnico que caem nas férias (para avisar quem cadastrou). */
+export async function approvedVisitsDuring(techId: string, startYmd: string, endYmd: string): Promise<ImplantationRequest[]> {
+  // janela folgada no servidor (fuso); o corte exato por dia é feito aqui
+  const { data, error } = await db.from("implantation_requests").select(REQUEST_COLS)
+    .eq("status", "aprovada")
+    .lt("approved_start", ymdOf(new Date(+dateOfYmd(endYmd) + 2 * 864e5)))
+    .gt("approved_end", ymdOf(new Date(+dateOfYmd(startYmd) - 864e5)));
+  if (error) throw error;
+  const span = { vacations: [{ id: "", start_date: startYmd, end_date: endYmd, note: null }] };
+  return ((data ?? []) as ImplantationRequest[])
+    .filter(r => techniciansOf(r).some(t => t.id === techId) && !!vacationFor(span, periodOf(r).start, periodOf(r).end))
+    .sort((a, b) => +periodOf(a).start - +periodOf(b).start);
 }
 
 /** Mensagem amigável para erros do Supabase/Postgres. */

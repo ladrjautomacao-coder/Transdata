@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle, Ban, CalendarRange, Camera, Check, CheckCircle2, History, Info, Loader2,
-  MapPin, MessageSquareWarning, Monitor, Pencil, Plus, RotateCcw, Send, Sun, Sunset, Trash2, Video, X, type LucideIcon,
+  MapPin, MessageSquareWarning, Monitor, Palmtree, Pencil, Plus, RotateCcw, Send, Sun, Sunset, Trash2, Video, X, type LucideIcon,
 } from "lucide-react";
 import { Constants } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
@@ -25,9 +25,10 @@ import {
   countTechnicianVisits, rejectRequest, removeTechnician, saveTechnician, type Attendance,
   photoFileProblem, removeTechnicianPhoto, techniciansOf, toLocalInput, uploadTechnicianPhoto,
   VISIT_FORMAT_LABEL, REMOTE_PERIODS, formatAddress, visitFormatText, type RemotePeriod, type VisitFormat,
-  type EligibleProject, type HistoryEntry, type ImplantationRequest, type Technician,
+  type EligibleProject, type HistoryEntry, type ImplantationRequest, type Technician, type TechnicianVacation,
 } from "@/lib/implantationScheduling";
 import { MeetingLink, ProjectBox, StatusPill, TechAvatar, VisitDestination } from "./AgendaShared";
+import { VacationChip, VacationPanel } from "./VacationPanel";
 import { HolidayWarning } from "./HolidaysDialog";
 import { useCustomHolidays } from "@/hooks/useCustomHolidays";
 
@@ -647,11 +648,16 @@ export function TechniciansDialog({ open, onOpenChange, onChanged }: { open: boo
   const [photoBusy, setPhotoBusy] = useState<string | null>(null);
   const [newPhoto, setNewPhoto] = useState<File | null>(null);
   const [newPhotoUrl, setNewPhotoUrl] = useState<string | null>(null);
+  const [vacationFor, setVacationFor] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const pickFor = useRef<Technician | "novo" | null>(null);
 
   const load = () => fetchTechnicians(true).then(setList).catch(err => { setList([]); toast.error("Erro ao carregar técnicos", { description: errorMessage(err) }); });
-  useEffect(() => { if (open) { setList(null); setEditing(null); load(); } }, [open]);
+  useEffect(() => { if (open) { setList(null); setEditing(null); setVacationFor(null); load(); } }, [open]);
+  const updateVacations = (techId: string, update: (v: TechnicianVacation[]) => TechnicianVacation[]) => {
+    setList(l => l?.map(x => x.id === techId ? { ...x, vacations: update(x.vacations ?? []) } : x) ?? l);
+    onChanged();
+  };
   useEffect(() => {
     if (!newPhoto) { setNewPhotoUrl(null); return; }
     const url = URL.createObjectURL(newPhoto);
@@ -783,15 +789,22 @@ export function TechniciansDialog({ open, onOpenChange, onChanged }: { open: boo
                 <p className="text-[11px] text-muted-foreground sm:col-span-4">O e-mail liga o técnico à conta do portal: use o mesmo e-mail com que ele entra.</p>
               </li>
             ) : (
-              <li key={t.id} className={`flex items-center gap-3 px-3 py-2.5 ${t.active ? "" : "opacity-50"}`}>
+              <Fragment key={t.id}>
+              <li className={`flex items-center gap-3 px-3 py-2.5 ${t.active ? "" : "opacity-50"}`}>
                 <TechPhotoButton tech={t} busy={photoBusy === t.id} onPick={() => pickPhoto(t)} onRemove={() => clearPhoto(t)} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{t.full_name}</p>
                   <p className="truncate text-[11px] text-muted-foreground">{[t.area, t.email].filter(Boolean).join(" · ") || "—"}</p>
+                  <VacationChip tech={t} />
                 </div>
-                <span className="text-[11px] text-muted-foreground">{t.active ? "Ativo" : "Inativo"}</span>
+                <span className="hidden text-[11px] text-muted-foreground sm:inline">{t.active ? "Ativo" : "Inativo"}</span>
                 <Switch checked={t.active} onCheckedChange={() => toggleActive(t)} aria-label={`Ativar ou desativar ${t.full_name}`} />
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-primary"
+                <Button variant="ghost" size="icon" aria-expanded={vacationFor === t.id} onClick={() => setVacationFor(v => v === t.id ? null : t.id)}
+                  className={`h-8 w-8 shrink-0 ${vacationFor === t.id ? "bg-sky-500/10 text-sky-700 dark:text-sky-300" : "text-muted-foreground hover:text-sky-700 dark:hover:text-sky-300"}`}
+                  aria-label={`Férias de ${t.full_name}`} title="Férias">
+                  <Palmtree className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="-ml-2 h-8 w-8 shrink-0 text-muted-foreground hover:text-primary"
                   onClick={() => setEditing({ id: t.id, full_name: t.full_name, email: t.email ?? "", area: t.area ?? "" })} aria-label={`Editar ${t.full_name}`} title="Editar técnico">
                   <Pencil className="h-4 w-4" />
                 </Button>
@@ -800,10 +813,12 @@ export function TechniciansDialog({ open, onOpenChange, onChanged }: { open: boo
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </li>
+              {vacationFor === t.id && <li><VacationPanel tech={t} onChange={update => updateVacations(t.id, update)} /></li>}
+              </Fragment>
             ))}
           </ul>
         )}
-        {!!list?.length && <p className="-mt-2 text-[11px] text-muted-foreground">Clique no avatar para enviar, trocar ou remover a foto. A imagem é recortada em quadrado.</p>}
+        {!!list?.length && <p className="-mt-2 text-[11px] text-muted-foreground">Clique no avatar para enviar, trocar ou remover a foto. A imagem é recortada em quadrado. Use o ícone de palmeira para cadastrar as férias.</p>}
         <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button></DialogFooter>
       </DialogContent>
     </Dialog>

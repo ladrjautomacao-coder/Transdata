@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { holidaysByDay } from "@/lib/holidays";
-import type { ImplantationRequest, Technician } from "@/lib/implantationScheduling";
+import { vacationFor, type ImplantationRequest, type Technician } from "@/lib/implantationScheduling";
 import {
-  candidatesFor, computeAlerts, distanceKm, fmtDayRange, fmtWeekRange, loadCityIndex, placeLabel, placeOf, visitKindOf, visitOrdinal, workdaysIn,
+  candidatesFor, checksFor, computeAlerts, distanceKm, fmtDayRange, fmtWeekRange, loadCityIndex, placeLabel, placeOf, techLoad,
+  visitKindOf, visitOrdinal, workdaysIn,
 } from "@/lib/agendaTecnica";
 
 const tech = (id: string, full_name: string): Technician => ({ id, full_name, email: null, area: null, active: true });
@@ -105,5 +106,41 @@ describe("alertas e recomendação", () => {
     const rec = cands.find(c => c.recommended);
     expect(rec?.free).toBe(true);
     expect(rec?.tech.id).not.toBe("ma");
+  });
+});
+
+describe("férias do técnico", () => {
+  // Ana de férias de 02 a 13/11; Lucas livre
+  const anaFerias: Technician = { ...AP, vacations: [{ id: "v1", start_date: "2026-11-02", end_date: "2026-11-13", note: "férias anuais" }] };
+  const pending = visit("Expresso Itamarati", "São José do Rio Preto", "SP", "Rede de Vendas", at(5, 11), at(6, 11, 18), [], "pendente");
+
+  it("técnico de férias não fica livre nem é recomendado, e a verificação explica o motivo", () => {
+    const start = new Date(pending.requested_start), end = new Date(pending.requested_end);
+    const cands = candidatesFor({ request: pending, start, end, techs: [anaFerias, LA], requests: [pending], holidays, index: null });
+    const ana = cands.find(c => c.tech.id === "ap");
+    expect(ana?.free).toBe(false);
+    expect(ana?.vacation?.start_date).toBe("2026-11-02");
+    expect(cands.find(c => c.recommended)?.tech.id).toBe("la");
+    const checks = checksFor({ request: pending, start, end, chosen: [ana!], custom: [], index: null });
+    expect(checks.find(c => c.level === "error")?.text).toBe("Ana Prado está de férias de 02/11 a 13/11.");
+  });
+
+  it("visita que termina à meia-noite do dia anterior às férias não conta como dentro delas", () => {
+    expect(vacationFor(anaFerias, new Date(2026, 9, 31, 8), new Date(2026, 10, 2, 0, 0))).toBeNull();
+    expect(vacationFor(anaFerias, new Date(2026, 10, 13, 8), new Date(2026, 10, 13, 18))?.id).toBe("v1");
+    expect(vacationFor(anaFerias, new Date(2026, 10, 14, 8), new Date(2026, 10, 14, 18))).toBeNull();
+  });
+
+  it("visita aprovada nas férias vira alerta, e dias de férias não contam como livres", () => {
+    const approved = [visit("Viação Garcia", "Londrina", "PR", "1ª Visita - Bilhetagem", at(10, 11), at(11, 11, 18), [anaFerias])];
+    const alerts = computeAlerts({ techs: [anaFerias, LA], approved, from: new Date(2026, 10, 2), to: new Date(2026, 10, 15), today, holidays, custom: [], index: null });
+    const ferias = alerts.find(a => a.kind === "ferias");
+    expect(ferias?.techId).toBe("ap");
+    expect(ferias?.text).toMatch(/cai nas férias de 02\/11 a 13\/11/);
+    // 02 a 13/11: 9 dias úteis (Finados no dia 02), todos de férias
+    const load = techLoad(anaFerias, approved, new Date(2026, 10, 2), new Date(2026, 10, 13), holidays, today);
+    expect(load.workdays).toBe(0);
+    expect(load.off).toBe(9);
+    expect(load.vacation?.now).toBe(false);
   });
 });
