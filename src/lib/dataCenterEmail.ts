@@ -11,14 +11,13 @@ export type SistemaDC = (typeof SISTEMAS)[number];
 export interface DataCenterForm {
   /** Código do cliente, 5 dígitos (ex.: 00745). */
   codigo: string;
-  sistema: SistemaDC | "";
+  /** Um ou mais (ex.: TDMax Urbano e TDMax Seccionado no mesmo cliente). */
+  sistemas: SistemaDC[];
   recolhimento: "com" | "sem";
   migracao: boolean;
   migracaoDe: string;
   prefixo: string;
   mascara: string;
-  /** Só quando o projeto ainda não tem CNPJ no cadastro. */
-  cnpj: string;
   crm: boolean;
   recarga: boolean;
   abt: boolean;
@@ -30,20 +29,30 @@ const solucoes = (p: GerProject) => p.project_solutions.map(s => s.solution?.nam
 const temSolucao = (p: GerProject, re: RegExp) => solucoes(p).some(n => re.test(n));
 export const temCarrier = (p: GerProject) => temSolucao(p, /carrier/i);
 
-/** Sistema sugerido pelo cadastro (o GP pode trocar). */
-function sistemaSugerido(p: GerProject): SistemaDC {
-  if (temSolucao(p, /gest[aã]o de frota/i) && !temSolucao(p, /bilhet/i)) return "Gestão de Frota";
-  if (temSolucao(p, /\bits\b/i) && !temSolucao(p, /bilhet/i)) return "ITS";
-  if ((p.fleet_seccionado ?? 0) > 0 && !(p.fleet_urbano ?? 0)) return "TDMax Seccionado";
-  return "TDMax Urbano";
+/** Sistemas sugeridos pelo cadastro (o GP marca ou desmarca). */
+function sistemasSugeridos(p: GerProject): SistemaDC[] {
+  const its = temSolucao(p, /\bits\b/i), frota = temSolucao(p, /gest[aã]o de frota/i);
+  const out: SistemaDC[] = [];
+  if (temSolucao(p, /bilhet/i) || (!its && !frota)) {
+    const urb = p.fleet_urbano ?? 0, sec = p.fleet_seccionado ?? 0;
+    if (urb > 0 || sec === 0) out.push("TDMax Urbano");
+    if (sec > 0) out.push("TDMax Seccionado");
+  }
+  if (its) out.push("ITS");
+  if (frota) out.push("Gestão de Frota");
+  return out;
 }
 
 /** Valores iniciais: o mais comum hoje, para o GP só ajustar o que muda. */
 export const formInicial = (p: GerProject): DataCenterForm => ({
-  codigo: "", sistema: sistemaSugerido(p), recolhimento: "sem", migracao: false, migracaoDe: "",
-  prefixo: "4", mascara: "4", cnpj: "",
+  codigo: "", sistemas: sistemasSugeridos(p), recolhimento: "sem", migracao: false, migracaoDe: "",
+  prefixo: "4", mascara: "4",
   crm: true, recarga: true, abt: false, billing: false, observacoes: "",
 });
+
+/** Marca ou desmarca um sistema, mantendo a ordem da lista. */
+export const alternarSistema = (atuais: SistemaDC[], s: SistemaDC) =>
+  SISTEMAS.filter(x => (x === s ? !atuais.includes(s) : atuais.includes(x)));
 
 const dois = (n: number) => String(Math.max(0, n)).padStart(2, "0");
 export const soDigitos = (s: string) => s.replace(/\D/g, "");
@@ -53,25 +62,27 @@ export const razaoSocial = (p: GerProject) => p.company_name.trim().toUpperCase(
 export const totalCarros = (p: GerProject) => p.fleet_size ?? 0;
 export const reservas = (p: GerProject) => p.reserve_fleet ?? 0;
 export const licenciados = (p: GerProject) => Math.max(0, totalCarros(p) - reservas(p));
-/** CNPJ do cadastro; sem ele, o que o GP informou no e-mail. */
-export const cnpjDC = (p: GerProject, f: DataCenterForm) => p.cnpj || f.cnpj;
+/** O CNPJ vem só do cadastro do projeto. */
+export const temCnpj = (p: GerProject) => cnpjDigits(p.cnpj ?? "").length === 14;
 
-/** TDMax Urbano e Seccionado entram no código só como "TDMax". */
-const sufixoSistema = (s: DataCenterForm["sistema"]) => (s.startsWith("TDMax") ? "TDMax" : s || "Sistema");
+/** TDMax Urbano e Seccionado entram no código só como "TDMax"; vários sistemas: "TDMax/ITS". */
+const sufixoSistemas = (s: SistemaDC[]) =>
+  [...new Set(s.map(x => (x.startsWith("TDMax") ? "TDMax" : x)))].join("/") || "Sistema";
+export const sistemasTexto = (s: SistemaDC[]) => s.join(", ") || "—";
 /** "00745 - MARISUL TRANSPORTES LTDA-Marau/RS-TDMax" */
 export const codigoCliente = (p: GerProject, f: DataCenterForm) =>
-  `${f.codigo || "_____"} - ${razaoSocial(p)}-${cidadeUf(p)}-${sufixoSistema(f.sistema)}`;
+  `${f.codigo || "_____"} - ${razaoSocial(p)}-${cidadeUf(p)}-${sufixoSistemas(f.sistemas)}`;
 export const assuntoDC = (p: GerProject, f: DataCenterForm) => `DATA CENTER | CRIAR SITE NO BD | ${codigoCliente(p, f)}`;
 
 /** O que ainda falta para o e-mail ficar pronto. */
 export function faltando(p: GerProject, f: DataCenterForm): string[] {
   const out: string[] = [];
   if (!/^\d{5}$/.test(f.codigo)) out.push("Código do cliente com 5 dígitos");
-  if (!f.sistema) out.push("Sistema");
+  if (!f.sistemas.length) out.push("Sistema");
   if (f.migracao && !f.migracaoDe.trim()) out.push("Sistema de origem da migração");
   if (!soDigitos(f.prefixo)) out.push("Dígitos do prefixo");
   if (!soDigitos(f.mascara)) out.push("Máscara da linha");
-  if (cnpjDigits(cnpjDC(p, f)).length !== 14) out.push("CNPJ completo");
+  if (!temCnpj(p)) out.push("CNPJ no cadastro do projeto");
   return out;
 }
 
@@ -85,7 +96,7 @@ export function linhasDC(p: GerProject, f: DataCenterForm): { grupo: string; lin
       { label: "Selo", valor: "Liberação para Criação do BD no DC", origem: "padrao" },
       { label: "Departamento", valor: "CPQ - PMO", origem: "padrao" },
       { label: "Código do Cliente", valor: codigoCliente(p, f), origem: "gp" },
-      { label: "Sistema", valor: f.sistema || "—", origem: "gp" },
+      { label: "Sistema", valor: sistemasTexto(f.sistemas), origem: "gp" },
     ] },
     { grupo: "Configuração", linhas: [
       { label: "Com ou Sem Recolhimento", valor: f.recolhimento === "com" ? "Com recolhimento" : "Sem recolhimento", origem: "gp" },
@@ -99,7 +110,7 @@ export function linhasDC(p: GerProject, f: DataCenterForm): { grupo: string; lin
       { label: "Quantidade de carros licenciados", valor: dois(licenciados(p)), origem: "cadastro" },
       { label: "Quantidade de carros reservas", valor: dois(reservas(p)), origem: "cadastro" },
       { label: "Quantidade total de carros", valor: dois(totalCarros(p)), origem: "cadastro" },
-      { label: "CNPJ", valor: cnpjDC(p, f) || "—", origem: p.cnpj ? "cadastro" : "gp" },
+      { label: "CNPJ", valor: p.cnpj || "—", origem: "cadastro" },
       { label: "Razão Social", valor: razaoSocial(p), origem: "cadastro" },
     ] },
     { grupo: "Módulos", linhas: [
@@ -118,30 +129,39 @@ export function linhasDC(p: GerProject, f: DataCenterForm): { grupo: string; lin
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-/** HTML do e-mail com estilos em linha e tabela (é o que o Outlook respeita ao colar). */
+/**
+ * HTML do e-mail para colar no Outlook. O Outlook descarta parte do CSS ao colar (caixa alta,
+ * espaçamento entre letras, cantos arredondados, opacidade, herança de cor), então aqui só entra
+ * o que ele mantém: tabela simples, cor de fundo na célula (bgcolor) e fonte, tamanho,
+ * cor e peso declarados em cada texto. Os títulos já vão escritos em maiúsculas.
+ */
 export function emailHtmlDC(p: GerProject, f: DataCenterForm, gp: string): string {
-  const font = "font-family:Arial,Helvetica,sans-serif;";
+  const font = "font-family:'Segoe UI',Arial,Helvetica,sans-serif;";
+  const txt = (size: number, color: string, bold = false) => `${font}font-size:${size}px;color:${color};font-weight:${bold ? "bold" : "normal"};`;
+  const linha = "border-top:1px solid #e3dcec;";
   const grupos = linhasDC(p, f).map(g => {
-    const head = `<tr><td colspan="2" style="${font}background:#efe6f6;color:#4b1768;font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;padding:7px 14px;border-top:1px solid #e3dcec;">${esc(g.grupo)}</td></tr>`;
+    const head = `<tr><td colspan="2" bgcolor="#efe6f6" style="${txt(11, "#4b1768", true)}background-color:#efe6f6;padding:8px 16px;${linha}">${esc(g.grupo.toUpperCase())}</td></tr>`;
     const rows = g.linhas.map(l => {
-      const valor = l.simNao
-        ? `<span style="${font}display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:bold;${l.valor === "Sim" ? "background:#dcf3ea;color:#047857;" : "background:#f1f0f3;color:#645a72;"}">${esc(l.valor)}</span>`
-        : esc(l.valor);
-      return `<tr><td style="${font}width:46%;padding:7px 14px;border-top:1px solid #e3dcec;color:#645a72;font-size:13px;vertical-align:top;">${esc(l.label)}</td><td style="${font}padding:7px 14px;border-top:1px solid #e3dcec;color:#1f1630;font-size:13px;font-weight:bold;vertical-align:top;">${valor}</td></tr>`;
+      const valor = !l.simNao ? `<span style="${txt(13, "#1f1630", true)}">${esc(l.valor)}</span>`
+        : l.valor === "Sim" ? `<span style="${txt(13, "#047857", true)}">&#9679;&nbsp;Sim</span>`
+        : `<span style="${txt(13, "#8a8197")}">&#9675;&nbsp;Não</span>`;
+      return `<tr><td width="42%" valign="top" style="${txt(13, "#645a72")}width:42%;padding:8px 16px;${linha}">${esc(l.label)}</td>`
+        + `<td valign="top" style="${txt(13, "#1f1630", true)}padding:8px 16px;${linha}">${valor}</td></tr>`;
     }).join("");
     return head + rows;
   }).join("");
-  return `<div style="${font}color:#1f1630;font-size:14px;line-height:1.5;">`
-    + `<p style="margin:0 0 4px 0;">Prezados,</p>`
-    + `<p style="margin:0 0 16px 0;">Segue solicitação para criação do ambiente no data center.</p>`
+  const p0 = (texto: string, extra = "") => `<p style="${txt(14, "#1f1630")}margin:0;${extra}">${texto}</p>`;
+  return p0("Prezados,")
+    + p0("Segue solicitação para criação do ambiente no data center.", "margin-bottom:14px;")
     + `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;max-width:640px;border:1px solid #e3dcec;">`
-    + `<tr><td colspan="2" style="${font}background:#4b1768;color:#ffffff;padding:12px 14px;">`
-    + `<div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;opacity:.8;">Data Center · Criar site no BD</div>`
-    + `<div style="font-size:15px;font-weight:bold;margin-top:2px;">${esc(codigoCliente(p, f))}</div></td></tr>`
+    + `<tr><td colspan="2" bgcolor="#4b1768" style="background-color:#4b1768;padding:14px 16px;">`
+    + `<p style="${txt(11, "#dcc8ec", true)}margin:0;">DATA CENTER &nbsp;|&nbsp; CRIAR SITE NO BD</p>`
+    + `<p style="${txt(16, "#ffffff", true)}margin:4px 0 0 0;">${esc(codigoCliente(p, f))}</p></td></tr>`
     + grupos
     + `</table>`
-    + `<p style="margin:16px 0 0 0;">Atenciosamente,<br><b>${esc(gp)}</b><br><span style="color:#645a72;">Gerente de Projetos · Transdata</span></p>`
-    + `</div>`;
+    + p0("Atenciosamente,", "margin-top:16px;")
+    + p0(`<b style="${txt(14, "#1f1630", true)}">${esc(gp)}</b>`)
+    + `<p style="${txt(13, "#645a72")}margin:0;">Gerente de Projetos · Transdata</p>`;
 }
 
 /** Versão em texto (para quem colar onde não aceita formatação). */

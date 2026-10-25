@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, CheckCircle2, Copy, ExternalLink, Lock, Mail, PencilLine, Send } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Copy, ExternalLink, Lock, Mail, PencilLine, RefreshCw, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -10,10 +10,9 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { GerProject } from "@/lib/gerenciamento";
 import {
-  DC_DESTINATARIO, SISTEMAS, assuntoDC, cidadeUf, codigoCliente, emailHtmlDC, emailTextoDC, faltando, formInicial, licenciados,
-  mailtoDC, outlookWebDC, razaoSocial, reservas, soDigitos, temCarrier, totalCarros, type DataCenterForm,
+  DC_DESTINATARIO, SISTEMAS, alternarSistema, assuntoDC, cidadeUf, codigoCliente, emailHtmlDC, emailTextoDC, faltando, formInicial,
+  licenciados, mailtoDC, outlookWebDC, razaoSocial, reservas, soDigitos, temCarrier, temCnpj, totalCarros, type DataCenterForm,
 } from "@/lib/dataCenterEmail";
-import { formatCnpj } from "@/lib/cnpj";
 
 /** Copia o e-mail formatado (HTML) para colar no Outlook; sem suporte, copia o texto. */
 async function copiarEmail(html: string, texto: string) {
@@ -66,6 +65,23 @@ function Seg<T extends string>({ value, options, onChange, label }: { value: T |
   );
 }
 
+/** Botões de escolha múltipla. */
+function Multi<T extends string>({ value, options, onToggle, label }: { value: T[]; options: T[]; onToggle: (v: T) => void; label: string }) {
+  return (
+    <div role="group" aria-label={label} className="flex flex-wrap gap-1.5">
+      {options.map(o => {
+        const on = value.includes(o);
+        return (
+          <button key={o} type="button" role="checkbox" aria-checked={on} onClick={() => onToggle(o)}
+            className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background hover:bg-muted"}`}>
+            {on && <Check className="h-3.5 w-3.5" aria-hidden />}{o}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Sim/Não de um módulo. */
 function SimNao({ id, label, value, onChange }: { id: string; label: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -83,7 +99,7 @@ function SimNao({ id, label, value, onChange }: { id: string; label: string; val
  * E-mail ao Data Center: o GP completa o que varia, confere a prévia e abre o Outlook
  * com destinatário e assunto prontos; o corpo formatado vai copiado para colar.
  */
-export function DataCenterEmailDialog({ open, onOpenChange, project, form, onForm, gp, onRegistrar }: {
+export function DataCenterEmailDialog({ open, onOpenChange, project, form, onForm, gp, onRegistrar, onAtualizarProjeto }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   project: GerProject;
@@ -92,11 +108,21 @@ export function DataCenterEmailDialog({ open, onOpenChange, project, form, onFor
   gp: string;
   /** "Já enviei": registra a solicitação na atividade. */
   onRegistrar: () => void;
+  /** Relê o cadastro do projeto (depois de completar o CNPJ em outra aba). */
+  onAtualizarProjeto: () => Promise<unknown>;
 }) {
-  const f = form ?? formInicial(project);
+  // completa com os padrões o que faltar (o formulário muda de forma entre versões)
+  const f: DataCenterForm = { ...formInicial(project), ...form };
   const set = (patch: Partial<DataCenterForm>) => { onForm({ ...f, ...patch }); setConferido(false); setAberto(false); };
   const [conferido, setConferido] = useState(false);
   const [aberto, setAberto] = useState(false);
+  const [atualizando, setAtualizando] = useState(false);
+  const atualizar = async () => {
+    setAtualizando(true);
+    try { await onAtualizarProjeto(); setConferido(false); }
+    catch { toast.error("Não foi possível reler o cadastro do projeto. Tente de novo."); }
+    finally { setAtualizando(false); }
+  };
   const falta = faltando(project, f);
   const html = emailHtmlDC(project, f, gp);
   const texto = emailTextoDC(project, f, gp);
@@ -139,11 +165,11 @@ export function DataCenterEmailDialog({ open, onOpenChange, project, form, onFor
                     onBlur={() => { if (f.codigo && f.codigo.length < 5) set({ codigo: f.codigo.padStart(5, "0") }); }} />
                   <span className="min-w-0 flex-1 truncate rounded-md bg-muted/60 px-2.5 py-1.5 font-mono text-[12px]" title={codigoCliente(project, f)}>{codigoCliente(project, f)}</span>
                 </div>
-                <p className="mt-1 text-[11px] text-muted-foreground">Você digita os 5 dígitos; nome, cidade e UF vêm do cadastro e o final é TDMax (ou ITS / Gestão de Frota).</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">Você digita os 5 dígitos; nome, cidade e UF vêm do cadastro e o final vem dos sistemas (TDMax Urbano e Seccionado viram "TDMax").</p>
               </div>
               <div>
-                <Label className="text-xs">Sistema *</Label>
-                <div className="mt-1.5"><Seg label="Sistema" value={f.sistema} onChange={v => set({ sistema: v })} options={SISTEMAS.map(s => ({ v: s, l: s }))} /></div>
+                <Label className="text-xs">Sistema * <span className="font-normal text-muted-foreground">(um ou mais)</span></Label>
+                <div className="mt-1.5"><Multi label="Sistema" value={f.sistemas} options={[...SISTEMAS]} onToggle={s => set({ sistemas: alternarSistema(f.sistemas, s) })} /></div>
               </div>
             </Grupo>
 
@@ -171,13 +197,22 @@ export function DataCenterEmailDialog({ open, onOpenChange, project, form, onFor
 
             <Grupo titulo="Cliente e frota">
               <Fixo label="Razão social" valor={razaoSocial(project)} />
-              {project.cnpj ? (
-                <Fixo label="CNPJ" valor={project.cnpj} />
+              {temCnpj(project) ? (
+                <Fixo label="CNPJ" valor={project.cnpj ?? ""} />
               ) : (
-                <div>
-                  <Label className="text-xs" htmlFor="dc-cnpj">CNPJ *</Label>
-                  <Input id="dc-cnpj" inputMode="numeric" placeholder="00.000.000/0000-00" className="mt-1.5 h-9 font-mono sm:w-56" value={f.cnpj} onChange={e => set({ cnpj: formatCnpj(e.target.value) })} />
-                  <p className="mt-1 text-[11px] text-muted-foreground">O projeto ainda não tem CNPJ no cadastro. Informe aqui ou edite o projeto.</p>
+                <div className="space-y-2.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-[13px]">
+                  <p className="flex items-start gap-1.5 text-amber-900 dark:text-amber-100">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                    <span><b>CNPJ não cadastrado no projeto.</b> O CNPJ do e-mail vem do cadastro: abra o projeto, clique em Editar, preencha o CNPJ e salve. Depois clique em Atualizar.</span>
+                  </p>
+                  <div className="flex flex-wrap gap-2 pl-5">
+                    <Button variant="outline" size="sm" className="h-8" asChild>
+                      <a href={`/projetos/${project.id}`} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-3.5 w-3.5" />Abrir o cadastro do projeto</a>
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-8" onClick={atualizar} disabled={atualizando}>
+                      <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${atualizando ? "animate-spin" : ""}`} />{atualizando ? "Atualizando…" : "Atualizar"}
+                    </Button>
+                  </div>
                 </div>
               )}
               <Fixo label="Cidade/UF" valor={cidadeUf(project)} />

@@ -85,8 +85,10 @@ function Registro({ texto, onDesfazer, children }: { texto: string; onDesfazer?:
  * Módulo 01 · Abertura do projeto: as atividades do GP do cadastro até o Handover.
  * Protótipo: o estado vem de quem chama e ainda não é gravado.
  */
-export function Modulo01({ project, estado, onChange, userName, ordem, travada, onMover }: {
+export function Modulo01({ project, estado, onChange, userName, ordem, travada, onMover, onAtualizarProjeto }: {
   project: GerProject;
+  /** Relê o cadastro do projeto sem sair da tela. */
+  onAtualizarProjeto: () => Promise<unknown>;
   estado: Modulo01Estado;
   onChange: (update: (e: Modulo01Estado) => Modulo01Estado) => void;
   userName: string;
@@ -145,7 +147,7 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
           <Mail className="mr-1.5 h-3.5 w-3.5" />{d.solicitadoEm ? "Ver e-mail ao Data Center" : "Montar e-mail ao Data Center"}
         </Button>
         <DataCenterEmailDialog open={emailDC} onOpenChange={setEmailDC} project={project} form={d.email} gp={userName}
-          onForm={email => set({ email })} onRegistrar={() => set({ solicitadoEm: agora() })} />
+          onForm={email => set({ email })} onRegistrar={() => set({ solicitadoEm: agora() })} onAtualizarProjeto={onAtualizarProjeto} />
         {d.solicitadoEm ? (
           <>
             <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-800 dark:text-amber-200"><Mail className="h-3.5 w-3.5" />Solicitado em {quando(d.solicitadoEm)}</span>

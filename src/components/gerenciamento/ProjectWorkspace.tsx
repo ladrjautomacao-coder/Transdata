@@ -67,6 +67,8 @@ export function ProjectWorkspace({ id, onBack, initial }: { id: string; onBack: 
     fetchGerProject(id).then(setProject).catch(err => { setError(errorMessage(err)); setProject(null); });
   };
   useEffect(load, [id]);
+  // sem esqueleto: a tela e o que o GP preencheu continuam onde estão
+  const reler = () => fetchGerProject(id).then(p => { if (p) setProject(p); });
 
   const back = <Button variant="ghost" size="sm" className="-ml-2 h-8 w-fit text-muted-foreground" onClick={onBack}><ArrowLeft className="mr-1.5 h-4 w-4" />Trocar projeto</Button>;
 
@@ -169,7 +171,7 @@ export function ProjectWorkspace({ id, onBack, initial }: { id: string; onBack: 
           </div>
 
           <Modulo01 project={project} estado={estado} onChange={u => setEstado(u)} userName={profile?.full_name ?? "Você"}
-            ordem={ordem} travada={travada} onMover={mover} />
+            ordem={ordem} travada={travada} onMover={mover} onAtualizarProjeto={reler} />
         </div>
       </div>
     </div>
