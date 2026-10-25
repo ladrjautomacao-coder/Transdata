@@ -13,6 +13,7 @@ import {
   type Atividade, type AtividadeId, type GerProject, type Modulo01Estado, type SituacaoAtividade,
 } from "@/lib/gerenciamento";
 import { ChecklistPreRequisitos } from "./ChecklistPreRequisitos";
+import { DataCenterEmailDialog } from "./DataCenterEmailDialog";
 
 const p2 = (n: number) => String(n).padStart(2, "0");
 /** 25/10/2026 às 14:30 */
@@ -96,6 +97,7 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
   onMover: (id: AtividadeId, dir: -1 | 1) => void;
 }) {
   const [campos, setCampos] = useState<Record<string, string>>({});
+  const [emailDC, setEmailDC] = useState(false);
   const codigo = project.project_code ?? "—";
   const lista = ordem.map(id => MODULO_01.atividades.find(a => a.id === id)).filter((a): a is Atividade => !!a);
 
@@ -137,17 +139,20 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
     const d = estado.datacenter;
     const set = (patch: Partial<Modulo01Estado["datacenter"]>) => onChange(e => ({ ...e, datacenter: { ...e.datacenter, ...patch } }));
     if (d.concluidoEm) return <Registro texto={`Sites criados e credenciais recebidas em ${quando(d.concluidoEm)}`} onDesfazer={() => set({ concluidoEm: null })} />;
-    const email = `Assunto: Criação de sites e credenciais – ${project.company_name} (${codigo})\n\nOlá, equipe do Data Center,\n\nPor favor, criem os sites do cliente ${project.company_name} no banco de dados e gerem as credenciais de acesso.\nCódigo do projeto: ${codigo}.\n\nObrigado,\n${userName}`;
     return (
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" className="h-8" onClick={() => copiar(email, "E-mail ao Data Center")}><Copy className="mr-1.5 h-3.5 w-3.5" />Copiar e-mail ao Data Center</Button>
+        <Button variant={d.solicitadoEm ? "outline" : "default"} size="sm" className="h-8" onClick={() => setEmailDC(true)}>
+          <Mail className="mr-1.5 h-3.5 w-3.5" />{d.solicitadoEm ? "Ver e-mail ao Data Center" : "Montar e-mail ao Data Center"}
+        </Button>
+        <DataCenterEmailDialog open={emailDC} onOpenChange={setEmailDC} project={project} form={d.email} gp={userName}
+          onForm={email => set({ email })} onRegistrar={() => set({ solicitadoEm: agora() })} />
         {d.solicitadoEm ? (
           <>
             <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-800 dark:text-amber-200"><Mail className="h-3.5 w-3.5" />Solicitado em {quando(d.solicitadoEm)}</span>
             <Button size="sm" className="h-8 sm:ml-auto" onClick={() => set({ concluidoEm: agora() })}><Check className="mr-1.5 h-3.5 w-3.5" />Credenciais recebidas</Button>
           </>
         ) : (
-          <Button size="sm" className="h-8" onClick={() => set({ solicitadoEm: agora() })}><Mail className="mr-1.5 h-3.5 w-3.5" />Registrar solicitação</Button>
+          <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => set({ solicitadoEm: agora() })}>Já pedi por fora: registrar solicitação</Button>
         )}
       </div>
     );

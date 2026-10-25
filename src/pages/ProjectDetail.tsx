@@ -40,6 +40,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { useSettings } from "@/contexts/SettingsContext";
 import { subPhasesByStatus } from "@/pages/ProjectManagement";
 import { teamRoleLabels } from "@/lib/teamRoleLabels";
+import { cnpjDigits, formatCnpj } from "@/lib/cnpj";
 import { useNoteDraft } from "@/hooks/useNoteDraft";
 import ProjectPendenciesSection from "@/components/kanban/ProjectPendenciesSection";
 import ProjectDsvPanel from "@/components/dsv/ProjectDsvPanel";
@@ -107,6 +108,9 @@ export default function ProjectDetail() {
   const [fleetSize, setFleetSize] = useState<string>("");
   const [fleetUrbano, setFleetUrbano] = useState<string>("0");
   const [fleetSeccionado, setFleetSeccionado] = useState<string>("0");
+  const [cnpj, setCnpj] = useState("");
+  const [reserveFleet, setReserveFleet] = useState<string>("0");
+  const [atlasPay, setAtlasPay] = useState(false);
   const [implDeadlineDays, setImplDeadlineDays] = useState<string>("");
   const [contractualDeadlineDays, setContractualDeadlineDays] = useState<string>("");
   const [isPilot, setIsPilot] = useState(false);
@@ -179,6 +183,9 @@ export default function ProjectDetail() {
       setFleetSize(data.fleet_size?.toString() || "");
       setFleetUrbano((data as any).fleet_urbano?.toString() || "0");
       setFleetSeccionado((data as any).fleet_seccionado?.toString() || "0");
+      setCnpj(data.cnpj || "");
+      setReserveFleet(data.reserve_fleet?.toString() || "0");
+      setAtlasPay(!!data.atlas_pay);
       setImplDeadlineDays(data.implementation_deadline_days?.toString() || "");
       setContractualDeadlineDays(data.contractual_deadline_days?.toString() || "");
       setIsPilot(data.is_pilot || false);
@@ -346,6 +353,9 @@ export default function ProjectDetail() {
     add("Tipo de Projeto", oldTypeName, newTypeName);
     
     add("Frota Contratada", project.fleet_size, fleetSize);
+    add("Frota Reserva", project.reserve_fleet ?? 0, parseInt(reserveFleet) || 0);
+    add("CNPJ", project.cnpj, cnpj ? formatCnpj(cnpj) : "");
+    add("AtlasPay", project.atlas_pay ? "Sim" : "Não", atlasPay ? "Sim" : "Não");
     add("Prazo Implantação (dias)", project.implementation_deadline_days, implDeadlineDays);
     add("Prazo Contratual (dias)", project.contractual_deadline_days, contractualDeadlineDays);
     add("Piloto", project.is_pilot ? "Sim" : "Não", isPilot ? "Sim" : "Não");
@@ -417,6 +427,9 @@ export default function ProjectDetail() {
     const seccionado = parseInt(fleetSeccionado) || 0;
     if (urbano < 0 || seccionado < 0) { toast({ title: "Sistema: valores não podem ser negativos", variant: "destructive" }); return; }
     if (urbano + seccionado !== fleet) { toast({ title: "A soma de Urbano e Seccionado deve ser igual à Frota Contratada", variant: "destructive" }); return; }
+    const reserve = parseInt(reserveFleet) || 0;
+    if (reserve < 0 || reserve > fleet) { toast({ title: "A Frota Reserva faz parte da Frota Contratada: informe de 0 até a frota contratada", variant: "destructive" }); return; }
+    if (cnpj && cnpjDigits(cnpj).length !== 14) { toast({ title: "CNPJ incompleto: informe os 14 dígitos ou deixe em branco", variant: "destructive" }); return; }
     const implDays = parseInt(implDeadlineDays);
     if (!implDeadlineDays || isNaN(implDays) || implDays < 1) { toast({ title: "Informe o Prazo de Implantação", variant: "destructive" }); return; }
     const contrDays = parseInt(contractualDeadlineDays);
@@ -440,6 +453,9 @@ export default function ProjectDetail() {
         fleet_size: fleet,
         fleet_urbano: urbano,
         fleet_seccionado: seccionado,
+        reserve_fleet: reserve,
+        cnpj: cnpj ? formatCnpj(cnpj) : null,
+        atlas_pay: atlasPay,
         implementation_deadline_days: implDays,
         contractual_deadline_days: contrDays,
         is_pilot: isPilot,
@@ -937,6 +953,10 @@ export default function ProjectDetail() {
             {editing ? (
               <>
                 <div className="space-y-1"><Label className="text-xs text-muted-foreground">Empresa</Label><Input value={companyName} onChange={e => setCompanyName(e.target.value)} /></div>
+                <div className="space-y-1">
+                  <Label htmlFor="pd-cnpj" className="text-xs text-muted-foreground">CNPJ</Label>
+                  <Input id="pd-cnpj" inputMode="numeric" value={cnpj} onChange={e => setCnpj(formatCnpj(e.target.value))} placeholder="00.000.000/0000-00" className="font-mono" />
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <LocationFields
                     countryCode={countryCode}
@@ -964,6 +984,10 @@ export default function ProjectDetail() {
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Frota Contratada</Label>
                   <Input type="number" min={1} step={1} value={fleetSize} onChange={e => setFleetSize(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="pd-reserva" className="text-xs text-muted-foreground">Frota Reserva (parte da Frota Contratada)</Label>
+                  <Input id="pd-reserva" type="number" min={0} step={1} value={reserveFleet} onChange={e => setReserveFleet(e.target.value)} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Sistema · Urbano</Label>
@@ -999,10 +1023,11 @@ export default function ProjectDetail() {
             ) : (
               <>
                 <div><span className="text-xs text-muted-foreground">Empresa</span><p className="font-medium">{project.company_name}</p></div>
+                <div><span className="text-xs text-muted-foreground">CNPJ</span><p className={cn(project.cnpj && "font-mono")}>{project.cnpj || "—"}</p></div>
                 <div><span className="text-xs text-muted-foreground">Localização</span><p>{formatLocation(project.city, project.state, project.country_code)}</p></div>
                 <div><span className="text-xs text-muted-foreground">Tipo do Projeto</span><p>{projectTypeName}</p></div>
                 <div><span className="text-xs text-muted-foreground">Seguimento do Projeto</span><p>{projectSegmentLabel((project as any).project_segment)}</p></div>
-                <div><span className="text-xs text-muted-foreground">Frota Contratada</span><p>{project.fleet_size ?? "—"} veículos</p></div>
+                <div><span className="text-xs text-muted-foreground">Frota Contratada</span><p>{project.fleet_size ?? "—"} veículos{project.reserve_fleet > 0 && <span className="text-muted-foreground"> · {project.reserve_fleet} de reserva</span>}</p></div>
                 <div><span className="text-xs text-muted-foreground">Sistema</span><p>Urbano: <strong>{(project as any).fleet_urbano ?? 0}</strong> · Seccionado: <strong>{(project as any).fleet_seccionado ?? 0}</strong></p></div>
                 <div><span className="text-xs text-muted-foreground">Contratação</span><p>{fmtDate(project.contract_date)}</p></div>
                 <div className="grid grid-cols-2 gap-3">
@@ -1076,6 +1101,10 @@ export default function ProjectDetail() {
                       </div>
                     );
                   })}
+                  <label htmlFor="pd-atlaspay" className="flex cursor-pointer items-center justify-between gap-3 rounded-md border p-2">
+                    <span className="text-sm">AtlasPay <span className="text-xs text-muted-foreground">(funcionalidade)</span></span>
+                    <Switch id="pd-atlaspay" checked={atlasPay} onCheckedChange={setAtlasPay} />
+                  </label>
                 </div>
                 <Separator />
                 <Label className="text-xs text-muted-foreground">Equipamentos</Label>
@@ -1137,6 +1166,7 @@ export default function ProjectDetail() {
                       : <span className="text-sm text-muted-foreground">Nenhuma</span>}
                   </div>
                 </div>
+                <div><span className="text-xs text-muted-foreground">AtlasPay</span><p>{project.atlas_pay ? "Sim" : "Não"}</p></div>
                 <Separator />
                 <div>
                   <span className="text-xs text-muted-foreground">Equipamentos</span>
@@ -1444,7 +1474,8 @@ export default function ProjectDetail() {
                   project_segment: "Seguimento do Projeto",
                   fleet_size: "Frota Total", fleet_urbano: "Frota Urbano",
                   fleet_seccionado: "Frota Seccionado", complementary_fleet: "Frota Complementar",
-                  implemented_fleet: "Frota Implementada",
+                  implemented_fleet: "Frota Implementada", reserve_fleet: "Frota Reserva",
+                  cnpj: "CNPJ", atlas_pay: "AtlasPay",
                   is_pilot: "Piloto", pilot_info: "Info do Piloto",
                   embedded_install_training: "Treinamento de instalação embarcada",
                   complementary_sale: "Venda Complementar", observations: "Observações",

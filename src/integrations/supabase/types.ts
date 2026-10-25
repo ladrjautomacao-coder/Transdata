@@ -657,7 +657,9 @@ export type Database = {
       }
       projects: {
         Row: {
+          atlas_pay: boolean
           city: string
+          cnpj: string | null
           company_name: string
           complementary_fleet: number
           complementary_sale: boolean
@@ -689,6 +691,7 @@ export type Database = {
           project_type_id: string | null
           reached_implemented: boolean
           reached_implemented_at: string | null
+          reserve_fleet: number
           state: Database["public"]["Enums"]["brazilian_state"] | null
           status: Database["public"]["Enums"]["project_status"]
           sub_phase: string | null
@@ -696,7 +699,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          atlas_pay?: boolean
           city: string
+          cnpj?: string | null
           company_name: string
           complementary_fleet?: number
           complementary_sale?: boolean
@@ -728,6 +733,7 @@ export type Database = {
           project_type_id?: string | null
           reached_implemented?: boolean
           reached_implemented_at?: string | null
+          reserve_fleet?: number
           state?: Database["public"]["Enums"]["brazilian_state"] | null
           status?: Database["public"]["Enums"]["project_status"]
           sub_phase?: string | null
@@ -735,7 +741,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          atlas_pay?: boolean
           city?: string
+          cnpj?: string | null
           company_name?: string
           complementary_fleet?: number
           complementary_sale?: boolean
@@ -767,6 +775,7 @@ export type Database = {
           project_type_id?: string | null
           reached_implemented?: boolean
           reached_implemented_at?: string | null
+          reserve_fleet?: number
           state?: Database["public"]["Enums"]["brazilian_state"] | null
           status?: Database["public"]["Enums"]["project_status"]
           sub_phase?: string | null

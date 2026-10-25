@@ -1,6 +1,7 @@
 // Gerenciamento do projeto (em desenvolvimento): os módulos com as rotinas do GP.
 // Protótipo: as atividades do módulo 01 ainda não são gravadas no banco.
 import { supabase } from "@/integrations/supabase/client";
+import type { DataCenterForm } from "@/lib/dataCenterEmail";
 
 export interface GerProject {
   id: string;
@@ -15,12 +16,20 @@ export interface GerProject {
   manager_id: string | null;
   manager: { full_name: string } | null;
   executive: { full_name: string } | null;
+  fleet_size: number | null;
+  fleet_urbano: number | null;
+  fleet_seccionado: number | null;
+  /** Parte da frota contratada que fica de reserva. */
+  reserve_fleet: number;
+  cnpj: string | null;
+  atlas_pay: boolean;
   project_type: { name: string } | null;
   project_solutions: { solution: { name: string } | null }[];
 }
 
 const COLS =
-  "id, company_name, project_code, city, state, country_code, status, sub_phase, created_at, manager_id, " +
+  "id, company_name, project_code, city, state, country_code, status, sub_phase, created_at, manager_id, fleet_size, fleet_urbano, fleet_seccionado, " +
+  "reserve_fleet, cnpj, atlas_pay, " +
   "manager:team_members!projects_manager_id_fkey(full_name), executive:team_members!projects_executive_id_fkey(full_name), " +
   "project_type:project_types(name), project_solutions(solution:solutions(name))";
 
@@ -118,7 +127,8 @@ export interface Modulo01Estado {
     resultado: ChecklistResultado | null;
     em: string | null;
   };
-  datacenter: { solicitadoEm: string | null; concluidoEm: string | null };
+  /** `email`: o que o GP preencheu no e-mail ao Data Center (volta preenchido ao reabrir). */
+  datacenter: { solicitadoEm: string | null; concluidoEm: string | null; email: DataCenterForm | null };
   handover: { agendadoPara: string; participantes: string; particularidades: string; atencao: string; expectativas: string; registradoEm: string | null };
   carrier: { arquivo: string | null; operadora: string; em: string | null };
 }
@@ -126,7 +136,7 @@ export interface Modulo01Estado {
 export const modulo01Vazio = (): Modulo01Estado => ({
   feitos: {},
   checklist: { itens: {}, naoAplica: {}, vencimentoDzero: "", observacoes: "", emailComercialEm: null, autorizadoPor: "", resultado: null, em: null },
-  datacenter: { solicitadoEm: null, concluidoEm: null },
+  datacenter: { solicitadoEm: null, concluidoEm: null, email: null },
   handover: { agendadoPara: "", participantes: "", particularidades: "", atencao: "", expectativas: "", registradoEm: null },
   carrier: { arquivo: null, operadora: "", em: null },
 });

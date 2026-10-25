@@ -24,6 +24,7 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { LocationFields } from "@/components/LocationFields";
 import { useTenantBranding } from "@/contexts/TenantBrandingContext";
 import { teamRoleLabels } from "@/lib/teamRoleLabels";
+import { cnpjDigits, formatCnpj } from "@/lib/cnpj";
 
 type BrazilianState = Database["public"]["Enums"]["brazilian_state"];
 type ProjectStatus = Database["public"]["Enums"]["project_status"];
@@ -98,6 +99,10 @@ export default function NewProject() {
   const [complementaryFleet, setComplementaryFleet] = useState<string>("0");
   const [fleetUrbano, setFleetUrbano] = useState<string>("0");
   const [fleetSeccionado, setFleetSeccionado] = useState<string>("0");
+  // Usados no e-mail ao Data Center (Gerenciamento)
+  const [cnpj, setCnpj] = useState("");
+  const [reserveFleet, setReserveFleet] = useState<string>("0");
+  const [atlasPay, setAtlasPay] = useState(false);
 
   // Anexos por categoria
   const ATTACHMENT_CATEGORIES = [
@@ -184,12 +189,13 @@ export default function NewProject() {
     selectedSolutions, selectedIntegrations, selectedFeatures, selectedEquipments, equipmentQty,
     fleetSize, implDeadlineDays, contractualDeadlineDays, isPilot, pilotInfo, embeddedTraining,
     installationTransmobile, installationClient, complementarySale, complementaryFleet,
-    fleetUrbano, fleetSeccionado, attachmentLinks,
+    fleetUrbano, fleetSeccionado, attachmentLinks, cnpj, reserveFleet, atlasPay,
   }), [companyName, city, state, countryCode, contractDate, dZeroDate, handoverDate, executiveProjectDate,
     executiveId, managerId, status, selectedProducts, projectTypeId, projectSegment, selectedSolutions,
     selectedIntegrations, selectedFeatures, selectedEquipments, equipmentQty, fleetSize, implDeadlineDays,
     contractualDeadlineDays, isPilot, pilotInfo, embeddedTraining, installationTransmobile,
-    installationClient, complementarySale, complementaryFleet, fleetUrbano, fleetSeccionado, attachmentLinks]);
+    installationClient, complementarySale, complementaryFleet, fleetUrbano, fleetSeccionado, attachmentLinks,
+    cnpj, reserveFleet, atlasPay]);
 
   // Carregar rascunho existente ao abrir a tela
   useEffect(() => {
@@ -247,6 +253,9 @@ export default function NewProject() {
     setFleetUrbano(d.fleetUrbano ?? "0");
     setFleetSeccionado(d.fleetSeccionado ?? "0");
     setAttachmentLinks(d.attachmentLinks || { pasta: [] });
+    setCnpj(d.cnpj || "");
+    setReserveFleet(d.reserveFleet ?? "0");
+    setAtlasPay(!!d.atlasPay);
     setDraftFound(null);
     toast({ title: "Cadastro restaurado", description: "Os dados preenchidos anteriormente foram recuperados." });
   };
@@ -298,6 +307,15 @@ export default function NewProject() {
       toast({ title: "A soma de Urbano e Seccionado deve ser igual à Frota Contratada", variant: "destructive" });
       return;
     }
+    const reserve = parseInt(reserveFleet) || 0;
+    if (isTransdata && (reserve < 0 || reserve > fleet)) {
+      toast({ title: "A Frota Reserva faz parte da Frota Contratada: informe de 0 até a frota contratada", variant: "destructive" });
+      return;
+    }
+    if (isTransdata && cnpj && cnpjDigits(cnpj).length !== 14) {
+      toast({ title: "CNPJ incompleto: informe os 14 dígitos ou deixe em branco", variant: "destructive" });
+      return;
+    }
     const implDays = parseInt(implDeadlineDays);
     if (!implDeadlineDays || isNaN(implDays) || implDays < 1) {
       toast({ title: "Informe o Prazo de Implantação", variant: "destructive" });
@@ -344,6 +362,9 @@ export default function NewProject() {
           fleet_size: isNaN(fleet) ? null : fleet,
           fleet_urbano: urbano,
           fleet_seccionado: seccionado,
+          reserve_fleet: reserve,
+          cnpj: cnpj ? formatCnpj(cnpj) : null,
+          atlas_pay: atlasPay,
           is_pilot: isPilot,
           pilot_info: isPilot ? pilotInfo : null,
           embedded_install_training: embeddedTraining === "" ? null : embeddedTraining === "sim",
@@ -480,9 +501,17 @@ export default function NewProject() {
             <CardDescription>Dados gerais do projeto e contrato</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2 space-y-2">
-              <Label>Nome da Empresa <span className="text-destructive">*</span></Label>
-              <Input value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Ex.: TransMobile Ltda." required maxLength={settings.companyNameMax} />
+            <div className={cn("sm:col-span-2 grid gap-4", isTransdata && "sm:grid-cols-[minmax(0,1fr)_220px]")}>
+              <div className="min-w-0 space-y-2">
+                <Label>Nome da Empresa <span className="text-destructive">*</span></Label>
+                <Input value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Ex.: TransMobile Ltda." required maxLength={settings.companyNameMax} />
+              </div>
+              {isTransdata && (
+                <div className="space-y-2">
+                  <Label htmlFor="np-cnpj">CNPJ</Label>
+                  <Input id="np-cnpj" inputMode="numeric" value={cnpj} onChange={e => setCnpj(formatCnpj(e.target.value))} placeholder="00.000.000/0000-00" className="font-mono" />
+                </div>
+              )}
             </div>
             <LocationFields
               countryCode={countryCode}
@@ -545,6 +574,13 @@ export default function NewProject() {
               />
               <HelperText>{isTransdata ? "Quantidade de veículos do contrato" : "Opcional — preencha se fizer sentido para o seu negócio"}</HelperText>
             </div>
+            {isTransdata && (
+              <div className="space-y-2">
+                <Label htmlFor="np-reserva">Frota Reserva</Label>
+                <Input id="np-reserva" type="number" min={0} step={1} value={reserveFleet} onChange={e => setReserveFleet(e.target.value)} placeholder="0" />
+                <HelperText>Parte da Frota Contratada que fica de reserva</HelperText>
+              </div>
+            )}
             <DatePicker label="Data de Contratação" date={contractDate} onSelect={setContractDate} required />
             <DatePicker label="Data D-zero" date={dZeroDate} onSelect={setDZeroDate} />
             <DatePicker label="Data Handover" date={handoverDate} onSelect={setHandoverDate} />
@@ -645,6 +681,16 @@ export default function NewProject() {
                 </div>
               )}
             </div>
+            <label htmlFor="np-atlaspay" className="flex cursor-pointer items-center justify-between gap-3 rounded-md border p-3">
+              <span>
+                <span className="block text-sm font-medium">AtlasPay</span>
+                <span className="block text-xs text-muted-foreground">Funcionalidade AtlasPay contratada pelo cliente</span>
+              </span>
+              <span className="flex items-center gap-2">
+                <span className={cn("text-xs font-semibold", atlasPay ? "text-emerald-600" : "text-muted-foreground")}>{atlasPay ? "Sim" : "Não"}</span>
+                <Switch id="np-atlaspay" checked={atlasPay} onCheckedChange={setAtlasPay} />
+              </span>
+            </label>
           </CardContent>
         </Card>
         </>
