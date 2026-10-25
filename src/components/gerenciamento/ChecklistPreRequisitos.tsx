@@ -1,12 +1,11 @@
 import { toast } from "sonner";
-import { AlertTriangle, Check, CheckCircle2, Copy, Mail, RotateCcw, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Circle, Copy, Mail, MinusCircle, RotateCcw, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  CHECKLIST_ITENS, RESP_CHECKLIST, checklistLiberado, itensAplicaveis, naoAplica, pendenciasDe,
+  CHECKLIST_ITENS, RESP_CHECKLIST, checklistLiberado, itemOk, itensAplicaveis, naoAplica, pendenciasDe,
   type GerProject, type Modulo01Estado,
 } from "@/lib/gerenciamento";
 
@@ -79,18 +78,22 @@ export function ChecklistPreRequisitos({ project, estado, onChange, userName }: 
             {Object.values(RESP_CHECKLIST).map(r => <span key={r.label} className={`rounded px-1.5 font-semibold ${r.chip}`}>{r.label}</span>)}
           </span>
         </div>
-        <ul className="divide-y rounded-lg border border-border/60">
+        <ul className="divide-y overflow-hidden rounded-lg border border-border/60">
           {CHECKLIST_ITENS.map(i => {
             const na = naoAplica(estado, i);
             const marcado = !na && !!c.itens[i.id];
-            const id = `ger-ck-${i.id}`;
+            const okItem = !na && itemOk(estado, i);
+            // o pagamento do D-zero só fica ok com o vencimento informado
+            const semData = !!i.vencimento && !c.vencimentoDzero;
             return (
-              <li key={i.id} className={`flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 ${na ? "bg-muted/40" : liberado ? "" : "hover:bg-muted/40"}`}>
-                <Checkbox id={id} checked={marcado} disabled={liberado || na} onCheckedChange={v => set({ itens: { ...c.itens, [i.id]: v === true } })} />
-                <Label htmlFor={id} className={`min-w-0 flex-1 text-sm font-medium leading-snug ${na ? "text-muted-foreground line-through" : "cursor-pointer"}`}>{i.texto}</Label>
+              <li key={i.id} className={`flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5 pl-3 pr-2.5 transition-colors ${na ? "bg-muted/40" : okItem ? "bg-emerald-500/[0.08] shadow-[inset_3px_0_0_0_rgb(16_185_129)]" : ""}`}>
+                {okItem ? <CheckCircle2 className="h-[18px] w-[18px] shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                  : na ? <MinusCircle className="h-[18px] w-[18px] shrink-0 text-muted-foreground/60" aria-hidden />
+                  : <Circle className="h-[18px] w-[18px] shrink-0 text-muted-foreground/50" aria-hidden />}
+                <span className={`min-w-0 flex-1 text-sm font-medium leading-snug ${na ? "text-muted-foreground line-through" : okItem ? "text-emerald-900 dark:text-emerald-100" : ""}`}>{i.texto}</span>
                 {i.podeNaoAplicar && (
                   // no celular desce para a linha de baixo, alinhado ao texto
-                  <span className="order-last basis-full pl-7 sm:order-none sm:basis-auto sm:pl-0">
+                  <span className="order-last basis-full pl-[30px] sm:order-none sm:basis-auto sm:pl-0">
                     <button type="button" disabled={liberado} aria-pressed={na} onClick={() => set({ naoAplica: { ...c.naoAplica, [i.id]: !na } })}
                       title={na ? "Voltar a contar este item" : "O cliente não contratou este serviço do Sigo"}
                       className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-70 ${na ? "border-foreground/60 bg-foreground text-background" : "border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground"}`}>
@@ -100,13 +103,27 @@ export function ChecklistPreRequisitos({ project, estado, onChange, userName }: 
                 )}
                 {i.vencimento && (
                   // no celular o vencimento desce para a linha de baixo, alinhado ao texto
-                  <span className="order-last flex basis-full items-center gap-1.5 pl-7 sm:order-none sm:basis-auto sm:pl-0">
+                  <span className="order-last flex basis-full items-center gap-1.5 pl-[30px] sm:order-none sm:basis-auto sm:pl-0">
                     <Label htmlFor="ger-ck-venc" className="text-[11px] text-muted-foreground">Vencimento</Label>
                     <Input id="ger-ck-venc" type="date" disabled={liberado} className={`h-8 w-[150px] text-xs ${marcado && !c.vencimentoDzero ? "border-amber-500" : ""}`}
                       value={c.vencimentoDzero} onChange={ev => set({ vencimentoDzero: ev.target.value })} />
                   </span>
                 )}
                 <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${RESP_CHECKLIST[i.resp].chip}`}>{RESP_CHECKLIST[i.resp].label}</span>
+                {!na && (
+                  <Button type="button" size="sm" aria-pressed={marcado}
+                    disabled={liberado || (!marcado && semData)}
+                    title={marcado ? "Clique para desfazer" : semData ? "Informe o vencimento primeiro" : "Marcar como ok"}
+                    aria-label={`${i.texto}: ${marcado ? "desfazer ok" : "marcar como ok"}`}
+                    onClick={() => set({ itens: { ...c.itens, [i.id]: !marcado } })}
+                    className={`h-7 w-[60px] px-0 text-xs ${okItem
+                      ? "bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-100"
+                      : marcado // marcado, mas o vencimento foi apagado
+                      ? "border border-amber-500 bg-background text-amber-800 hover:bg-amber-500/10 dark:text-amber-200"
+                      : "border border-border bg-background text-foreground hover:border-emerald-500 hover:bg-emerald-500/10"}`}>
+                    <Check className="mr-1 h-3.5 w-3.5" />OK
+                  </Button>
+                )}
               </li>
             );
           })}

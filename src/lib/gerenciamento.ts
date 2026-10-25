@@ -94,14 +94,13 @@ export const RESP_CHECKLIST: Record<RespChecklist, { label: string; chip: string
   sigo: { label: "Sigo", chip: "bg-blue-500/15 text-blue-700 dark:text-blue-300" },
 };
 
-export type ChecklistItemId = "contrato_transdata" | "contrato_sigo_locacao" | "contrato_sigo_pagamento" | "cobranca_dzero" | "pagamento_dzero" | "sem_pendencias" | "conta_sigo";
+export type ChecklistItemId = "contrato_transdata" | "contrato_sigo_locacao" | "contrato_sigo_pagamento" | "pagamento_dzero" | "sem_pendencias" | "conta_sigo";
 /** `podeNaoAplicar`: itens do Sigo — nem todo cliente contrata o banco Sigo. */
 export const CHECKLIST_ITENS: { id: ChecklistItemId; texto: string; resp: RespChecklist; vencimento?: true; podeNaoAplicar?: true }[] = [
   { id: "contrato_transdata", texto: "Contrato Transdata assinado", resp: "transdata" },
   { id: "contrato_sigo_locacao", texto: "Contrato Sigo (Locação) assinado", resp: "sigo", podeNaoAplicar: true },
   { id: "contrato_sigo_pagamento", texto: "Contrato Sigo (Meios de Pagamento) assinado", resp: "sigo", podeNaoAplicar: true },
-  { id: "cobranca_dzero", texto: "Cobrança D-zero emitida", resp: "transdata", vencimento: true },
-  { id: "pagamento_dzero", texto: "Pagamento D-zero efetuado", resp: "cliente" },
+  { id: "pagamento_dzero", texto: "Pagamento D-zero efetuado", resp: "cliente", vencimento: true },
   { id: "sem_pendencias", texto: "Cliente sem pendências financeiras", resp: "cliente" },
   { id: "conta_sigo", texto: "Abertura da Conta Sigo realizada", resp: "sigo", podeNaoAplicar: true },
 ];
@@ -152,7 +151,7 @@ export const ATIVIDADE_FIXA: AtividadeId = "portal";
 export const naoAplica = (e: Modulo01Estado, i: (typeof CHECKLIST_ITENS)[number]) => !!i.podeNaoAplicar && !!e.checklist.naoAplica[i.id];
 /** Itens que contam no checklist deste projeto. */
 export const itensAplicaveis = (e: Modulo01Estado) => CHECKLIST_ITENS.filter(i => !naoAplica(e, i));
-/** Item ok: marcado (a cobrança do D-zero também precisa do vencimento). */
+/** Item ok: marcado (o pagamento do D-zero também precisa do vencimento). */
 export const itemOk = (e: Modulo01Estado, i: (typeof CHECKLIST_ITENS)[number]) =>
   !!e.checklist.itens[i.id] && (!i.vencimento || !!e.checklist.vencimentoDzero);
 /** Pré-requisitos que se aplicam e ainda não estão ok. */
