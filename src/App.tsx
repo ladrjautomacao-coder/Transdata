@@ -11,6 +11,7 @@ import { SettingsProvider } from "@/contexts/SettingsContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 import { PermissionRoute } from "@/components/PermissionRoute";
+import { SuperAdminRoute } from "@/components/SuperAdminRoute";
 import { AppLayout } from "@/components/AppLayout";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -23,6 +24,7 @@ import ProjectList from "./pages/ProjectList";
 import ProjectDetail from "./pages/ProjectDetail";
 import ProjectManagement from "./pages/ProjectManagement";
 import Cronograma from "./pages/Cronograma";
+import Gerenciamento from "./pages/Gerenciamento";
 import VisaoComercial from "./pages/VisaoComercial";
 import TeamMembers from "./pages/TeamMembers";
 import Products from "./pages/Products";
@@ -69,6 +71,7 @@ function AppRoutes() {
 
           <Route path="/projetos/gestao" element={<ProjectManagement />} />
           <Route path="/projetos/cronograma" element={<Cronograma />} />
+          <Route path="/projetos/gerenciamento" element={<SuperAdminRoute><Gerenciamento /></SuperAdminRoute>} />
           <Route path="/projetos/:id" element={<ProjectDetail />} />
           <Route path="/comercial" element={<VisaoComercial />} />
           {/* Portal PSM antigo foi desativado; links salvos caem no Report IMP */}

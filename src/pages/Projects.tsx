@@ -2,11 +2,11 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenantBranding } from "@/contexts/TenantBrandingContext";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, List, Signal, Kanban, CalendarRange } from "lucide-react";
+import { Plus, List, Signal, Kanban, CalendarRange, ListChecks } from "lucide-react";
 
 export default function Projects() {
   const navigate = useNavigate();
-  const { isAdmin, loading } = useAuth();
+  const { isAdmin, isSuperAdmin, loading } = useAuth();
   const branding = useTenantBranding();
 
   if (loading) {
@@ -17,7 +17,7 @@ export default function Projects() {
     );
   }
 
-  const cards = [
+  const cards: { title: string; description: string; icon: typeof Plus; onClick: () => void; badge?: string }[] = [
     ...(isAdmin ? [{
       title: "Cadastrar Novo Projeto",
       description: "Crie um novo projeto no sistema",
@@ -36,6 +36,14 @@ export default function Projects() {
       icon: List,
       onClick: () => navigate("/projetos/lista"),
     },
+    // Em desenvolvimento: só Super Admin até as rotinas do GP ficarem prontas
+    ...(isSuperAdmin ? [{
+      title: "Gerenciamento",
+      description: "O roteiro do GP em cada fase do projeto",
+      icon: ListChecks,
+      onClick: () => navigate("/projetos/gerenciamento"),
+      badge: "Em desenvolvimento",
+    }] : []),
     // Teste isolado: Cronograma só aparece pra este tenant enquanto validamos
     // se vale a pena expor pra todo mundo.
     ...(branding.slug === "empresateste" ? [{
@@ -74,7 +82,7 @@ export default function Projects() {
       </div>
 
       {/* Cards */}
-      <div className={`relative z-10 grid gap-3 sm:gap-8 w-full max-w-5xl px-4 justify-center ${cards.length <= 2 ? 'sm:grid-cols-2 max-w-3xl mx-auto' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
+      <div className={`relative z-10 grid gap-3 sm:gap-8 w-full max-w-5xl px-4 justify-center ${cards.length <= 2 ? 'sm:grid-cols-2 max-w-3xl mx-auto' : cards.length === 4 ? 'sm:grid-cols-2 max-w-4xl mx-auto' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
         {cards.map((card) => (
           <Card
             key={card.title}
@@ -82,6 +90,9 @@ export default function Projects() {
             onClick={card.onClick}
           >
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary via-primary/80 to-primary/40" />
+            {card.badge && (
+              <span className="absolute right-3 top-3 z-20 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10.5px] font-semibold text-amber-800 dark:text-amber-200">{card.badge}</span>
+            )}
             <div className="absolute inset-0 bg-gradient-to-br from-primary/0 to-primary/0 group-hover:from-primary/5 group-hover:to-primary/10 transition-all duration-300" />
 
             <CardContent className="relative z-10 flex flex-row items-center gap-4 p-5 text-left sm:flex-col sm:gap-5 sm:p-10 sm:text-center">
