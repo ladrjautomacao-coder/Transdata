@@ -17,7 +17,7 @@ import {
   mailtoCobertura, municipiosDaUf, outlookWebCobertura, pctTexto, periodoTexto, recomendada,
   type EmailCobertura, type OperadoraCobertura, type ResultadoCobertura, type SetoresMunicipio,
 } from "@/lib/coberturaOperadoras";
-import { Fixo, Grupo } from "./DataCenterEmailDialog";
+import { Fixo, Grupo, PassoColar } from "./DataCenterEmailDialog";
 import { MapaCoberturaSvg } from "./MapaCoberturaSvg";
 
 type EstadoCarrier = Modulo01Estado["carrier"];
@@ -259,7 +259,7 @@ export function CoberturaEmailDialog({ open, onOpenChange, project, estado, onEs
             {aberto ? (
               <div className="flex flex-wrap items-center gap-3">
                 <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                <p className="min-w-0 flex-1 basis-72 text-[13px]"><b>E-mail copiado e Outlook aberto</b> com o assunto{estado.para.trim() ? " e o destinatário" : ""}. Clique no corpo do e-mail, cole (Ctrl+V) e envie. A atividade já ficou como feita.</p>
+                <p className="min-w-0 flex-1 basis-72 text-[13px]"><b>Agora cole no Outlook:</b> clique no corpo do e-mail, acima da sua assinatura, e use <b>Ctrl+V</b>. Depois é só enviar. A atividade já ficou como feita.</p>
                 <Button variant="ghost" size="sm" className="h-9" asChild><a href={outlookWebCobertura(estado.para, assunto)} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-4 w-4" />Outlook na web</a></Button>
                 <Button variant="outline" size="sm" className="h-9" onClick={copiarSo}><Copy className="mr-1.5 h-4 w-4" />Copiar de novo</Button>
                 <Button size="sm" className="h-9" onClick={() => onOpenChange(false)}><Check className="mr-1.5 h-4 w-4" />Fechar</Button>
@@ -277,6 +277,7 @@ export function CoberturaEmailDialog({ open, onOpenChange, project, estado, onEs
                 </div>
                 <Button variant="outline" className="h-9" disabled={!pronto} onClick={copiarSo}><Copy className="mr-1.5 h-4 w-4" />Copiar e-mail</Button>
                 <Button className="h-9" disabled={!pronto} onClick={abrirOutlook}><Mail className="mr-1.5 h-4 w-4" />Copiar e abrir no Outlook</Button>
+                {pronto && <PassoColar />}
               </div>
             )}
           </div>

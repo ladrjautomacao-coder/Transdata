@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Check, CheckCircle2, Copy, ExternalLink, Lock, Mail, PencilLine, RefreshCw } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ClipboardPaste, Copy, ExternalLink, Lock, Mail, PencilLine, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -14,6 +14,19 @@ import {
   licenciados, mailtoDC, outlookWebDC, razaoSocial, reservas, soDigitos, temCarrier, temCnpj, totalCarros, type DataCenterForm,
 } from "@/lib/dataCenterEmail";
 import { copiarEmail } from "@/lib/emailOutlook";
+
+/**
+ * O navegador não consegue pôr o e-mail formatado dentro do Outlook: o link só leva destinatário
+ * e assunto. O corpo vai copiado, e o GP cola; este aviso fica à vista antes de abrir o Outlook.
+ */
+export function PassoColar() {
+  return (
+    <p className="flex basis-full items-start gap-2 rounded-md bg-primary/[0.07] px-3 py-2 text-[12.5px]">
+      <ClipboardPaste className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+      <span><b>O Outlook abre com o corpo em branco.</b> Clique no corpo do e-mail, acima da sua assinatura, e cole com <b>Ctrl+V</b>: o modelo da prévia já vai copiado.</span>
+    </p>
+  );
+}
 
 /** Grupo do formulário. */
 export function Grupo({ titulo, children }: { titulo: string; children: ReactNode }) {
@@ -245,7 +258,7 @@ export function DataCenterEmailDialog({ open, onOpenChange, project, form, onFor
           {aberto ? (
             <div className="flex flex-wrap items-center gap-3">
               <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-              <p className="min-w-0 flex-1 basis-72 text-[13px]"><b>E-mail copiado e Outlook aberto</b> com destinatário e assunto. Clique no corpo do e-mail, cole (Ctrl+V) e envie. A atividade já ficou como feita.</p>
+              <p className="min-w-0 flex-1 basis-72 text-[13px]"><b>Agora cole no Outlook:</b> clique no corpo do e-mail, acima da sua assinatura, e use <b>Ctrl+V</b>. Depois é só enviar. A atividade já ficou como feita.</p>
               <Button variant="ghost" size="sm" className="h-9" asChild><a href={outlookWebDC(project, f)} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-4 w-4" />Outlook na web</a></Button>
               <Button variant="outline" size="sm" className="h-9" onClick={copiar}><Copy className="mr-1.5 h-4 w-4" />Copiar de novo</Button>
               <Button size="sm" className="h-9" onClick={() => onOpenChange(false)}><Check className="mr-1.5 h-4 w-4" />Fechar</Button>
@@ -264,6 +277,7 @@ export function DataCenterEmailDialog({ open, onOpenChange, project, form, onFor
               )}
               <Button variant="outline" className="h-9" disabled={!pronto} onClick={copiar}><Copy className="mr-1.5 h-4 w-4" />Copiar e-mail</Button>
               <Button className="h-9" disabled={!pronto} onClick={abrirOutlook}><Mail className="mr-1.5 h-4 w-4" />Copiar e abrir no Outlook</Button>
+              {pronto && <PassoColar />}
             </div>
           )}
         </div>
