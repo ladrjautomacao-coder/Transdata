@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowUpDown, FlaskConical, Layers, Lock, LockOpen, RefreshCw, Rocket, RotateCcw } from "lucide-react";
+import { ArrowLeft, ArrowUpDown, FlaskConical, Gauge, Layers, Lock, LockOpen, RefreshCw, Rocket, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
@@ -10,6 +10,7 @@ import { errorMessage } from "@/lib/implantationScheduling";
 import {
   MODULO_01, ORDEM_PADRAO, fetchGerProject, modulo01Vazio, situacao, solutionsOf, type AtividadeId, type GerProject, type Modulo01Estado,
 } from "@/lib/gerenciamento";
+import { MedidorModulo } from "./MedidorModulo";
 import { Modulo01 } from "./Modulo01";
 
 // Ordem em discussão com os GPs: fica guardada neste navegador até virar a ordem oficial
@@ -67,6 +68,18 @@ export function ProjectWorkspace({ id, onBack, initial }: { id: string; onBack: 
     fetchGerProject(id).then(setProject).catch(err => { setError(errorMessage(err)); setProject(null); });
   };
   useEffect(load, [id]);
+  // ao abrir o projeto, o módulo aparece no medidor; a lista de atividades só abre quando o GP pede
+  const [aberto, setAberto] = useState(false);
+  const [foco, setFoco] = useState<string | null>(null);
+  const abrir = (atividadeId?: string) => { setFoco(atividadeId ?? null); setAberto(true); };
+  useEffect(() => {
+    if (!aberto) return;
+    const t = setTimeout(() => {
+      const alvo = foco ? document.getElementById(`ger-atv-${foco}`) : document.getElementById("ger-mod-titulo");
+      alvo?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
+    return () => clearTimeout(t);
+  }, [aberto, foco]);
   // sem esqueleto: a tela e o que o GP preencheu continuam onde estão
   const reler = () => fetchGerProject(id).then(p => { if (p) setProject(p); });
 
@@ -127,7 +140,9 @@ export function ProjectWorkspace({ id, onBack, initial }: { id: string; onBack: 
         {/* Módulos do projeto */}
         <nav aria-label="Módulos do projeto" className="flex flex-col gap-2">
           <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">Módulos do projeto</p>
-          <button type="button" aria-current="page" className="flex flex-col gap-2 rounded-xl border border-primary bg-primary/[0.06] p-3 text-left ring-1 ring-primary">
+          <button type="button" aria-current="page" aria-expanded={aberto} onClick={() => (aberto ? setAberto(false) : abrir())}
+            title={aberto ? "Voltar ao medidor do módulo" : "Abrir as atividades do módulo"}
+            className="flex flex-col gap-2 rounded-xl border border-primary bg-primary/[0.06] p-3 text-left ring-1 ring-primary transition-colors hover:bg-primary/[0.1]">
             <span className="flex items-center gap-2">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-[13px] font-bold text-primary-foreground">{MODULO_01.numero}</span>
               <span className="min-w-0 flex-1 text-sm font-semibold leading-tight">{MODULO_01.nome}</span>
@@ -140,7 +155,14 @@ export function ProjectWorkspace({ id, onBack, initial }: { id: string; onBack: 
           </div>
         </nav>
 
+        {!aberto ? (
+          <MedidorModulo numero={MODULO_01.numero} nome={MODULO_01.nome} resumo={MODULO_01.resumo}
+            atividades={emOrdem.map(a => ({ a, sit: situacao(a.id, estado, project, ordem) }))} onAbrir={abrir} />
+        ) : (
         <div className="flex min-w-0 flex-col gap-4">
+          <Button variant="ghost" size="sm" className="-mb-1 -ml-2 h-8 w-fit text-muted-foreground" onClick={() => setAberto(false)}>
+            <Gauge className="mr-1.5 h-4 w-4" />Voltar ao medidor do módulo
+          </Button>
           {/* Destaque do módulo */}
           <section aria-labelledby="ger-mod-titulo" className="flex flex-wrap items-center gap-5 overflow-hidden rounded-2xl bg-gradient-to-br from-primary to-primary/80 p-5 text-primary-foreground shadow-sm sm:p-6">
             <div className="min-w-0 flex-1 basis-64">
@@ -173,6 +195,7 @@ export function ProjectWorkspace({ id, onBack, initial }: { id: string; onBack: 
           <Modulo01 project={project} estado={estado} onChange={u => setEstado(u)} userName={profile?.full_name ?? "Você"}
             ordem={ordem} travada={travada} onMover={mover} onAtualizarProjeto={reler} />
         </div>
+        )}
       </div>
     </div>
   );
