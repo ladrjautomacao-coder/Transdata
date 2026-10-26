@@ -206,7 +206,8 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
             <Button size="sm" className="h-8" onClick={() => setEmailDC(true)}>
               <Mail className="mr-1.5 h-3.5 w-3.5" />Montar e-mail ao Data Center
             </Button>
-            <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={concluir}>Já pedi por fora: marcar como feito</Button>
+            <Button variant="outline" size="sm" className="h-8" onClick={concluir}><Check className="mr-1.5 h-3.5 w-3.5" />Marcar como feito</Button>
+            <span className="text-[12px] text-muted-foreground">se o pedido foi feito por fora do portal</span>
           </div>
         )}
         {/* fora do condicional: ao concluir, o diálogo aberto continua o mesmo */}
@@ -277,7 +278,8 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
             <Button size="sm" className="h-8" onClick={() => setEmailCobertura(true)}>
               <RadioTower className="mr-1.5 h-3.5 w-3.5" />Montar e-mail de cobertura
             </Button>
-            <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => concluir(null)}>Já enviei por fora: marcar como feito</Button>
+            <Button variant="outline" size="sm" className="h-8" onClick={() => concluir(null)}><Check className="mr-1.5 h-3.5 w-3.5" />Marcar como feito</Button>
+            <span className="text-[12px] text-muted-foreground">se o e-mail foi enviado por fora do portal</span>
           </div>
         )}
         {/* fora do condicional: ao concluir, o diálogo aberto continua o mesmo */}
