@@ -73,10 +73,38 @@ function colunas(cab, esperadas, arquivo) {
   return idx;
 }
 
-async function supa(caminho, init = {}) {
-  const r = await fetch(URL_SUPA + caminho, { ...init, headers: { apikey: CHAVE, Authorization: `Bearer ${CHAVE}`, ...init.headers } });
-  if (!r.ok) throw new Error(`${init.method ?? "GET"} ${caminho}: HTTP ${r.status} ${await r.text()}`);
-  return r.headers.get("content-type")?.includes("json") ? r.json() : null;
+const motivo = e => [e?.message, e?.cause?.code ?? e?.cause?.message].filter(Boolean).join(" · ");
+/** No GitHub Actions, o erro vira anotação da execução (fica legível sem abrir o registro). */
+const erroNoGitHub = (titulo, texto) => {
+  if (process.env.GITHUB_ACTIONS) console.log(`::error title=${titulo}::${String(texto).replace(/\r?\n/g, " ")}`);
+};
+process.on("uncaughtException", e => { erroNoGitHub("Carga da cobertura", motivo(e)); console.error(e); process.exit(1); });
+
+/**
+ * Repete o que falhar por rede: os servidores da Anatel e do IBGE às vezes demoram a aceitar
+ * conexão. Espera 15 s, 30 s, 45 s e 60 s entre as tentativas; erro marcado `semRepetir` para na hora.
+ */
+async function comTentativas(descricao, fn, tentativas = 5) {
+  for (let i = 1; ; i++) {
+    try { return await fn(); }
+    catch (e) {
+      if (e?.semRepetir || i >= tentativas) throw e;
+      console.log(`${descricao}: ${motivo(e)}. Nova tentativa em ${15 * i}s (${i} de ${tentativas - 1}).`);
+      await new Promise(ok => setTimeout(ok, 15_000 * i));
+    }
+  }
+}
+
+function supa(caminho, init = {}) {
+  return comTentativas(`Supabase ${caminho.split("?")[0]}`, async () => {
+    const r = await fetch(URL_SUPA + caminho, { ...init, headers: { apikey: CHAVE, Authorization: `Bearer ${CHAVE}`, ...init.headers } });
+    if (!r.ok) {
+      const e = new Error(`${init.method ?? "GET"} ${caminho}: HTTP ${r.status} ${await r.text()}`);
+      e.semRepetir = r.status < 500 && r.status !== 429; // chave errada, sem permissão etc.: repetir não resolve
+      throw e;
+    }
+    return r.headers.get("content-type")?.includes("json") ? r.json() : null;
+  });
 }
 
 async function emParalelo(itens, n, fn) {
@@ -85,7 +113,7 @@ async function emParalelo(itens, n, fn) {
 }
 
 // ---------------------------------------------------------------- Anatel
-const anatel = await zipRemoto(ANATEL);
+const anatel = await comTentativas("Anatel (índice do zip)", () => zipRemoto(ANATEL));
 const periodos = anatel.entradas.map(e => /^Cobertura_(\d{4})_(\d{2})_Municipios\.csv$/.exec(e.nome)).filter(Boolean).map(m => `${m[1]}-${m[2]}`).sort();
 const periodo = periodos.at(-1);
 if (!periodo) throw new Error("Nenhum arquivo Cobertura_AAAA_MM_Municipios.csv no zip da Anatel.");
@@ -114,7 +142,9 @@ if (!saida && !args.forcar) {
 // Por município: % da área, dos moradores e dos domicílios cobertos, por operadora e tecnologia
 const municipais = [];
 const escopo = new Map(); // código IBGE → { nome, uf }
-{
+await comTentativas("Anatel (municípios)", async () => {
+  municipais.length = 0;
+  escopo.clear();
   let idx = null;
   for await (const l of linhas(await anatel.abrir(entrada("Municipios")))) {
     if (!l) continue;
@@ -134,12 +164,24 @@ const escopo = new Map(); // código IBGE → { nome, uf }
       pct_domicilios: pct(f[idx.dom]), area_km2: Math.round(num(f[idx.km2]) * 100) / 100, moradores: Math.round(num(f[idx.moradores])), periodo,
     });
   }
-}
+});
 console.log(`Municípios: ${escopo.size}, linhas Claro/Vivo: ${municipais.length}.`);
+
+// A tabela entra já: o comparativo funciona mesmo que algum mapa falhe depois
+if (!saida) {
+  for (let i = 0; i < municipais.length; i += 1000) {
+    await supa("/rest/v1/cobertura_movel_municipio?on_conflict=cod_ibge,operadora,tecnologia", {
+      method: "POST", body: JSON.stringify(municipais.slice(i, i + 1000)),
+      headers: { "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+    });
+  }
+  console.log("Tabela por município gravada.");
+}
 
 // Por setor censitário: % do setor com 4G e 5G, por operadora (setores do Censo 2022)
 const porSetor = new Map(); // código do município → Map(código do setor → { CLARO: [4G, 5G], VIVO: [...] })
-{
+await comTentativas("Anatel (setores)", async () => {
+  porSetor.clear();
   let idx = null;
   for await (const l of linhas(await anatel.abrir(entrada("Setores")))) {
     if (!l) continue;
@@ -156,7 +198,7 @@ const porSetor = new Map(); // código do município → Map(código do setor �
     if (!m.has(setor)) m.set(setor, {});
     m.get(setor)[f[idx.op]] = [um(num(f[idx.c4g])), um(num(f[idx.c5g]))];
   }
-}
+});
 console.log(`Setores com cobertura: ${[...porSetor.values()].reduce((s, m) => s + m.size, 0)}.`);
 
 // ---------------------------------------------------------------- IBGE + arquivos por município
@@ -168,9 +210,11 @@ async function setoresDaUf(uf, municipios) {
   const zipPath = join(cache, `${uf}_setores_CD2022.zip`);
   if (!existsSync(zipPath)) {
     console.log(`IBGE: baixando os setores de ${uf}...`);
-    const r = await fetch(`${IBGE}/${uf}_setores_CD2022.zip`);
-    if (!r.ok) throw new Error(`IBGE ${uf}: HTTP ${r.status}`);
-    await pipeline(Readable.fromWeb(r.body), createWriteStream(zipPath + ".parcial"));
+    await comTentativas(`IBGE ${uf}`, async () => {
+      const r = await fetch(`${IBGE}/${uf}_setores_CD2022.zip`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      await pipeline(Readable.fromWeb(r.body), createWriteStream(zipPath + ".parcial"));
+    });
     await rename(zipPath + ".parcial", zipPath);
   }
   const tmp = join(cache, `tmp-${uf}`);
@@ -221,25 +265,34 @@ function caixa(features) {
 }
 
 const arquivos = [];
+const falhas = []; // UFs que não deram certo: as outras seguem, e a carga fica para a próxima execução
 const ufsNoEscopo = [...new Set([...escopo.values()].map(m => m.uf))].filter(uf => UFS.includes(uf));
 for (const uf of ufsNoEscopo) {
-  const muns = [...escopo].filter(([, m]) => m.uf === uf).map(([cod]) => cod);
-  const geo = await setoresDaUf(uf, muns);
-  for (const cod of muns) {
-    const features = (geo.get(cod) ?? []).filter(f => f.geometry);
-    if (!features.length) continue;
-    const cob = porSetor.get(cod) ?? new Map();
-    const conteudo = {
-      periodo, municipio: { cod_ibge: Number(cod), nome: escopo.get(cod).nome, uf },
-      fonte: "Anatel (cobertura estimada) e IBGE (setores censitários, Censo 2022)",
-      bbox: caixa(features),
-      // g: anéis do setor (os buracos se desenham com a regra evenodd); v: % do setor com [4G, 5G]
-      setores: features.map(f => ({ c: String(f.properties.CD_SETOR), g: compactar(f.geometry), v: cob.get(String(f.properties.CD_SETOR)) ?? {} })),
-    };
-    arquivos.push({ cod, json: JSON.stringify(conteudo) });
+  try {
+    const muns = [...escopo].filter(([, m]) => m.uf === uf).map(([cod]) => cod);
+    const geo = await setoresDaUf(uf, muns);
+    const daUf = [];
+    for (const cod of muns) {
+      const features = (geo.get(cod) ?? []).filter(f => f.geometry);
+      if (!features.length) continue;
+      const cob = porSetor.get(cod) ?? new Map();
+      const conteudo = {
+        periodo, municipio: { cod_ibge: Number(cod), nome: escopo.get(cod).nome, uf },
+        fonte: "Anatel (cobertura estimada) e IBGE (setores censitários, Censo 2022)",
+        bbox: caixa(features),
+        // g: anéis do setor (os buracos se desenham com a regra evenodd); v: % do setor com [4G, 5G]
+        setores: features.map(f => ({ c: String(f.properties.CD_SETOR), g: compactar(f.geometry), v: cob.get(String(f.properties.CD_SETOR)) ?? {} })),
+      };
+      daUf.push({ cod, json: JSON.stringify(conteudo) });
+    }
+    if (saida) arquivos.push(...daUf);
+    else await enviarArquivos(daUf);
+    console.log(`${uf}: ${muns.length} municípios processados.`);
+  } catch (e) {
+    falhas.push(uf);
+    console.error(`${uf}: falhou (${motivo(e)}). Seguindo com as outras UFs.`);
+    erroNoGitHub(`Mapas de ${uf}`, motivo(e));
   }
-  console.log(`${uf}: ${muns.length} municípios processados.`);
-  if (!saida) await enviarArquivos(arquivos.splice(0));
 }
 
 async function enviarArquivos(lista) {
@@ -254,13 +307,11 @@ if (saida) {
   await writeFile(join(saida, "municipios.json"), JSON.stringify({ periodo, linhas: municipais }, null, 1));
   for (const { cod, json } of arquivos) await writeFile(join(saida, `setores-${cod}.json`), json);
   console.log(`Arquivos gerados em ${saida} (nada foi gravado no banco).`);
+} else if (falhas.length) {
+  // sem marcar o período como carregado: a próxima execução refaz tudo
+  erroNoGitHub("Carga incompleta", `Mapas não gerados para: ${falhas.join(", ")}. A tabela por município foi gravada; a próxima execução tenta de novo.`);
+  process.exit(1);
 } else {
-  for (let i = 0; i < municipais.length; i += 1000) {
-    await supa("/rest/v1/cobertura_movel_municipio?on_conflict=cod_ibge,operadora,tecnologia", {
-      method: "POST", body: JSON.stringify(municipais.slice(i, i + 1000)),
-      headers: { "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
-    });
-  }
   await supa("/rest/v1/cobertura_movel_meta?on_conflict=id", {
     method: "POST",
     body: JSON.stringify({ id: 1, periodo, fonte_publicada_em: anatel.ultimaAlteracao ? new Date(anatel.ultimaAlteracao).toISOString() : null, carregado_em: new Date().toISOString() }),
