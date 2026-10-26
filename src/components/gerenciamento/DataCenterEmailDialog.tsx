@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Check, CheckCircle2, Copy, ExternalLink, Lock, Mail, PencilLine, RefreshCw, Send } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Copy, ExternalLink, Lock, Mail, PencilLine, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -13,24 +13,10 @@ import {
   DC_DESTINATARIO, SISTEMAS, alternarSistema, assuntoDC, cidadeUf, codigoCliente, emailHtmlDC, emailTextoDC, faltando, formInicial,
   licenciados, mailtoDC, outlookWebDC, razaoSocial, reservas, soDigitos, temCarrier, temCnpj, totalCarros, type DataCenterForm,
 } from "@/lib/dataCenterEmail";
-
-/** Copia o e-mail formatado (HTML) para colar no Outlook; sem suporte, copia o texto. */
-async function copiarEmail(html: string, texto: string) {
-  try {
-    if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
-      await navigator.clipboard.write([new ClipboardItem({
-        "text/html": new Blob([html], { type: "text/html" }),
-        "text/plain": new Blob([texto], { type: "text/plain" }),
-      })]);
-    } else {
-      await navigator.clipboard.writeText(texto);
-    }
-    return true;
-  } catch { return false; }
-}
+import { copiarEmail } from "@/lib/emailOutlook";
 
 /** Grupo do formulário. */
-function Grupo({ titulo, children }: { titulo: string; children: ReactNode }) {
+export function Grupo({ titulo, children }: { titulo: string; children: ReactNode }) {
   return (
     <section className="space-y-3">
       <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-primary">{titulo}</p>
@@ -40,7 +26,7 @@ function Grupo({ titulo, children }: { titulo: string; children: ReactNode }) {
 }
 
 /** Valor que vem do cadastro (ou é padrão): só leitura, com cadeado. */
-function Fixo({ label, valor, origem = "do cadastro" }: { label: string; valor: string; origem?: string }) {
+export function Fixo({ label, valor, origem = "do cadastro" }: { label: string; valor: string; origem?: string }) {
   return (
     <div className="flex items-center gap-2 rounded-md bg-muted/60 px-2.5 py-1.5 text-[13px]">
       <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
@@ -99,15 +85,15 @@ function SimNao({ id, label, value, onChange }: { id: string; label: string; val
  * E-mail ao Data Center: o GP completa o que varia, confere a prévia e abre o Outlook
  * com destinatário e assunto prontos; o corpo formatado vai copiado para colar.
  */
-export function DataCenterEmailDialog({ open, onOpenChange, project, form, onForm, gp, onRegistrar, onAtualizarProjeto }: {
+export function DataCenterEmailDialog({ open, onOpenChange, project, form, onForm, gp, onCopiado, onAtualizarProjeto }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   project: GerProject;
   form: DataCenterForm | null;
   onForm: (f: DataCenterForm) => void;
   gp: string;
-  /** "Já enviei": registra a solicitação na atividade. */
-  onRegistrar: () => void;
+  /** O GP copiou o e-mail: a atividade fica feita. */
+  onCopiado: () => void;
   /** Relê o cadastro do projeto (depois de completar o CNPJ em outra aba). */
   onAtualizarProjeto: () => Promise<unknown>;
 }) {
@@ -129,12 +115,14 @@ export function DataCenterEmailDialog({ open, onOpenChange, project, form, onFor
   const pronto = falta.length === 0 && conferido;
 
   const copiar = async () => {
-    if (await copiarEmail(html, texto)) toast.success("E-mail copiado. No Outlook, clique no corpo e cole (Ctrl+V).");
-    else toast.error("Não foi possível copiar. Tente de novo ou selecione a prévia e copie.");
+    if (!(await copiarEmail(html, texto))) { toast.error("Não foi possível copiar. Tente de novo ou selecione a prévia e copie."); return; }
+    onCopiado();
+    toast.success("E-mail copiado e atividade marcada como feita. No Outlook, clique no corpo e cole (Ctrl+V).");
   };
   const abrirOutlook = async () => {
     const ok = await copiarEmail(html, texto);
     if (!ok) { toast.error("Não foi possível copiar o e-mail. Tente de novo."); return; }
+    onCopiado();
     window.location.href = mailtoDC(project, f);
     setAberto(true);
   };
@@ -257,10 +245,10 @@ export function DataCenterEmailDialog({ open, onOpenChange, project, form, onFor
           {aberto ? (
             <div className="flex flex-wrap items-center gap-3">
               <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-              <p className="min-w-0 flex-1 basis-72 text-[13px]"><b>E-mail copiado e Outlook aberto</b> com destinatário e assunto. Clique no corpo do e-mail, cole (Ctrl+V) e envie.</p>
+              <p className="min-w-0 flex-1 basis-72 text-[13px]"><b>E-mail copiado e Outlook aberto</b> com destinatário e assunto. Clique no corpo do e-mail, cole (Ctrl+V) e envie. A atividade já ficou como feita.</p>
               <Button variant="ghost" size="sm" className="h-9" asChild><a href={outlookWebDC(project, f)} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-4 w-4" />Outlook na web</a></Button>
               <Button variant="outline" size="sm" className="h-9" onClick={copiar}><Copy className="mr-1.5 h-4 w-4" />Copiar de novo</Button>
-              <Button size="sm" className="h-9" onClick={() => { onRegistrar(); onOpenChange(false); }}><Send className="mr-1.5 h-4 w-4" />Já enviei: registrar solicitação</Button>
+              <Button size="sm" className="h-9" onClick={() => onOpenChange(false)}><Check className="mr-1.5 h-4 w-4" />Fechar</Button>
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-3">

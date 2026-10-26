@@ -1,0 +1,76 @@
+# Carga da cobertura das operadoras (Anatel + setores censitários do IBGE) usada no e-mail de
+# cobertura do Gerenciamento (projetos com Carrier). Roda toda segunda-feira às 6h (Brasília):
+# a Anatel publica um período por trimestre, sem data fixa; se nada mudou, a carga só confere a
+# data do arquivo e termina em segundos, sem gravar. Também pelo botão "Run workflow".
+# Segredos do repositório: SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY.
+name: Cobertura das operadoras
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+    inputs:
+      forcar:
+        description: "Recarregar mesmo se o período já estiver no banco"
+        type: boolean
+        default: false
+
+concurrency:
+  group: cobertura-anatel
+  cancel-in-progress: false
+
+jobs:
+  carga:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      actions: write # só para o passo "Manter o agendamento ativo"
+    defaults:
+      run:
+        working-directory: scripts/cobertura
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: scripts/cobertura/package-lock.json
+
+      # rápido: só lê o índice do zip da Anatel e o período gravado no banco
+      - name: Verificar se a Anatel publicou período novo
+        id: verificar
+        if: ${{ !inputs.forcar }}
+        run: node atualizar.mjs --verificar
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      # os mapas dos setores do IBGE (Censo 2022) não mudam até o próximo censo
+      - name: Cache dos mapas do IBGE
+        if: ${{ inputs.forcar || steps.verificar.outputs.novo == 'true' }}
+        uses: actions/cache@v4
+        with:
+          path: scripts/cobertura/.cache
+          key: ibge-setores-cd2022-v1
+
+      - if: ${{ inputs.forcar || steps.verificar.outputs.novo == 'true' }}
+        run: npm ci
+
+      - name: Carga
+        if: ${{ inputs.forcar || steps.verificar.outputs.novo == 'true' }}
+        run: node atualizar.mjs ${{ inputs.forcar && '--forcar' || '' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NODE_OPTIONS: --max-old-space-size=6144
+
+      # repositório público: o GitHub desliga agendamentos depois de 60 dias sem commits;
+      # reativar a cada execução mantém a carga semanal rodando mesmo sem desenvolvimento
+      - name: Manter o agendamento ativo
+        if: always() && github.event_name == 'schedule'
+        working-directory: .
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/cobertura-anatel.yml/enable"
+        env:
+          GH_TOKEN: ${{ github.token }}

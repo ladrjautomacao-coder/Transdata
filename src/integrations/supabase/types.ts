@@ -102,6 +102,72 @@ export type Database = {
         }
         Relationships: []
       }
+      cobertura_movel_meta: {
+        Row: {
+          carregado_em: string
+          fonte_publicada_em: string | null
+          id: number
+          periodo: string
+        }
+        Insert: {
+          carregado_em?: string
+          fonte_publicada_em?: string | null
+          id?: number
+          periodo: string
+        }
+        Update: {
+          carregado_em?: string
+          fonte_publicada_em?: string | null
+          id?: number
+          periodo?: string
+        }
+        Relationships: []
+      }
+      cobertura_movel_municipio: {
+        Row: {
+          area_km2: number | null
+          cod_ibge: number
+          moradores: number | null
+          municipio: string
+          municipio_norm: string
+          operadora: string
+          pct_area: number
+          pct_domicilios: number
+          pct_moradores: number
+          periodo: string
+          tecnologia: string
+          uf: string
+        }
+        Insert: {
+          area_km2?: number | null
+          cod_ibge: number
+          moradores?: number | null
+          municipio: string
+          municipio_norm: string
+          operadora: string
+          pct_area?: number
+          pct_domicilios?: number
+          pct_moradores?: number
+          periodo: string
+          tecnologia: string
+          uf: string
+        }
+        Update: {
+          area_km2?: number | null
+          cod_ibge?: number
+          moradores?: number | null
+          municipio?: string
+          municipio_norm?: string
+          operadora?: string
+          pct_area?: number
+          pct_domicilios?: number
+          pct_moradores?: number
+          periodo?: string
+          tecnologia?: string
+          uf?: string
+        }
+        Relationships: []
+      }
       countries: {
         Row: {
           active: boolean

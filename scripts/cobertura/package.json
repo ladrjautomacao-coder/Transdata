@@ -1,0 +1,15 @@
+{
+  "name": "carga-cobertura-operadoras",
+  "private": true,
+  "type": "module",
+  "description": "Carga trimestral da cobertura Claro/Vivo (Anatel) e dos setores censitários (IBGE) para o Gerenciamento.",
+  "scripts": {
+    "atualizar": "node atualizar.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "mapshaper": "0.7.74"
+  }
+}

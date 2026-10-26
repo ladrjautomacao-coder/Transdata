@@ -2,6 +2,7 @@
 // Protótipo: as atividades do módulo 01 ainda não são gravadas no banco.
 import { supabase } from "@/integrations/supabase/client";
 import type { DataCenterForm } from "@/lib/dataCenterEmail";
+import type { OperadoraCobertura } from "@/lib/coberturaOperadoras";
 
 export interface GerProject {
   id: string;
@@ -80,11 +81,10 @@ export const MODULO_01 = {
     { id: "checklist", titulo: "Checklist de pré-requisitos", descricao: "Confira se o projeto cumpre os pré-requisitos para virar projeto.", responsavel: "gp" },
     { id: "datacenter", titulo: "Sites e credenciais no Data Center", descricao: "Peça por e-mail ao Data Center a criação dos sites do cliente no banco de dados e as credenciais de acesso.", responsavel: "gp" },
     { id: "handover", titulo: "Reunião de Handover", descricao: "Passagem de bastão do Comercial para Projetos, com o Executivo de Vendas.", responsavel: "gp" },
-    { id: "carrier", titulo: "Mapa de calor das operadoras", descricao: "Gere o mapa de calor das operadoras de telefonia e indique ao cliente a de melhor sinal.", responsavel: "assistente" },
+    { id: "carrier", titulo: "Mapa de calor das operadoras", descricao: "Envie ao cliente o comparativo de cobertura Claro × Vivo da cidade, com o mapa de calor e a operadora recomendada.", responsavel: "assistente" },
   ] as Atividade[],
 };
 
-export const OPERADORAS = ["Vivo", "Claro", "TIM", "Outra"] as const;
 
 /* ─── Checklist de pré-requisitos (modelo "Checklist · Cadastro Novo Projeto") ─── */
 export type RespChecklist = "transdata" | "cliente" | "sigo";
@@ -126,18 +126,25 @@ export interface Modulo01Estado {
     resultado: ChecklistResultado | null;
     em: string | null;
   };
-  /** `email`: o que o GP preencheu no e-mail ao Data Center (volta preenchido ao reabrir). */
-  datacenter: { solicitadoEm: string | null; concluidoEm: string | null; email: DataCenterForm | null };
+  /**
+   * `concluidoEm`: quando o GP copiou o e-mail ao Data Center (ou marcou que pediu por fora).
+   * `email`: o que ele preencheu (volta preenchido ao reabrir).
+   */
+  datacenter: { concluidoEm: string | null; email: DataCenterForm | null };
   handover: { agendadoPara: string; participantes: string; particularidades: string; atencao: string; expectativas: string; registradoEm: string | null };
-  carrier: { arquivo: string | null; operadora: string; em: string | null };
+  /**
+   * E-mail de cobertura ao cliente. `codIbge`: município escolhido à mão quando o nome do
+   * cadastro não bate com a lista da Anatel; `para`: e-mail do cliente (opcional).
+   */
+  carrier: { concluidoEm: string | null; recomendada: OperadoraCobertura | null; para: string; codIbge: number | null };
 }
 
 export const modulo01Vazio = (): Modulo01Estado => ({
   feitos: {},
   checklist: { itens: {}, naoAplica: {}, vencimentoDzero: "", observacoes: "", emailComercialEm: null, autorizadoPor: "", resultado: null, em: null },
-  datacenter: { solicitadoEm: null, concluidoEm: null, email: null },
+  datacenter: { concluidoEm: null, email: null },
   handover: { agendadoPara: "", participantes: "", particularidades: "", atencao: "", expectativas: "", registradoEm: null },
-  carrier: { arquivo: null, operadora: "", em: null },
+  carrier: { concluidoEm: null, recomendada: null, para: "", codIbge: null },
 });
 
 export type SituacaoAtividade = "feito" | "afazer" | "aguardando" | "bloqueado" | "naoaplica";
@@ -171,12 +178,11 @@ export function situacao(a: AtividadeId, e: Modulo01Estado, p: GerProject, ordem
   const feito = a === "checklist" ? checklistLiberado(e)
     : a === "datacenter" ? !!e.datacenter.concluidoEm
     : a === "handover" ? !!e.handover.registradoEm
-    : a === "carrier" ? !!e.carrier.em
+    : a === "carrier" ? !!e.carrier.concluidoEm
     : !!e.feitos[a];
   if (feito) return "feito";
   const abaixoDoChecklist = ordem.indexOf(a) > ordem.indexOf("checklist");
   if ((abaixoDoChecklist || a === "handover") && !checklistLiberado(e)) return "bloqueado";
   if (a === "checklist" && e.checklist.emailComercialEm) return "aguardando";
-  if (a === "datacenter" && e.datacenter.solicitadoEm) return "aguardando";
   return "afazer";
 }

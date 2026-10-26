@@ -1,18 +1,19 @@
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
-  ArrowDown, ArrowUp, Check, CheckCircle2, Copy, ExternalLink, FileUp, Lock, Mail, RotateCcw,
+  ArrowDown, ArrowUp, Check, CheckCircle2, Copy, ExternalLink, Lock, Mail, RadioTower, RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  ATIVIDADE_FIXA, MODULO_01, OPERADORAS, RESPONSAVEL_LABEL, situacao,
+  ATIVIDADE_FIXA, MODULO_01, RESPONSAVEL_LABEL, situacao,
   type Atividade, type AtividadeId, type GerProject, type Modulo01Estado, type SituacaoAtividade,
 } from "@/lib/gerenciamento";
+import { NOME_OPERADORA, type OperadoraCobertura } from "@/lib/coberturaOperadoras";
 import { ChecklistPreRequisitos } from "./ChecklistPreRequisitos";
+import { CoberturaEmailDialog } from "./CoberturaEmailDialog";
 import { DataCenterEmailDialog } from "./DataCenterEmailDialog";
 
 const p2 = (n: number) => String(n).padStart(2, "0");
@@ -100,6 +101,7 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
 }) {
   const [campos, setCampos] = useState<Record<string, string>>({});
   const [emailDC, setEmailDC] = useState(false);
+  const [emailCobertura, setEmailCobertura] = useState(false);
   const codigo = project.project_code ?? "—";
   const lista = ordem.map(id => MODULO_01.atividades.find(a => a.id === id)).filter((a): a is Atividade => !!a);
 
@@ -140,23 +142,26 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
   const datacenter = () => {
     const d = estado.datacenter;
     const set = (patch: Partial<Modulo01Estado["datacenter"]>) => onChange(e => ({ ...e, datacenter: { ...e.datacenter, ...patch } }));
-    if (d.concluidoEm) return <Registro texto={`Sites criados e credenciais recebidas em ${quando(d.concluidoEm)}`} onDesfazer={() => set({ concluidoEm: null })} />;
+    // copiar o e-mail (ou avisar que pediu por fora) já conclui a atividade; copiar de novo mantém a 1ª data
+    const concluir = () => onChange(e => ({ ...e, datacenter: { ...e.datacenter, concluidoEm: e.datacenter.concluidoEm ?? agora() } }));
     return (
-      <div className="flex flex-wrap items-center gap-2">
-        <Button variant={d.solicitadoEm ? "outline" : "default"} size="sm" className="h-8" onClick={() => setEmailDC(true)}>
-          <Mail className="mr-1.5 h-3.5 w-3.5" />{d.solicitadoEm ? "Ver e-mail ao Data Center" : "Montar e-mail ao Data Center"}
-        </Button>
-        <DataCenterEmailDialog open={emailDC} onOpenChange={setEmailDC} project={project} form={d.email} gp={userName}
-          onForm={email => set({ email })} onRegistrar={() => set({ solicitadoEm: agora() })} onAtualizarProjeto={onAtualizarProjeto} />
-        {d.solicitadoEm ? (
-          <>
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-800 dark:text-amber-200"><Mail className="h-3.5 w-3.5" />Solicitado em {quando(d.solicitadoEm)}</span>
-            <Button size="sm" className="h-8 sm:ml-auto" onClick={() => set({ concluidoEm: agora() })}><Check className="mr-1.5 h-3.5 w-3.5" />Credenciais recebidas</Button>
-          </>
+      <>
+        {d.concluidoEm ? (
+          <Registro texto={`Pedido ao Data Center feito em ${quando(d.concluidoEm)} por ${userName}`} onDesfazer={() => set({ concluidoEm: null })}>
+            {d.email && <> · <button type="button" className="font-medium text-primary underline-offset-2 hover:underline" onClick={() => setEmailDC(true)}>Ver e-mail</button></>}
+          </Registro>
         ) : (
-          <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => set({ solicitadoEm: agora() })}>Já pedi por fora: registrar solicitação</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" className="h-8" onClick={() => setEmailDC(true)}>
+              <Mail className="mr-1.5 h-3.5 w-3.5" />Montar e-mail ao Data Center
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={concluir}>Já pedi por fora: marcar como feito</Button>
+          </div>
         )}
-      </div>
+        {/* fora do condicional: ao concluir, o diálogo aberto continua o mesmo */}
+        <DataCenterEmailDialog open={emailDC} onOpenChange={setEmailDC} project={project} form={d.email} gp={userName}
+          onForm={email => set({ email })} onCopiado={concluir} onAtualizarProjeto={onAtualizarProjeto} />
+      </>
     );
   };
 
@@ -206,25 +211,28 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
     const c = estado.carrier;
     const set = (patch: Partial<Modulo01Estado["carrier"]>) => onChange(e => ({ ...e, carrier: { ...e.carrier, ...patch } }));
     if (sit === "naoaplica") return <p className="text-[13px] text-muted-foreground">Só nos projetos com a solução Carrier. Este projeto não tem.</p>;
-    if (c.em) return <Registro texto={`Mapa entregue em ${quando(c.em)} · operadora recomendada: ${c.operadora || "—"}`} onDesfazer={() => set({ em: null })} />;
+    // copiar o e-mail (ou avisar que enviou por fora) conclui; copiar de novo mantém a 1ª data
+    const concluir = (rec: OperadoraCobertura | null) =>
+      onChange(e => ({ ...e, carrier: { ...e.carrier, concluidoEm: e.carrier.concluidoEm ?? agora(), recomendada: rec ?? e.carrier.recomendada } }));
     return (
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="min-w-0 flex-1 basis-56">
-          <Label className="text-xs" htmlFor="ger-carrier-arquivo">Mapa de calor (imagem ou PDF)</Label>
-          <label htmlFor="ger-carrier-arquivo" className="mt-1.5 flex h-9 cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 text-[13px] text-muted-foreground hover:border-primary hover:text-primary">
-            <FileUp className="h-4 w-4" /><span className="truncate">{c.arquivo ?? "Escolher arquivo"}</span>
-          </label>
-          <input id="ger-carrier-arquivo" type="file" accept="image/*,application/pdf" className="sr-only" onChange={ev => set({ arquivo: ev.target.files?.[0]?.name ?? null })} />
-        </div>
-        <div className="w-40">
-          <Label className="text-xs">Melhor operadora</Label>
-          <Select value={c.operadora} onValueChange={v => set({ operadora: v })}>
-            <SelectTrigger className="mt-1.5 h-9" aria-label="Melhor operadora"><SelectValue placeholder="Escolha" /></SelectTrigger>
-            <SelectContent>{OPERADORAS.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-        <Button className="h-9" disabled={!c.operadora} onClick={() => set({ em: agora() })}><Check className="mr-1.5 h-4 w-4" />Concluir</Button>
-      </div>
+      <>
+        {c.concluidoEm ? (
+          <Registro texto={`E-mail de cobertura enviado em ${quando(c.concluidoEm)} por ${userName}${c.recomendada ? ` · recomendada: ${NOME_OPERADORA[c.recomendada]}` : ""}`}
+            onDesfazer={() => set({ concluidoEm: null })}>
+            {" · "}<button type="button" className="font-medium text-primary underline-offset-2 hover:underline" onClick={() => setEmailCobertura(true)}>Ver e-mail</button>
+          </Registro>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" className="h-8" onClick={() => setEmailCobertura(true)}>
+              <RadioTower className="mr-1.5 h-3.5 w-3.5" />Montar e-mail de cobertura
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => concluir(null)}>Já enviei por fora: marcar como feito</Button>
+          </div>
+        )}
+        {/* fora do condicional: ao concluir, o diálogo aberto continua o mesmo */}
+        <CoberturaEmailDialog open={emailCobertura} onOpenChange={setEmailCobertura} project={project} estado={c} onEstado={set}
+          remetente={userName} onCopiado={concluir} />
+      </>
     );
   };
 

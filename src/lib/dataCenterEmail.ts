@@ -2,6 +2,7 @@
 // o resto vem do cadastro do projeto. O portal monta o HTML para colar no Outlook.
 import type { GerProject } from "@/lib/gerenciamento";
 import { cnpjDigits } from "@/lib/cnpj";
+import { escHtml, estiloTexto } from "@/lib/emailOutlook";
 
 export const DC_DESTINATARIO = "meusuporte@itstransdata.com";
 export const SISTEMAS = ["TDMax Urbano", "TDMax Seccionado", "ITS", "Gestão de Frota"] as const;
@@ -127,17 +128,15 @@ export function linhasDC(p: GerProject, f: DataCenterForm): { grupo: string; lin
   ];
 }
 
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const esc = escHtml;
+const txt = estiloTexto;
 
 /**
- * HTML do e-mail para colar no Outlook. O Outlook descarta parte do CSS ao colar (caixa alta,
- * espaçamento entre letras, cantos arredondados, opacidade, herança de cor), então aqui só entra
- * o que ele mantém: tabela simples, cor de fundo na célula (bgcolor) e fonte, tamanho,
- * cor e peso declarados em cada texto. Os títulos já vão escritos em maiúsculas.
+ * HTML do e-mail para colar no Outlook: só o que ele mantém ao colar (ver src/lib/emailOutlook.ts):
+ * tabela simples, cor de fundo na célula (bgcolor) e o estilo declarado em cada texto.
+ * Os títulos já vão escritos em maiúsculas.
  */
 export function emailHtmlDC(p: GerProject, f: DataCenterForm, gp: string): string {
-  const font = "font-family:'Segoe UI',Arial,Helvetica,sans-serif;";
-  const txt = (size: number, color: string, bold = false) => `${font}font-size:${size}px;color:${color};font-weight:${bold ? "bold" : "normal"};`;
   const linha = "border-top:1px solid #e3dcec;";
   const grupos = linhasDC(p, f).map(g => {
     const head = `<tr><td colspan="2" bgcolor="#efe6f6" style="${txt(11, "#4b1768", true)}background-color:#efe6f6;padding:8px 16px;${linha}">${esc(g.grupo.toUpperCase())}</td></tr>`;

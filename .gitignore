@@ -15,6 +15,9 @@ dist-ssr
 # Supabase CLI local cache
 supabase/.temp
 
+# Carga da cobertura das operadoras: mapas do IBGE baixados
+scripts/cobertura/.cache
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
