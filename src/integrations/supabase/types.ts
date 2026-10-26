@@ -725,6 +725,7 @@ export type Database = {
         Row: {
           atlas_pay: boolean
           city: string
+          client_manager_name: string | null
           cnpj: string | null
           company_name: string
           complementary_fleet: number
@@ -767,6 +768,7 @@ export type Database = {
         Insert: {
           atlas_pay?: boolean
           city: string
+          client_manager_name?: string | null
           cnpj?: string | null
           company_name: string
           complementary_fleet?: number
@@ -809,6 +811,7 @@ export type Database = {
         Update: {
           atlas_pay?: boolean
           city?: string
+          client_manager_name?: string | null
           cnpj?: string | null
           company_name?: string
           complementary_fleet?: number

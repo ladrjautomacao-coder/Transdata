@@ -111,6 +111,7 @@ export default function ProjectDetail() {
   const [cnpj, setCnpj] = useState("");
   const [reserveFleet, setReserveFleet] = useState<string>("0");
   const [atlasPay, setAtlasPay] = useState(false);
+  const [clientManagerName, setClientManagerName] = useState("");
   const [implDeadlineDays, setImplDeadlineDays] = useState<string>("");
   const [contractualDeadlineDays, setContractualDeadlineDays] = useState<string>("");
   const [isPilot, setIsPilot] = useState(false);
@@ -186,6 +187,7 @@ export default function ProjectDetail() {
       setCnpj(data.cnpj || "");
       setReserveFleet(data.reserve_fleet?.toString() || "0");
       setAtlasPay(!!data.atlas_pay);
+      setClientManagerName(data.client_manager_name || "");
       setImplDeadlineDays(data.implementation_deadline_days?.toString() || "");
       setContractualDeadlineDays(data.contractual_deadline_days?.toString() || "");
       setIsPilot(data.is_pilot || false);
@@ -369,6 +371,7 @@ export default function ProjectDetail() {
     const oldMgr = project.manager?.full_name || "—";
     const newMgr = managers.find(m => m.id === managerId)?.full_name || "—";
     add(teamRoleLabels.manager ?? "Gestor de Projetos", oldMgr, newMgr);
+    add("GP no cliente", project.client_manager_name, clientManagerName.trim());
 
     add("Data do Contrato", fmtDate(project.contract_date), contractDate ? format(contractDate, "dd/MM/yyyy") : "—");
     add("Data D-Zero", fmtDate(project.d_zero_date), dZeroDate ? format(dZeroDate, "dd/MM/yyyy") : "—");
@@ -456,6 +459,7 @@ export default function ProjectDetail() {
         reserve_fleet: reserve,
         cnpj: cnpj ? formatCnpj(cnpj) : null,
         atlas_pay: atlasPay,
+        client_manager_name: clientManagerName.trim() || null,
         implementation_deadline_days: implDays,
         contractual_deadline_days: contrDays,
         is_pilot: isPilot,
@@ -1062,6 +1066,10 @@ export default function ProjectDetail() {
                     <SelectContent>{managers.map(m => <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-1">
+                  <Label htmlFor="pd-client-manager" className="text-xs text-muted-foreground">Gerente de Projetos no cliente</Label>
+                  <Input id="pd-client-manager" value={clientManagerName} onChange={e => setClientManagerName(e.target.value)} placeholder="Nome de quem conduz o projeto no cliente" maxLength={120} />
+                </div>
                 <Separator />
                 <Label className="text-xs text-muted-foreground">Soluções</Label>
                 <div className="space-y-3">
@@ -1145,6 +1153,7 @@ export default function ProjectDetail() {
               <>
                 <div><span className="text-xs text-muted-foreground">{teamRoleLabels.executive ?? "Executivo de Vendas"}</span><p>{project.executive?.full_name || "—"}</p></div>
                 <div><span className="text-xs text-muted-foreground">{teamRoleLabels.manager ?? "Gerente de Projetos"}</span><p>{project.manager?.full_name || "—"}</p></div>
+                <div><span className="text-xs text-muted-foreground">Gerente de Projetos no cliente</span><p>{project.client_manager_name || "—"}</p></div>
                 <Separator />
                 <div>
                   <span className="text-xs text-muted-foreground">Soluções</span>
@@ -1475,7 +1484,7 @@ export default function ProjectDetail() {
                   fleet_size: "Frota Total", fleet_urbano: "Frota Urbano",
                   fleet_seccionado: "Frota Seccionado", complementary_fleet: "Frota Complementar",
                   implemented_fleet: "Frota Implementada", reserve_fleet: "Frota Reserva",
-                  cnpj: "CNPJ", atlas_pay: "AtlasPay",
+                  cnpj: "CNPJ", atlas_pay: "AtlasPay", client_manager_name: "GP no cliente",
                   is_pilot: "Piloto", pilot_info: "Info do Piloto",
                   embedded_install_training: "Treinamento de instalação embarcada",
                   complementary_sale: "Venda Complementar", observations: "Observações",

@@ -103,6 +103,8 @@ export default function NewProject() {
   const [cnpj, setCnpj] = useState("");
   const [reserveFleet, setReserveFleet] = useState<string>("0");
   const [atlasPay, setAtlasPay] = useState(false);
+  // Usado no pedido "Designação do GP" (Gerenciamento)
+  const [clientManagerName, setClientManagerName] = useState("");
 
   // Anexos por categoria
   const ATTACHMENT_CATEGORIES = [
@@ -189,13 +191,13 @@ export default function NewProject() {
     selectedSolutions, selectedIntegrations, selectedFeatures, selectedEquipments, equipmentQty,
     fleetSize, implDeadlineDays, contractualDeadlineDays, isPilot, pilotInfo, embeddedTraining,
     installationTransmobile, installationClient, complementarySale, complementaryFleet,
-    fleetUrbano, fleetSeccionado, attachmentLinks, cnpj, reserveFleet, atlasPay,
+    fleetUrbano, fleetSeccionado, attachmentLinks, cnpj, reserveFleet, atlasPay, clientManagerName,
   }), [companyName, city, state, countryCode, contractDate, dZeroDate, handoverDate, executiveProjectDate,
     executiveId, managerId, status, selectedProducts, projectTypeId, projectSegment, selectedSolutions,
     selectedIntegrations, selectedFeatures, selectedEquipments, equipmentQty, fleetSize, implDeadlineDays,
     contractualDeadlineDays, isPilot, pilotInfo, embeddedTraining, installationTransmobile,
     installationClient, complementarySale, complementaryFleet, fleetUrbano, fleetSeccionado, attachmentLinks,
-    cnpj, reserveFleet, atlasPay]);
+    cnpj, reserveFleet, atlasPay, clientManagerName]);
 
   // Carregar rascunho existente ao abrir a tela
   useEffect(() => {
@@ -256,6 +258,7 @@ export default function NewProject() {
     setCnpj(d.cnpj || "");
     setReserveFleet(d.reserveFleet ?? "0");
     setAtlasPay(!!d.atlasPay);
+    setClientManagerName(d.clientManagerName || "");
     setDraftFound(null);
     toast({ title: "Cadastro restaurado", description: "Os dados preenchidos anteriormente foram recuperados." });
   };
@@ -357,6 +360,7 @@ export default function NewProject() {
         project_segment: projectSegment || null,
         implementation_deadline_days: implDays,
         contractual_deadline_days: contrDays,
+        client_manager_name: clientManagerName.trim() || null,
         filled_by: user?.id || null,
         ...(isTransdata ? {
           fleet_size: isNaN(fleet) ? null : fleet,
@@ -814,6 +818,11 @@ export default function NewProject() {
                   {managers.map(m => <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="np-client-manager">Gerente de Projetos no cliente</Label>
+              <Input id="np-client-manager" value={clientManagerName} onChange={e => setClientManagerName(e.target.value)} placeholder="Nome de quem conduz o projeto no cliente" maxLength={120} />
+              <HelperText>Quem conduz o projeto do lado do cliente. Pode ser preenchido depois, em Editar.</HelperText>
             </div>
           </CardContent>
         </Card>

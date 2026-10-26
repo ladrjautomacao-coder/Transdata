@@ -22,7 +22,15 @@ export interface GerProject {
   fleet_seccionado: number | null;
   /** Parte da frota contratada que fica de reserva. */
   reserve_fleet: number;
+  contract_date: string | null;
+  /** Prazo contratual em dias, a partir da contratação (fim do contrato). */
+  contractual_deadline_days: number | null;
+  d_zero_date: string | null;
+  handover_date: string | null;
+  project_segment: string | null;
   cnpj: string | null;
+  /** Quem conduz o projeto do lado do cliente. */
+  client_manager_name: string | null;
   atlas_pay: boolean;
   project_type: { name: string } | null;
   project_solutions: { solution: { name: string } | null }[];
@@ -30,7 +38,7 @@ export interface GerProject {
 
 const COLS =
   "id, company_name, project_code, city, state, country_code, status, sub_phase, created_at, manager_id, fleet_size, fleet_urbano, fleet_seccionado, " +
-  "reserve_fleet, cnpj, atlas_pay, " +
+  "reserve_fleet, cnpj, atlas_pay, contract_date, contractual_deadline_days, d_zero_date, handover_date, project_segment, client_manager_name, " +
   "manager:team_members!projects_manager_id_fkey(full_name), executive:team_members!projects_executive_id_fkey(full_name), " +
   "project_type:project_types(name), project_solutions(solution:solutions(name))";
 
@@ -44,6 +52,29 @@ export async function fetchGerProject(id: string): Promise<GerProject | null> {
   const { data, error } = await supabase.from("projects").select(COLS).eq("id", id).maybeSingle();
   if (error) throw error;
   return (data as unknown as GerProject) ?? null;
+}
+
+const p2 = (n: number) => String(n).padStart(2, "0");
+/** ISO ou AAAA-MM-DD → dd/mm/aaaa */
+export const dataBr = (v: string | null | undefined) => {
+  if (!v) return "—";
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T00:00:00`) : new Date(v);
+  return Number.isNaN(d.getTime()) ? "—" : `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()}`;
+};
+/** ISO → dd/mm/aaaa às hh:mm */
+export const dataHoraBr = (v: string | null | undefined) => {
+  if (!v) return "—";
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? "—" : `${dataBr(v)} às ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+};
+
+/** Fim do contrato (AAAA-MM-DD): contratação + prazo contratual, a mesma conta do detalhe do projeto. */
+export function fimDoContrato(p: Pick<GerProject, "contract_date" | "contractual_deadline_days">): string | null {
+  if (!p.contract_date || !p.contractual_deadline_days) return null;
+  const d = new Date(`${p.contract_date.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() + p.contractual_deadline_days);
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
 }
 
 export const solutionsOf = (p: GerProject) => p.project_solutions.map(ps => ps.solution?.name).filter((n): n is string => !!n);

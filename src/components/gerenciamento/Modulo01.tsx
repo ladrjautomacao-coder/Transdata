@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
-  ArrowDown, ArrowUp, Check, CheckCircle2, Copy, ExternalLink, Lock, Mail, RadioTower, RotateCcw,
+  ArrowDown, ArrowUp, Check, CheckCircle2, ClipboardList, Copy, ExternalLink, Lock, Mail, RadioTower, RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,9 +12,11 @@ import {
   type Atividade, type AtividadeId, type GerProject, type Modulo01Estado, type SituacaoAtividade,
 } from "@/lib/gerenciamento";
 import { NOME_OPERADORA, type OperadoraCobertura } from "@/lib/coberturaOperadoras";
+import { pedidoDesignacaoGp } from "@/lib/pedidoSelo";
 import { ChecklistPreRequisitos } from "./ChecklistPreRequisitos";
 import { CoberturaEmailDialog } from "./CoberturaEmailDialog";
 import { DataCenterEmailDialog } from "./DataCenterEmailDialog";
+import { PedidoSeloDialog } from "./PedidoSeloDialog";
 
 const p2 = (n: number) => String(n).padStart(2, "0");
 /** 25/10/2026 às 14:30 */
@@ -102,15 +104,19 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
   const [campos, setCampos] = useState<Record<string, string>>({});
   const [emailDC, setEmailDC] = useState(false);
   const [emailCobertura, setEmailCobertura] = useState(false);
+  const [pedidoAberto, setPedidoAberto] = useState(false);
+  const pedido = pedidoDesignacaoGp(project);
   const codigo = project.project_code ?? "—";
   const lista = ordem.map(id => MODULO_01.atividades.find(a => a.id === id)).filter((a): a is Atividade => !!a);
+
+  const desfazerTarefa = (id: "pedidos" | "totvs" | "drive") => onChange(e => { const feitos = { ...e.feitos }; delete feitos[id]; return { ...e, feitos }; });
 
   const tarefa = (a: Atividade) => {
     const id = a.id as "pedidos" | "totvs" | "drive";
     const f = estado.feitos[id];
     if (f) {
       return (
-        <Registro texto={`Feito em ${quando(f.em)} por ${f.por}`} onDesfazer={() => onChange(e => { const feitos = { ...e.feitos }; delete feitos[id]; return { ...e, feitos }; })}>
+        <Registro texto={`Feito em ${quando(f.em)} por ${f.por}`} onDesfazer={() => desfazerTarefa(id)}>
           {f.valor && (a.campo?.url
             ? <> · <a href={f.valor} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">Abrir pasta<ExternalLink className="h-3 w-3" /></a></>
             : <> · <b>{f.valor}</b></>)}
@@ -136,6 +142,51 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
           <Check className="mr-1.5 h-4 w-4" />Marcar como feito
         </Button>
       </div>
+    );
+  };
+
+  const pedidos = (a: Atividade) => {
+    const f = estado.feitos.pedidos;
+    // copiar o pedido conclui a atividade; copiar de novo mantém a 1ª data e o nº já informado
+    const concluir = () => onChange(e => ({ ...e, feitos: { ...e.feitos, pedidos: {
+      em: e.feitos.pedidos?.em ?? agora(), por: e.feitos.pedidos?.por ?? userName, valor: e.feitos.pedidos?.valor ?? (campos.pedidos?.trim() || undefined),
+    } } }));
+    const numero = campos.pedidos?.trim() ?? "";
+    const salvarNumero = () => onChange(e => (e.feitos.pedidos ? { ...e, feitos: { ...e.feitos, pedidos: { ...e.feitos.pedidos, valor: numero } } } : e));
+    const verPedido = <button type="button" className="font-medium text-primary underline-offset-2 hover:underline" onClick={() => setPedidoAberto(true)}>Ver pedido</button>;
+    return (
+      <>
+        {f ? (
+          <div className="space-y-2">
+            <Registro texto={`Feito em ${quando(f.em)} por ${f.por}`} onDesfazer={() => desfazerTarefa("pedidos")}>
+              {f.valor && <> · nº <b>{f.valor}</b></>}{" · "}{verPedido}
+            </Registro>
+            {!f.valor && (
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="min-w-0 flex-1 basis-56">
+                  <Label className="text-xs" htmlFor="ger-pedidos-num">Nº no sistema de pedidos (opcional, pode informar depois)</Label>
+                  <Input id="ger-pedidos-num" className="mt-1.5 h-9" placeholder={a.campo?.placeholder}
+                    value={campos.pedidos ?? ""} onChange={ev => setCampos(c => ({ ...c, pedidos: ev.target.value }))} />
+                </div>
+                <Button variant="outline" className="h-9" disabled={!numero} onClick={salvarNumero}><Check className="mr-1.5 h-4 w-4" />Salvar nº</Button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <Button size="sm" className="h-8" onClick={() => setPedidoAberto(true)}>
+                <ClipboardList className="mr-1.5 h-3.5 w-3.5" />Gerar pedido para copiar
+              </Button>
+              <span className="text-[12px] text-muted-foreground">Selo <b className="font-semibold">{pedido.selo}</b> · copie e cole no sistema de pedidos</span>
+            </div>
+            {tarefa(a)}
+          </div>
+        )}
+        {/* fora do condicional: ao concluir, o diálogo aberto continua o mesmo */}
+        <PedidoSeloDialog open={pedidoAberto} onOpenChange={setPedidoAberto} project={project} pedido={pedido}
+          onCopiado={concluir} onAtualizarProjeto={onAtualizarProjeto} />
+      </>
     );
   };
 
@@ -250,7 +301,8 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
             <div className="flex gap-2"><dt className="text-muted-foreground">Executivo de Vendas</dt><dd className="font-medium">{project.executive?.full_name ?? "—"}</dd></div>
           </dl>
         );
-      case "pedidos": case "totvs": case "drive": return tarefa(a);
+      case "pedidos": return pedidos(a);
+      case "totvs": case "drive": return tarefa(a);
       case "checklist": return <ChecklistPreRequisitos project={project} estado={estado} onChange={onChange} userName={userName} />;
       case "datacenter": return datacenter();
       case "handover": return handover();
