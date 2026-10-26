@@ -175,8 +175,8 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
         ) : (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-              <Button size="sm" className="h-8" onClick={() => setPedidoAberto(true)}>
-                <ClipboardList className="mr-1.5 h-3.5 w-3.5" />Gerar pedido para copiar
+              <Button className="h-9" onClick={() => setPedidoAberto(true)}>
+                <ClipboardList className="mr-1.5 h-4 w-4" />Gerar pedido para copiar
               </Button>
               <span className="text-[12px] text-muted-foreground">Selo <b className="font-semibold">{pedido.selo}</b> · copie e cole no sistema de pedidos</span>
             </div>
@@ -203,10 +203,10 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
           </Registro>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" className="h-8" onClick={() => setEmailDC(true)}>
-              <Mail className="mr-1.5 h-3.5 w-3.5" />Montar e-mail ao Data Center
+            <Button className="h-9" onClick={() => setEmailDC(true)}>
+              <Mail className="mr-1.5 h-4 w-4" />Montar e-mail ao Data Center
             </Button>
-            <Button variant="outline" size="sm" className="h-8" onClick={concluir}><Check className="mr-1.5 h-3.5 w-3.5" />Marcar como feito</Button>
+            <Button className="h-9" onClick={concluir}><Check className="mr-1.5 h-4 w-4" />Marcar como feito</Button>
             <span className="text-[12px] text-muted-foreground">se o pedido foi feito por fora do portal</span>
           </div>
         )}
@@ -275,10 +275,10 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
           </Registro>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" className="h-8" onClick={() => setEmailCobertura(true)}>
-              <RadioTower className="mr-1.5 h-3.5 w-3.5" />Montar e-mail de cobertura
+            <Button className="h-9" onClick={() => setEmailCobertura(true)}>
+              <RadioTower className="mr-1.5 h-4 w-4" />Montar e-mail de cobertura
             </Button>
-            <Button variant="outline" size="sm" className="h-8" onClick={() => concluir(null)}><Check className="mr-1.5 h-3.5 w-3.5" />Marcar como feito</Button>
+            <Button className="h-9" onClick={() => concluir(null)}><Check className="mr-1.5 h-4 w-4" />Marcar como feito</Button>
             <span className="text-[12px] text-muted-foreground">se o e-mail foi enviado por fora do portal</span>
           </div>
         )}
