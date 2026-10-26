@@ -101,7 +101,7 @@ export interface Atividade {
 /** Nome provisório: os nomes dos módulos serão revistos depois. */
 export const MODULO_01 = {
   numero: "01",
-  nome: "Abertura do projeto",
+  nome: "Abertura do projeto (TAP)",
   resumo: "Do cadastro no portal até a reunião de Handover: o projeto sai do Comercial pronto para o time de Projetos.",
   atividades: [
     { id: "portal", titulo: "Cadastro do projeto no portal", descricao: "O portal gera o código do projeto e o projeto já sai com o GP responsável.", responsavel: "portal" },

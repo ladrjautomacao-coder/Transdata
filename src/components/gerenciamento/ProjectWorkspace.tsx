@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowUpDown, FlaskConical, Gauge, Layers, Lock, LockOpen, RefreshCw, Rocket, RotateCcw } from "lucide-react";
+import { ArrowLeft, ArrowUpDown, FileText, FlaskConical, Gauge, Layers, Lock, LockOpen, RefreshCw, Rocket, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
@@ -10,7 +10,9 @@ import { errorMessage } from "@/lib/implantationScheduling";
 import {
   MODULO_01, ORDEM_PADRAO, fetchGerProject, modulo01Vazio, situacao, solutionsOf, type AtividadeId, type GerProject, type Modulo01Estado,
 } from "@/lib/gerenciamento";
+import { montarTap, type DadosTap } from "@/lib/tap";
 import { MedidorModulo } from "./MedidorModulo";
+import { TapDialog } from "./TapDialog";
 import { Modulo01 } from "./Modulo01";
 
 // Ordem em discussão com os GPs: fica guardada neste navegador até virar a ordem oficial
@@ -71,6 +73,8 @@ export function ProjectWorkspace({ id, onBack, initial }: { id: string; onBack: 
   // ao abrir o projeto, o módulo aparece no medidor; a lista de atividades só abre quando o GP pede
   const [aberto, setAberto] = useState(false);
   const [foco, setFoco] = useState<string | null>(null);
+  // TAP: foto do módulo no clique em "Gerar documento TAP" (o diálogo gera o PDF)
+  const [tap, setTap] = useState<DadosTap | null>(null);
   const abrir = (atividadeId?: string) => { setFoco(atividadeId ?? null); setAberto(true); };
   useEffect(() => {
     if (!aberto) return;
@@ -106,6 +110,15 @@ export function ProjectWorkspace({ id, onBack, initial }: { id: string; onBack: 
   const proxima = aplicaveis.find(a => situacao(a.id, estado, project, ordem) !== "feito");
   const phase = project.sub_phase ? subPhasesByStatus[project.status as keyof typeof subPhasesByStatus]?.find(s => s.id === project.sub_phase)?.label : null;
   const solucoes = solutionsOf(project);
+  const statusNome = statusLabels[project.status as keyof typeof statusLabels] ?? project.status;
+  const gerarTap = () => setTap(montarTap({
+    project, estado, ordem, emitidoPor: profile?.full_name ?? "—", fase: phase ? `${statusNome} · ${phase}` : statusNome,
+  }));
+  const DOC_TAP = {
+    botao: "Gerar documento TAP",
+    bloqueado: "O documento TAP (Termo de Abertura do Projeto) é liberado quando o módulo chegar a 100%.",
+    concluido: "Gere o documento TAP para assinatura.",
+  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -157,7 +170,8 @@ export function ProjectWorkspace({ id, onBack, initial }: { id: string; onBack: 
 
         {!aberto ? (
           <MedidorModulo numero={MODULO_01.numero} nome={MODULO_01.nome} resumo={MODULO_01.resumo}
-            atividades={emOrdem.map(a => ({ a, sit: situacao(a.id, estado, project, ordem) }))} onAbrir={abrir} />
+            atividades={emOrdem.map(a => ({ a, sit: situacao(a.id, estado, project, ordem) }))} onAbrir={abrir}
+            documento={DOC_TAP} onGerarDocumento={gerarTap} />
         ) : (
         <div className="flex min-w-0 flex-col gap-4">
           <Button variant="ghost" size="sm" className="-mb-1 -ml-2 h-8 w-fit text-muted-foreground" onClick={() => setAberto(false)}>
@@ -169,9 +183,16 @@ export function ProjectWorkspace({ id, onBack, initial }: { id: string; onBack: 
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-80">Módulo {MODULO_01.numero}</p>
               <h2 id="ger-mod-titulo" className="text-xl font-bold sm:text-2xl">{MODULO_01.nome}</h2>
               <p className="mt-1 max-w-xl text-sm opacity-85">{MODULO_01.resumo}</p>
-              <p className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-primary-foreground/15 px-2.5 py-1.5 text-[13px] font-medium">
-                <Rocket className="h-4 w-4" />{proxima ? <>Próximo passo: <b>{proxima.titulo}</b></> : "Módulo concluído"}
-              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <p className="inline-flex items-center gap-1.5 rounded-lg bg-primary-foreground/15 px-2.5 py-1.5 text-[13px] font-medium">
+                  <Rocket className="h-4 w-4" />{proxima ? <>Próximo passo: <b>{proxima.titulo}</b></> : "Módulo concluído"}
+                </p>
+                {!proxima && (
+                  <Button size="sm" className="h-8 bg-primary-foreground text-primary hover:bg-primary-foreground/90" onClick={gerarTap}>
+                    <FileText className="mr-1.5 h-4 w-4" />{DOC_TAP.botao}
+                  </Button>
+                )}
+              </div>
             </div>
             <ProgressRing done={feitas} total={aplicaveis.length} />
           </section>
@@ -197,6 +218,7 @@ export function ProjectWorkspace({ id, onBack, initial }: { id: string; onBack: 
         </div>
         )}
       </div>
+      <TapDialog dados={tap} onOpenChange={o => { if (!o) setTap(null); }} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, ArrowRight, Check, CheckCircle2, Clock3, ListChecks, Lock, Minus, PartyPopper, Rocket, TrendingUp } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, CheckCircle2, Clock3, FileText, ListChecks, Lock, Minus, PartyPopper, Rocket, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RESPONSAVEL_LABEL, type Atividade, type SituacaoAtividade } from "@/lib/gerenciamento";
 
@@ -64,7 +64,7 @@ function Velocimetro({ pct, nivel }: { pct: number; nivel: Nivel }) {
  * Visão geral de um módulo ao abrir o projeto: medidor de 0 a 100%, o que falta e a trilha das
  * atividades. A lista completa só abre quando o GP pede ("Abrir atividades" ou uma bolinha).
  */
-export function MedidorModulo({ numero, nome, resumo, atividades, onAbrir }: {
+export function MedidorModulo({ numero, nome, resumo, atividades, onAbrir, documento, onGerarDocumento }: {
   numero: string;
   nome: string;
   resumo: string;
@@ -72,6 +72,9 @@ export function MedidorModulo({ numero, nome, resumo, atividades, onAbrir }: {
   atividades: { a: Atividade; sit: SituacaoAtividade }[];
   /** Abre a lista; com id, rola até a atividade. */
   onAbrir: (atividadeId?: string) => void;
+  /** Documento que o módulo gera ao chegar a 100% (ex.: o TAP no módulo 01). */
+  documento?: { botao: string; bloqueado: string; concluido: string };
+  onGerarDocumento?: () => void;
 }) {
   const aplicaveis = atividades.filter(x => x.sit !== "naoaplica");
   const feitas = aplicaveis.filter(x => x.sit === "feito").length;
@@ -113,7 +116,7 @@ export function MedidorModulo({ numero, nome, resumo, atividades, onAbrir }: {
               <p className="text-base font-bold">{nivel === "concluido" ? N.titulo : `${N.titulo}: ${faltam === 1 ? "falta 1 atividade" : `faltam ${faltam} atividades`}`}</p>
               <p className="text-[13px] opacity-90">
                 {nivel === "concluido"
-                  ? "Todas as atividades que se aplicam a este projeto estão feitas."
+                  ? `Todas as atividades que se aplicam a este projeto estão feitas.${documento ? ` ${documento.concluido}` : ""}`
                   : proxima ? <>Próximo passo: <b>{proxima.a.titulo}</b> ({RESPONSAVEL_LABEL[proxima.a.responsavel]}).</> : null}
               </p>
             </div>
@@ -135,13 +138,23 @@ export function MedidorModulo({ numero, nome, resumo, atividades, onAbrir }: {
           </ul>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button className="h-10" onClick={() => onAbrir(proxima?.a.id)}>
+            {nivel === "concluido" && onGerarDocumento && (
+              <Button className="h-10 bg-emerald-600 text-white hover:bg-emerald-500" onClick={onGerarDocumento}>
+                <FileText className="mr-1.5 h-4 w-4" />{documento?.botao}
+              </Button>
+            )}
+            <Button className="h-10" variant={nivel === "concluido" ? "outline" : "default"} onClick={() => onAbrir(proxima?.a.id)}>
               <ListChecks className="mr-1.5 h-4 w-4" />{nivel === "concluido" ? "Ver as atividades" : "Abrir atividades do módulo"}
             </Button>
             {proxima && nivel !== "concluido" && (
               <span className="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground"><Rocket className="h-3.5 w-3.5" />abre no próximo passo</span>
             )}
           </div>
+          {nivel !== "concluido" && documento && (
+            <p className="flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
+              <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />{documento.bloqueado}
+            </p>
+          )}
         </div>
       </div>
 
