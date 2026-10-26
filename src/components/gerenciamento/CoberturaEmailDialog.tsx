@@ -142,7 +142,7 @@ export function CoberturaEmailDialog({ open, onOpenChange, project, estado, onEs
   } else if (res.status === "sem_dados") {
     corpo = (
       <Aviso icone={<AlertTriangle className="h-4 w-4" />} titulo="Os dados de cobertura ainda não foram carregados no portal.">
-        <p>A carga da Anatel roda uma vez por mês, pelo GitHub (workflow "Cobertura das operadoras"). Depois da primeira carga, o e-mail fica disponível para todos os projetos com Carrier.</p>
+        <p>A carga da Anatel roda toda segunda-feira, pelo GitHub (workflow "Cobertura das operadoras"). Depois da primeira carga, o e-mail fica disponível para todos os projetos com Carrier, ITS ou Gestão de Frota.</p>
       </Aviso>
     );
   } else if (res.status === "nao_encontrado") {

@@ -210,7 +210,7 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
   const carrier = (sit: SituacaoAtividade) => {
     const c = estado.carrier;
     const set = (patch: Partial<Modulo01Estado["carrier"]>) => onChange(e => ({ ...e, carrier: { ...e.carrier, ...patch } }));
-    if (sit === "naoaplica") return <p className="text-[13px] text-muted-foreground">Só nos projetos com a solução Carrier. Este projeto não tem.</p>;
+    if (sit === "naoaplica") return <p className="text-[13px] text-muted-foreground">Só nos projetos com Carrier, ITS ou Gestão de Frota. Este projeto não tem nenhuma dessas soluções.</p>;
     // copiar o e-mail (ou avisar que enviou por fora) conclui; copiar de novo mantém a 1ª data
     const concluir = (rec: OperadoraCobertura | null) =>
       onChange(e => ({ ...e, carrier: { ...e.carrier, concluidoEm: e.carrier.concluidoEm ?? agora(), recomendada: rec ?? e.carrier.recomendada } }));

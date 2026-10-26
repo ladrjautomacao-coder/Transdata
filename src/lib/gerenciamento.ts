@@ -47,8 +47,10 @@ export async function fetchGerProject(id: string): Promise<GerProject | null> {
 }
 
 export const solutionsOf = (p: GerProject) => p.project_solutions.map(ps => ps.solution?.name).filter((n): n is string => !!n);
-/** Projeto com a solução Carrier: entra a atividade do mapa de calor das operadoras. */
-export const hasCarrier = (p: GerProject) => solutionsOf(p).some(n => /carrier/i.test(n));
+/** Soluções que dependem do sinal de celular: entra a atividade do mapa de calor das operadoras. */
+const SOLUCOES_COBERTURA = /carrier|\bits\b|gest[aã]o de frota/i;
+/** Projeto com Carrier, ITS ou Gestão de Frota. */
+export const precisaCobertura = (p: GerProject) => solutionsOf(p).some(n => SOLUCOES_COBERTURA.test(n));
 
 /* ─── Módulo 01 ─── */
 export type Responsavel = "portal" | "gp" | "assistente";
@@ -174,7 +176,7 @@ export const checklistLiberado = (e: Modulo01Estado) =>
  */
 export function situacao(a: AtividadeId, e: Modulo01Estado, p: GerProject, ordem: AtividadeId[] = ORDEM_PADRAO): SituacaoAtividade {
   if (a === "portal") return "feito";
-  if (a === "carrier" && !hasCarrier(p)) return "naoaplica";
+  if (a === "carrier" && !precisaCobertura(p)) return "naoaplica";
   const feito = a === "checklist" ? checklistLiberado(e)
     : a === "datacenter" ? !!e.datacenter.concluidoEm
     : a === "handover" ? !!e.handover.registradoEm

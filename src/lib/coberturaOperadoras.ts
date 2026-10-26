@@ -1,4 +1,5 @@
-// Cobertura das operadoras (Claro e Vivo) para o e-mail ao cliente nos projetos com Carrier.
+// Cobertura das operadoras (Claro e Vivo) para o e-mail ao cliente nos projetos com Carrier, ITS
+// ou Gestão de Frota.
 // Fonte: Anatel (cobertura estimada a partir das estações licenciadas), carregada a cada trimestre
 // por scripts/cobertura/atualizar.mjs; o mapa de calor usa os setores censitários do IBGE.
 import { supabase } from "@/integrations/supabase/client";

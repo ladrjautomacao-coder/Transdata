@@ -3,7 +3,20 @@ import {
   aneisDoSetor, dadosAtrasados, emailHtmlCobertura, emailTextoCobertura, fraseRecomendacao, normalizarMunicipio, pctTexto, periodoTexto,
   recomendada, resumir, type CoberturaMunicipio, type ResumoOperadora,
 } from "@/lib/coberturaOperadoras";
-import type { GerProject } from "@/lib/gerenciamento";
+import { precisaCobertura, type GerProject } from "@/lib/gerenciamento";
+
+describe("precisaCobertura", () => {
+  const com = (...nomes: string[]) => ({ project_solutions: nomes.map(name => ({ solution: { name } })) }) as unknown as GerProject;
+  it("vale para Carrier, ITS e Gestão de Frota (nomes do cadastro)", () => {
+    expect(precisaCobertura(com("Bilhetagem", "Carrier"))).toBe(true);
+    expect(precisaCobertura(com("Its (legado)"))).toBe(true);
+    expect(precisaCobertura(com("Gestão de frota"))).toBe(true);
+  });
+  it("não vale para as outras soluções", () => {
+    expect(precisaCobertura(com("Bilhetagem", "AtlasMob", "Biometria facial"))).toBe(false);
+    expect(precisaCobertura(com())).toBe(false);
+  });
+});
 
 // Tubarão/SC, Anatel 09/2026
 const linhas = [
