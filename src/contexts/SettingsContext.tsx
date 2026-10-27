@@ -55,6 +55,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   teamRoles: [
     { value: "executivo_vendas", label: "Executivo de Vendas" },
     { value: "gerente_projetos", label: "Gerente de Projetos" },
+    { value: "coordenador_implantacao", label: "Coordenador de Implantação" },
+    { value: "implantador", label: "Implantador" },
+    { value: "gerente_operacoes", label: "Gerente de Operações" },
+    { value: "gerente_relacionamento", label: "Gerente de Relacionamento" },
+    { value: "analista", label: "Analista" },
+    { value: "assistente", label: "Assistente" },
   ],
 };
 

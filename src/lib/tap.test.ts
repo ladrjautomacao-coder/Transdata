@@ -12,9 +12,19 @@ const projeto = (extra: Partial<GerProject> = {}) => ({
   ...extra,
 }) as GerProject;
 
-const tap = (p: GerProject) => montarTap({ project: p, estado: modulo01Vazio(), ordem: ORDEM_PADRAO, emitidoPor: "Luiz Alves", fase: "Planejamento", agora: new Date("2026-10-26T15:00:00") });
+const tap = (p: GerProject, coordenador: string | null = null) =>
+  montarTap({ project: p, estado: modulo01Vazio(), ordem: ORDEM_PADRAO, emitidoPor: "Luiz Alves", fase: "Planejamento", coordenador, agora: new Date("2026-10-26T15:00:00") });
 
 describe("montarTap", () => {
+  it("assinam o GP, o Coordenador de Implantação e o Gerente Comercial (executivo do projeto)", () => {
+    expect(tap(projeto(), "Fabiano Gazola").aprovacao).toEqual([
+      { papel: "Gerente de Projetos", nome: "Luiz Alves" },
+      { papel: "Coordenador de Implantação", nome: "Fabiano Gazola" },
+      { papel: "Gerente Comercial", nome: "Romano Garcia" },
+    ]);
+    // sem coordenador cadastrado, a linha fica para assinar à mão
+    expect(tap(projeto()).aprovacao[1]).toEqual({ papel: "Coordenador de Implantação", nome: "" });
+  });
   it("identificação traz o fim do contrato (contratação + prazo contratual)", () => {
     expect(tap(projeto()).identificacao).toContainEqual(["Fim do contrato", "15/09/2027"]);
     expect(tap(projeto({ contractual_deadline_days: null })).identificacao).toContainEqual(["Fim do contrato", "—"]);

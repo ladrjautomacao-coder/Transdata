@@ -54,6 +54,19 @@ export async function fetchGerProject(id: string): Promise<GerProject | null> {
   return (data as unknown as GerProject) ?? null;
 }
 
+/** Função "Coordenador de Implantação" em Equipe (Funções da equipe). */
+export const PAPEL_COORDENADOR_IMPLANTACAO = "coordenador_implantacao";
+
+/** Nome do Coordenador de Implantação do tenant; null se ninguém ou mais de uma pessoa ativa na função. */
+export async function fetchCoordenadorImplantacao(tenantId: string | null | undefined): Promise<string | null> {
+  let q = supabase.from("team_members").select("full_name").eq("role", PAPEL_COORDENADOR_IMPLANTACAO).eq("active", true);
+  // super admin enxerga todos os tenants: filtra pelo do usuário
+  if (tenantId) q = q.eq("tenant_id", tenantId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data?.length === 1 ? data[0].full_name : null;
+}
+
 const p2 = (n: number) => String(n).padStart(2, "0");
 /** ISO ou AAAA-MM-DD → dd/mm/aaaa */
 export const dataBr = (v: string | null | undefined) => {

@@ -38,19 +38,23 @@ const ou = (v: string | null | undefined, vazio = "—") => (v && v.trim() ? v.t
 const lista = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} e ${xs.at(-1)}`);
 
 /** Monta o TAP a partir do cadastro do projeto e do que foi registrado no módulo 01. */
-export function montarTap({ project, estado, ordem, emitidoPor, fase, agora = new Date() }: {
+export function montarTap({ project, estado, ordem, emitidoPor, fase, coordenador = null, agora = new Date() }: {
   project: GerProject;
   estado: Modulo01Estado;
   ordem: AtividadeId[];
   emitidoPor: string;
   /** Coluna e etapa do Kanban, já com os nomes do tenant. */
   fase: string;
+  /** Coordenador de Implantação da Equipe (null: assinatura sem nome). */
+  coordenador?: string | null;
   agora?: Date;
 }): DadosTap {
   const gp = project.manager?.full_name ?? "—";
   const executivo = project.executive?.full_name ?? "—";
   const papelGp = teamRoleLabels.manager ?? "Gerente de Projetos";
-  const papelExec = teamRoleLabels.executive ?? "Executivo(a) de Vendas";
+  // no TAP o Executivo de Vendas do projeto assina como Gerente Comercial
+  const papelExec = teamRoleLabels.executive ?? "Gerente Comercial";
+  const papelCoord = "Coordenador de Implantação";
   const solucoes = solutionsOf(project);
   const local = formatLocation(project.city, project.state, project.country_code);
   const cobertura = precisaCobertura(project);
@@ -87,6 +91,7 @@ export function montarTap({ project, estado, ordem, emitidoPor, fase, agora = ne
   const partes = [
     { papel: `${papelGp} (designado)`, nome: gp, responsabilidade: "Conduz o projeto do planejamento à entrega e responde pelas atividades deste termo." },
     { papel: papelExec, nome: executivo, responsabilidade: "Responsável comercial; repassa o contexto da venda e os combinados com o cliente no Handover." },
+    ...(coordenador ? [{ papel: papelCoord, nome: coordenador, responsabilidade: "Coordena a implantação do projeto em campo junto ao GP." }] : []),
     ...(cobertura ? [{ papel: "Assistente de Projetos", nome: "—", responsabilidade: "Apoia o GP; envia ao cliente o comparativo de cobertura das operadoras." }] : []),
     { papel: "Cliente", nome: project.company_name.trim(), responsabilidade: "Contratante; providencia os pré-requisitos sob sua responsabilidade." },
     ...(project.client_manager_name?.trim() ? [{ papel: "Gerente de Projetos no cliente", nome: project.client_manager_name.trim(), responsabilidade: "Conduz o projeto do lado do cliente; ponto de contato do GP Transdata." }] : []),
@@ -151,9 +156,9 @@ export function montarTap({ project, estado, ordem, emitidoPor, fase, agora = ne
       expectativas: ou(h.expectativas, "Nada registrado."),
     } : null,
     aprovacao: [
-      { papel: papelGp, nome: gp },
-      { papel: papelExec, nome: executivo },
-      { papel: "Diretoria (patrocinador)", nome: "" },
+      { papel: papelGp, nome: gp === "—" ? "" : gp },
+      { papel: papelCoord, nome: coordenador ?? "" },
+      { papel: papelExec, nome: executivo === "—" ? "" : executivo },
     ],
   };
 }

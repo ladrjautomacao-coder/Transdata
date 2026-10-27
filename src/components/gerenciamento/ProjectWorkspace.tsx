@@ -8,7 +8,7 @@ import { formatLocation } from "@/lib/location";
 import { subPhasesByStatus } from "@/pages/ProjectManagement";
 import { errorMessage } from "@/lib/implantationScheduling";
 import {
-  MODULO_01, ORDEM_PADRAO, fetchGerProject, modulo01Vazio, situacao, solutionsOf, type AtividadeId, type GerProject, type Modulo01Estado,
+  MODULO_01, ORDEM_PADRAO, fetchCoordenadorImplantacao, fetchGerProject, modulo01Vazio, situacao, solutionsOf, type AtividadeId, type GerProject, type Modulo01Estado,
 } from "@/lib/gerenciamento";
 import { montarTap, type DadosTap } from "@/lib/tap";
 import { MedidorModulo } from "./MedidorModulo";
@@ -111,9 +111,13 @@ export function ProjectWorkspace({ id, onBack, initial }: { id: string; onBack: 
   const phase = project.sub_phase ? subPhasesByStatus[project.status as keyof typeof subPhasesByStatus]?.find(s => s.id === project.sub_phase)?.label : null;
   const solucoes = solutionsOf(project);
   const statusNome = statusLabels[project.status as keyof typeof statusLabels] ?? project.status;
-  const gerarTap = () => setTap(montarTap({
-    project, estado, ordem, emitidoPor: profile?.full_name ?? "—", fase: phase ? `${statusNome} · ${phase}` : statusNome,
-  }));
+  const gerarTap = async () => {
+    // sem o coordenador (erro de rede), o TAP sai com a linha de assinatura em branco
+    const coordenador = await fetchCoordenadorImplantacao(profile?.tenant_id).catch(() => null);
+    setTap(montarTap({
+      project, estado, ordem, emitidoPor: profile?.full_name ?? "—", fase: phase ? `${statusNome} · ${phase}` : statusNome, coordenador,
+    }));
+  };
   const DOC_TAP = {
     botao: "Gerar documento TAP",
     bloqueado: "O documento TAP (Termo de Abertura do Projeto) é liberado quando o módulo chegar a 100%.",
