@@ -54,6 +54,17 @@ export async function fetchGerProject(id: string): Promise<GerProject | null> {
   return (data as unknown as GerProject) ?? null;
 }
 
+/**
+ * E-mail de um membro da Equipe (ex.: o GP do projeto). Em team_members o e-mail não é legível
+ * direto; a função admin_get_team_emails o devolve para admin. Sem permissão ou sem e-mail: null.
+ */
+export async function fetchEmailDaEquipe(memberId: string | null | undefined): Promise<string | null> {
+  if (!memberId) return null;
+  const { data, error } = await supabase.rpc("admin_get_team_emails");
+  if (error) return null;
+  return data?.find(m => m.id === memberId)?.email?.trim() || null;
+}
+
 /** Função "Coordenador de Implantação" em Equipe (Funções da equipe). */
 export const PAPEL_COORDENADOR_IMPLANTACAO = "coordenador_implantacao";
 
@@ -184,6 +195,8 @@ export interface Modulo01Estado {
     autorizadoPor: string;
     resultado: ChecklistResultado | null;
     em: string | null;
+    /** Quando o e-mail de checklist liberado foi copiado para o GP do projeto. */
+    emailGpEm: string | null;
   };
   /**
    * `concluidoEm`: quando o GP copiou o e-mail ao Data Center (ou marcou que pediu por fora).
@@ -205,7 +218,7 @@ export interface Modulo01Estado {
 
 export const modulo01Vazio = (): Modulo01Estado => ({
   feitos: {},
-  checklist: { itens: {}, naoAplica: {}, vencimentoDzero: "", observacoes: "", emailComercialEm: null, autorizadoPor: "", resultado: null, em: null },
+  checklist: { itens: {}, naoAplica: {}, vencimentoDzero: "", observacoes: "", emailComercialEm: null, autorizadoPor: "", resultado: null, em: null, emailGpEm: null },
   datacenter: { concluidoEm: null, email: null },
   codigobd: { enviadoEm: null, codigo: "", registradoEm: null, por: "" },
   handover: { agendadoPara: "", participantes: "", particularidades: "", atencao: "", expectativas: "", registradoEm: null },

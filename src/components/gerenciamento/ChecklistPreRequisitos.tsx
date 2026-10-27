@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, Check, CheckCircle2, Circle, Copy, Mail, MinusCircle, RotateCcw, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import {
   CHECKLIST_ITENS, RESP_CHECKLIST, checklistLiberado, itemOk, itensAplicaveis, naoAplica, pendenciasDe,
   type GerProject, type Modulo01Estado,
 } from "@/lib/gerenciamento";
+import { ChecklistEmailDialog } from "./ChecklistEmailDialog";
 
 const p2 = (n: number) => String(n).padStart(2, "0");
 const dia = (d: Date) => `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()}`;
@@ -24,6 +26,7 @@ export function ChecklistPreRequisitos({ project, estado, onChange, userName }: 
   userName: string;
 }) {
   const c = estado.checklist;
+  const [emailGp, setEmailGp] = useState(false);
   const set = (patch: Partial<Modulo01Estado["checklist"]>) => onChange(e => ({ ...e, checklist: { ...e.checklist, ...patch } }));
   const pendentes = pendenciasDe(estado);
   const total = itensAplicaveis(estado).length;
@@ -138,14 +141,23 @@ export function ChecklistPreRequisitos({ project, estado, onChange, userName }: 
 
       {/* Resultado */}
       {liberado ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-emerald-500/[0.07] px-3 py-2 text-[13px]">
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-          <span className="min-w-0 flex-1">
-            {c.resultado === "excecao"
-              ? <>Exceção autorizada por <b>{c.autorizadoPor}</b> com {ok} de {total} itens ok, registrada em {quando(c.em!)} por {userName}</>
-              : <>Checklist atendido, com todos os itens ok{semSigo ? ` (${semSigo} do Sigo não se aplica${semSigo > 1 ? "m" : ""})` : ""}, confirmado em {quando(c.em!)} por {userName}</>}
-          </span>
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" onClick={() => set({ em: null, resultado: null })}><RotateCcw className="mr-1 h-3.5 w-3.5" />Desfazer</Button>
+        <div className="space-y-2.5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-emerald-500/[0.07] px-3 py-2 text-[13px]">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <span className="min-w-0 flex-1">
+              {c.resultado === "excecao"
+                ? <>Exceção autorizada por <b>{c.autorizadoPor}</b> com {ok} de {total} itens ok, registrada em {quando(c.em!)} por {userName}</>
+                : <>Checklist atendido, com todos os itens ok{semSigo ? ` (${semSigo} do Sigo não se aplica${semSigo > 1 ? "m" : ""})` : ""}, confirmado em {quando(c.em!)} por {userName}</>}
+            </span>
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" onClick={() => set({ em: null, resultado: null, emailGpEm: null })}><RotateCcw className="mr-1 h-3.5 w-3.5" />Desfazer</Button>
+          </div>
+          {/* checklist liberado: avisar o GP do projeto por e-mail */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <Button className="h-9" onClick={() => setEmailGp(true)}><Mail className="mr-1.5 h-4 w-4" />Montar e-mail ao GP</Button>
+            {c.emailGpEm
+              ? <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />E-mail ao GP enviado em {quando(c.emailGpEm)}</span>
+              : <span className="text-[12px] text-muted-foreground">Avise o Gerente de Projetos{project.manager?.full_name ? ` (${project.manager.full_name})` : ""} que o checklist foi liberado.</span>}
+          </div>
         </div>
       ) : pendentes.length === 0 ? (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-emerald-500/40 bg-emerald-500/[0.07] p-3">
@@ -189,6 +201,8 @@ export function ChecklistPreRequisitos({ project, estado, onChange, userName }: 
           </div>
         </div>
       )}
+      <ChecklistEmailDialog open={emailGp} onOpenChange={setEmailGp} project={project} estado={estado} remetente={userName}
+        onCopiado={() => onChange(e => ({ ...e, checklist: { ...e.checklist, emailGpEm: e.checklist.emailGpEm ?? new Date().toISOString() } }))} />
     </div>
   );
 }
