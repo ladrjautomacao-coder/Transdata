@@ -1,6 +1,8 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Check, CheckCircle2, ClipboardPaste, Copy, ExternalLink, Lock, Mail, PencilLine, RefreshCw } from "lucide-react";
+import {
+  AlertTriangle, Check, CheckCircle2, ClipboardPaste, Copy, ExternalLink, ImageUp, Loader2, Lock, Mail, PencilLine, RefreshCw, Trash2, Upload,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -14,6 +16,7 @@ import {
   licenciados, mailtoDC, outlookWebDC, razaoSocial, reservas, soDigitos, temCarrier, temCnpj, totalCarros, type DataCenterForm,
 } from "@/lib/dataCenterEmail";
 import { copiarEmail } from "@/lib/emailOutlook";
+import { enviarLogo, type LogoCliente } from "@/lib/logoCliente";
 
 /**
  * O navegador não consegue pôr o e-mail formatado dentro do Outlook: o link só leva destinatário
@@ -77,6 +80,50 @@ function Multi<T extends string>({ value, options, onToggle, label }: { value: T
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/** Logo do cliente: arrasta ou escolhe o PNG; mostra a miniatura com as medidas. */
+function EnviarLogo({ projectId, logo, onLogo }: { projectId: string; logo: LogoCliente | null; onLogo: (l: LogoCliente | null) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const escolher = async (arquivo?: File) => {
+    if (!arquivo || enviando) return;
+    setErro(null); setEnviando(true);
+    try { onLogo(await enviarLogo(projectId, arquivo)); toast.success("Logo enviado. Ele já aparece na prévia do e-mail."); }
+    catch (e) { setErro(e instanceof Error ? e.message : "Não foi possível enviar o logo. Tente de novo."); }
+    finally { setEnviando(false); if (input.current) input.current.value = ""; }
+  };
+  return (
+    <div>
+      <input ref={input} id="dc-logo" type="file" accept="image/png" className="sr-only" onChange={e => void escolher(e.target.files?.[0])} />
+      {logo ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-border/70 bg-background p-2.5">
+          <span className="flex h-16 w-28 shrink-0 items-center justify-center rounded border border-border/60 bg-white p-1.5">
+            <img src={logo.url} alt={`Logo ${logo.nome}`} className="max-h-full max-w-full object-contain" />
+          </span>
+          <span className="min-w-0 flex-1 basis-32 text-[13px]">
+            <span className="block truncate font-medium" title={logo.nome}>{logo.nome}</span>
+            <span className="block text-[12px] text-muted-foreground">PNG · {logo.largura} × {logo.altura} px</span>
+          </span>
+          <span className="flex gap-1.5">
+            <Button variant="outline" size="sm" className="h-8" disabled={enviando} onClick={() => input.current?.click()}>
+              {enviando ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Upload className="mr-1.5 h-3.5 w-3.5" />}Trocar
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 text-destructive hover:text-destructive" onClick={() => onLogo(null)}><Trash2 className="mr-1.5 h-3.5 w-3.5" />Remover</Button>
+          </span>
+        </div>
+      ) : (
+        <label htmlFor="dc-logo" onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); void escolher(e.dataTransfer.files[0]); }}
+          className="flex cursor-pointer flex-col items-center gap-1 rounded-md border border-dashed border-primary/40 bg-primary/[0.04] px-4 py-5 text-center text-[13px] transition-colors hover:bg-primary/[0.08]">
+          {enviando ? <Loader2 className="h-6 w-6 animate-spin text-primary" /> : <ImageUp className="h-6 w-6 text-primary" />}
+          <span className="font-medium">{enviando ? "Enviando o logo…" : "Enviar o logo do cliente"}</span>
+          <span className="text-[11px] text-muted-foreground">Arraste o arquivo aqui ou clique para escolher. Só PNG, até 2 MB. Vai no corpo do e-mail.</span>
+        </label>
+      )}
+      {erro && <p role="alert" className="mt-1.5 text-[11px] text-destructive">{erro}</p>}
     </div>
   );
 }
@@ -227,6 +274,10 @@ export function DataCenterEmailDialog({ open, onOpenChange, project, form, onFor
               <Fixo label="Total de carros" valor={String(totalCarros(project))} origem="frota contratada" />
               <Fixo label="Carros reservas" valor={String(reservas(project))} origem="frota reserva" />
               <Fixo label="Carros licenciados" valor={String(licenciados(project))} origem="total − reservas" />
+            </Grupo>
+
+            <Grupo titulo="Logo do cliente *">
+              <EnviarLogo projectId={project.id} logo={f.logo} onLogo={logo => set({ logo })} />
             </Grupo>
 
             <Grupo titulo="Módulos">

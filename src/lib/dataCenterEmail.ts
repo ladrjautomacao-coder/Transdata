@@ -3,6 +3,7 @@
 import type { GerProject } from "@/lib/gerenciamento";
 import { cnpjDigits } from "@/lib/cnpj";
 import { escHtml, estiloTexto } from "@/lib/emailOutlook";
+import { alturaNoEmail, larguraNoEmail, type LogoCliente } from "@/lib/logoCliente";
 
 export const DC_DESTINATARIO = "meusuporte@itstransdata.com";
 export const SISTEMAS = ["TDMax Urbano", "TDMax Seccionado", "ITS", "Gestão de Frota"] as const;
@@ -24,6 +25,8 @@ export interface DataCenterForm {
   abt: boolean;
   billing: boolean;
   observacoes: string;
+  /** Logo do cliente (PNG) que vai no corpo do e-mail; obrigatório. */
+  logo: LogoCliente | null;
 }
 
 const solucoes = (p: GerProject) => p.project_solutions.map(s => s.solution?.name ?? "").filter(Boolean);
@@ -48,7 +51,7 @@ export function sistemasSugeridos(p: GerProject): SistemaDC[] {
 export const formInicial = (p: GerProject): DataCenterForm => ({
   codigo: "", sistemas: sistemasSugeridos(p), recolhimento: "sem", migracao: false, migracaoDe: "",
   prefixo: "4", mascara: "4",
-  crm: true, recarga: true, abt: false, billing: false, observacoes: "",
+  crm: true, recarga: true, abt: false, billing: false, observacoes: "", logo: null,
 });
 
 /** Marca ou desmarca um sistema, mantendo a ordem da lista. */
@@ -84,6 +87,7 @@ export function faltando(p: GerProject, f: DataCenterForm): string[] {
   if (!soDigitos(f.prefixo)) out.push("Dígitos do prefixo");
   if (!soDigitos(f.mascara)) out.push("Máscara da linha");
   if (!temCnpj(p)) out.push("CNPJ no cadastro do projeto");
+  if (!f.logo) out.push("Logo do cliente (PNG)");
   return out;
 }
 
@@ -149,6 +153,10 @@ export function emailHtmlDC(p: GerProject, f: DataCenterForm, gp: string): strin
     }).join("");
     return head + rows;
   }).join("");
+  // logo do cliente: imagem pública com largura e altura fixas (o Outlook embute ao colar)
+  const logo = !f.logo ? "" :
+    `<tr><td colspan="2" bgcolor="#efe6f6" style="${txt(11, "#4b1768", true)}background-color:#efe6f6;padding:8px 16px;${linha}">LOGO</td></tr>`
+    + `<tr><td colspan="2" style="padding:12px 16px;${linha}"><img src="${esc(f.logo.url)}" alt="Logo ${esc(razaoSocial(p))}" width="${larguraNoEmail(f.logo)}" height="${alturaNoEmail(f.logo)}" style="display:block;border:0;width:${larguraNoEmail(f.logo)}px;height:${alturaNoEmail(f.logo)}px;"></td></tr>`;
   const p0 = (texto: string, extra = "") => `<p style="${txt(14, "#1f1630")}margin:0;${extra}">${texto}</p>`;
   return p0("Prezados,")
     + p0("Segue solicitação para criação do ambiente no data center.", "margin-bottom:14px;")
@@ -157,6 +165,7 @@ export function emailHtmlDC(p: GerProject, f: DataCenterForm, gp: string): strin
     + `<p style="${txt(11, "#dcc8ec", true)}margin:0;">DATA CENTER &nbsp;|&nbsp; CRIAR SITE NO BD</p>`
     + `<p style="${txt(16, "#ffffff", true)}margin:4px 0 0 0;">${esc(codigoCliente(p, f))}</p></td></tr>`
     + grupos
+    + logo
     + `</table>`
     + p0("Atenciosamente,", "margin-top:16px;")
     + p0(`<b style="${txt(14, "#1f1630", true)}">${esc(gp)}</b>`)
@@ -166,6 +175,7 @@ export function emailHtmlDC(p: GerProject, f: DataCenterForm, gp: string): strin
 /** Versão em texto (para quem colar onde não aceita formatação). */
 export function emailTextoDC(p: GerProject, f: DataCenterForm, gp: string): string {
   const corpo = linhasDC(p, f).flatMap(g => g.linhas.map(l => `${l.label}: ${l.valor}`));
+  if (f.logo) corpo.push(`Logo: ${f.logo.url}`);
   return ["Prezados,", "", "Segue solicitação para criação do ambiente no data center.", "", ...corpo, "", "Atenciosamente,", gp, "Gerente de Projetos · Transdata"].join("\n");
 }
 
