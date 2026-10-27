@@ -31,6 +31,8 @@ export interface GerProject {
   cnpj: string | null;
   /** Quem conduz o projeto do lado do cliente. */
   client_manager_name: string | null;
+  /** Cidades da operação (projects.operation_cities); vazio: vale a cidade do contrato. Leia com lerCidadesOperacao. */
+  operation_cities: unknown;
   atlas_pay: boolean;
   project_type: { name: string } | null;
   project_solutions: { solution: { name: string } | null }[];
@@ -38,7 +40,7 @@ export interface GerProject {
 
 const COLS =
   "id, company_name, project_code, city, state, country_code, status, sub_phase, created_at, manager_id, fleet_size, fleet_urbano, fleet_seccionado, " +
-  "reserve_fleet, cnpj, atlas_pay, contract_date, contractual_deadline_days, d_zero_date, handover_date, project_segment, client_manager_name, " +
+  "reserve_fleet, cnpj, atlas_pay, contract_date, contractual_deadline_days, d_zero_date, handover_date, project_segment, client_manager_name, operation_cities, " +
   "manager:team_members!projects_manager_id_fkey(full_name), executive:team_members!projects_executive_id_fkey(full_name), " +
   "project_type:project_types(name), project_solutions(solution:solutions(name))";
 
@@ -151,7 +153,7 @@ export const MODULO_01 = {
     { id: "checklist", titulo: "Checklist de pré-requisitos", descricao: "Confira se o projeto cumpre os pré-requisitos para virar projeto.", responsavel: "gp" },
     { id: "datacenter", titulo: "Sites e credenciais no Data Center", descricao: "Peça por e-mail ao Data Center a criação dos sites do cliente no banco de dados e as credenciais de acesso.", responsavel: "gp" },
     { id: "handover", titulo: "Reunião de Handover", descricao: "Passagem de bastão do Comercial para Projetos, com o Executivo de Vendas.", responsavel: "gp" },
-    { id: "carrier", titulo: "Mapa de calor das operadoras", descricao: "Envie ao cliente o comparativo de cobertura Claro × Vivo da cidade, com o mapa de calor e a operadora recomendada.", responsavel: "assistente" },
+    { id: "carrier", titulo: "Mapa de calor das operadoras", descricao: "Envie ao cliente o comparativo de cobertura Claro × Vivo de cada cidade da operação, com o mapa de calor e a operadora recomendada.", responsavel: "assistente" },
   ] as Atividade[],
 };
 
@@ -213,7 +215,11 @@ export interface Modulo01Estado {
    * E-mail de cobertura ao cliente. `codIbge`: município escolhido à mão quando o nome do
    * cadastro não bate com a lista da Anatel; `para`: e-mail do cliente (opcional).
    */
-  carrier: { concluidoEm: string | null; recomendada: OperadoraCobertura | null; para: string; codIbge: number | null };
+  carrier: {
+    concluidoEm: string | null; recomendada: OperadoraCobertura | null; para: string; codIbge: number | null;
+    /** Recomendada de cada cidade da operação ("Caçador/SC"), quando o e-mail tem mais de uma. */
+    recomendadas: { cidade: string; operadora: OperadoraCobertura | null }[];
+  };
 }
 
 export const modulo01Vazio = (): Modulo01Estado => ({
@@ -222,7 +228,7 @@ export const modulo01Vazio = (): Modulo01Estado => ({
   datacenter: { concluidoEm: null, email: null },
   codigobd: { enviadoEm: null, codigo: "", registradoEm: null, por: "" },
   handover: { agendadoPara: "", participantes: "", particularidades: "", atencao: "", expectativas: "", registradoEm: null },
-  carrier: { concluidoEm: null, recomendada: null, para: "", codIbge: null },
+  carrier: { concluidoEm: null, recomendada: null, para: "", codIbge: null, recomendadas: [] },
 });
 
 /** Completa com o estado vazio o que faltar no que veio do banco (o formato cresce junto com o módulo). */

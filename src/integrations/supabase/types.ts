@@ -752,6 +752,7 @@ export type Database = {
           is_pilot: boolean
           manager_id: string | null
           observations: string | null
+          operation_cities: Json
           pilot_info: string | null
           project_code: string | null
           project_segment: string | null
@@ -795,6 +796,7 @@ export type Database = {
           is_pilot?: boolean
           manager_id?: string | null
           observations?: string | null
+          operation_cities?: Json
           pilot_info?: string | null
           project_code?: string | null
           project_segment?: string | null
@@ -838,6 +840,7 @@ export type Database = {
           is_pilot?: boolean
           manager_id?: string | null
           observations?: string | null
+          operation_cities?: Json
           pilot_info?: string | null
           project_code?: string | null
           project_segment?: string | null

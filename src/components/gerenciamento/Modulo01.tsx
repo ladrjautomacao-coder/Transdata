@@ -11,7 +11,7 @@ import {
   ATIVIDADE_FIXA, MODULO_01, RESPONSAVEL_LABEL, linkExterno, situacao,
   type Atividade, type AtividadeId, type GerProject, type Modulo01Estado, type SituacaoAtividade,
 } from "@/lib/gerenciamento";
-import { NOME_OPERADORA, type OperadoraCobertura } from "@/lib/coberturaOperadoras";
+import { NOME_OPERADORA } from "@/lib/coberturaOperadoras";
 import { soDigitos } from "@/lib/dataCenterEmail";
 import { pedidoDesignacaoGp } from "@/lib/pedidoSelo";
 import { ChecklistPreRequisitos } from "./ChecklistPreRequisitos";
@@ -329,12 +329,20 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
     const set = (patch: Partial<Modulo01Estado["carrier"]>) => onChange(e => ({ ...e, carrier: { ...e.carrier, ...patch } }));
     if (sit === "naoaplica") return <p className="text-[13px] text-muted-foreground">Só nos projetos com Carrier, ITS ou Gestão de Frota. Este projeto não tem nenhuma dessas soluções.</p>;
     // copiar o e-mail (ou avisar que enviou por fora) conclui; copiar de novo mantém a 1ª data
-    const concluir = (rec: OperadoraCobertura | null) =>
-      onChange(e => ({ ...e, carrier: { ...e.carrier, concluidoEm: e.carrier.concluidoEm ?? agora(), recomendada: rec ?? e.carrier.recomendada } }));
+    const concluir = (recs: Modulo01Estado["carrier"]["recomendadas"]) =>
+      onChange(e => ({ ...e, carrier: {
+        ...e.carrier, concluidoEm: e.carrier.concluidoEm ?? agora(),
+        recomendada: recs.length ? recs[0].operadora : e.carrier.recomendada,
+        recomendadas: recs.length ? recs : e.carrier.recomendadas,
+      } }));
+    // várias cidades: "Caçador/SC: Claro · Videira/SC: Vivo"
+    const recTexto = (c.recomendadas?.length ?? 0) > 1
+      ? ` · recomendadas: ${c.recomendadas.map(r => `${r.cidade}: ${r.operadora ? NOME_OPERADORA[r.operadora] : "nenhuma"}`).join(" · ")}`
+      : c.recomendada ? ` · recomendada: ${NOME_OPERADORA[c.recomendada]}` : "";
     return (
       <>
         {c.concluidoEm ? (
-          <Registro texto={`E-mail de cobertura enviado em ${quando(c.concluidoEm)} por ${userName}${c.recomendada ? ` · recomendada: ${NOME_OPERADORA[c.recomendada]}` : ""}`}
+          <Registro texto={`E-mail de cobertura enviado em ${quando(c.concluidoEm)} por ${userName}${recTexto}`}
             onDesfazer={() => set({ concluidoEm: null })}>
             {" · "}<button type="button" className="font-medium text-primary underline-offset-2 hover:underline" onClick={() => setEmailCobertura(true)}>Ver e-mail</button>
           </Registro>
@@ -343,7 +351,7 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
             <Button className="h-9" onClick={() => setEmailCobertura(true)}>
               <RadioTower className="mr-1.5 h-4 w-4" />Montar e-mail de cobertura
             </Button>
-            <Button className="h-9" onClick={() => concluir(null)}><Check className="mr-1.5 h-4 w-4" />Marcar como feito</Button>
+            <Button className="h-9" onClick={() => concluir([])}><Check className="mr-1.5 h-4 w-4" />Marcar como feito</Button>
             <span className="text-[12px] text-muted-foreground">se o e-mail foi enviado por fora do portal</span>
           </div>
         )}

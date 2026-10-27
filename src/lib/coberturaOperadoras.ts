@@ -112,10 +112,10 @@ export async function buscarSetores(codIbge: number): Promise<SetoresMunicipio |
 
 /**
  * Sobe a imagem do mapa para o e-mail apontar para ela (o Outlook embute ao colar).
- * Um arquivo por projeto e período: o e-mail já enviado não muda quando chegar outro trimestre.
+ * Um arquivo por projeto, período e município: o e-mail já enviado não muda quando chegar outro trimestre.
  */
-export async function enviarMapa(projectId: string, periodo: string, png: Blob): Promise<string> {
-  const caminho = `mapas/${projectId}/${periodo}.png`;
+export async function enviarMapa(projectId: string, periodo: string, codIbge: number, png: Blob): Promise<string> {
+  const caminho = `mapas/${projectId}/${periodo}-${codIbge}.png`;
   const { error } = await supabase.storage.from("cobertura").upload(caminho, png, { contentType: "image/png", upsert: true, cacheControl: "3600" });
   if (error) throw error;
   return supabase.storage.from("cobertura").getPublicUrl(caminho).data.publicUrl;
@@ -131,19 +131,30 @@ export const aneisDoSetor = (s: SetorMapa): [number, number][][] => s.g.map(r =>
 
 // ---------------------------------------------------------------- e-mail ao cliente
 
-export interface EmailCobertura {
-  project: GerProject;
+/** Uma cidade no e-mail: o comparativo, a operadora recomendada e o mapa. */
+export interface BlocoCobertura {
   dados: CoberturaMunicipio;
   recomendada: OperadoraCobertura | null;
-  remetente: string;
   /** Endereço público da imagem do mapa (ou um endereço local, na prévia). */
   mapaUrl: string | null;
 }
 
+/** E-mail ao cliente: um bloco por cidade da operação (uma só, se o projeto tiver uma). */
+export interface EmailCobertura {
+  project: GerProject;
+  cidades: BlocoCobertura[];
+  remetente: string;
+}
+
 const cidadeUf = (d: CoberturaMunicipio) => `${d.municipio}/${d.uf}`;
+/** "Caçador/SC, Videira/SC e Fraiburgo/SC" */
+const listaCidades = (e: EmailCobertura) => {
+  const t = e.cidades.map(c => cidadeUf(c.dados));
+  return t.length <= 1 ? t.join("") : `${t.slice(0, -1).join(", ")} e ${t.at(-1)}`;
+};
 
 export const assuntoCobertura = (e: EmailCobertura) =>
-  `COBERTURA DAS OPERADORAS | ${cidadeUf(e.dados).toUpperCase()} | ${e.project.company_name.trim().toUpperCase()}`;
+  `COBERTURA DAS OPERADORAS | ${e.cidades.map(c => cidadeUf(c.dados)).join(", ").toUpperCase()} | ${e.project.company_name.trim().toUpperCase()}`;
 
 /** Frase da recomendação, com o número da outra operadora para comparar. */
 export function fraseRecomendacao(d: CoberturaMunicipio, rec: OperadoraCobertura | null): string {
@@ -153,14 +164,13 @@ export function fraseRecomendacao(d: CoberturaMunicipio, rec: OperadoraCobertura
   return `${NOME_OPERADORA[rec]}, com sinal 4G em ${pctTexto(r.area4g)} da área do município${outras ? ` (${outras})` : ""}.`;
 }
 
-const FONTE_DADOS = (d: CoberturaMunicipio) =>
-  `Fonte: Anatel, cobertura estimada a partir das estações licenciadas das operadoras, período ${periodoTexto(d.periodo)}. Não substitui medição em campo.`;
+const FONTE_DADOS = (periodo: string) =>
+  `Fonte: Anatel, cobertura estimada a partir das estações licenciadas das operadoras, período ${periodoTexto(periodo)}. Não substitui medição em campo.`;
 
-/** HTML do e-mail ao cliente (mesmas regras do e-mail ao Data Center para colar no Outlook). */
-export function emailHtmlCobertura(e: EmailCobertura): string {
-  const { dados: d, recomendada: rec } = e;
+/** HTML de uma cidade: faixa com o nome, tabela Claro × Vivo, recomendação e mapa. */
+function blocoHtml(b: BlocoCobertura): string {
+  const { dados: d, recomendada: rec } = b;
   const linha = "border-top:1px solid #e3dcec;";
-  const p0 = (texto: string, extra = "") => `<p style="${txt(14, "#1f1630")}margin:0;${extra}">${texto}</p>`;
   const th = (t: string, w: string) => `<td width="${w}" bgcolor="#efe6f6" style="${txt(11, "#4b1768", true)}background-color:#efe6f6;padding:8px 12px;${linha}">${t}</td>`;
   const linhas = d.resumo.map(r => {
     const destaque = r.operadora === rec;
@@ -170,25 +180,32 @@ export function emailHtmlCobertura(e: EmailCobertura): string {
     const nome = `${esc(NOME_OPERADORA[r.operadora])}${destaque ? `&nbsp;&nbsp;<span style="${txt(10, "#047857", true)}">RECOMENDADA</span>` : ""}`;
     return `<tr>${td(nome, true)}${td(pctTexto(r.area4g), destaque)}${td(pctTexto(r.moradores4g))}${td(pctTexto(r.area5g))}${td(pctTexto(r.moradores5g))}</tr>`;
   }).join("");
-  const links = (Object.keys(MAPA_DA_OPERADORA) as OperadoraCobertura[])
-    .map(op => `<a href="${MAPA_DA_OPERADORA[op]}" style="${txt(13, "#4b1768", true)}">mapa da ${NOME_OPERADORA[op]}</a>`).join(" · ");
-  return p0("Prezados,")
-    + p0(`Segue o comparativo de cobertura das operadoras Claro e Vivo em ${esc(cidadeUf(d))}, com base nos dados oficiais da Anatel.`, "margin-bottom:14px;")
-    + `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;max-width:640px;border:1px solid #e3dcec;">`
+  return `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;max-width:640px;border:1px solid #e3dcec;margin-top:16px;">`
     + `<tr><td colspan="5" bgcolor="#4b1768" style="background-color:#4b1768;padding:14px 16px;">`
     + `<p style="${txt(11, "#dcc8ec", true)}margin:0;">COBERTURA DAS OPERADORAS &nbsp;|&nbsp; ANATEL ${periodoTexto(d.periodo)}</p>`
     + `<p style="${txt(16, "#ffffff", true)}margin:4px 0 0 0;">${esc(cidadeUf(d))}</p></td></tr>`
     + `<tr>${th("OPERADORA", "32%")}${th("4G · ÁREA", "17%")}${th("4G · MORADORES", "17%")}${th("5G · ÁREA", "17%")}${th("5G · MORADORES", "17%")}</tr>`
     + linhas
     + `</table>`
-    + p0(`<b style="${txt(14, "#1f1630", true)}">Recomendação:</b> ${esc(fraseRecomendacao(d, rec))}`, "margin-top:14px;")
-    + (e.mapaUrl
-      ? `<p style="${txt(13, "#1f1630", true)}margin:18px 0 2px 0;">Mapa de calor da cobertura 4G</p>`
+    + `<p style="${txt(14, "#1f1630")}margin:12px 0 0 0;"><b style="${txt(14, "#1f1630", true)}">Recomendação em ${esc(cidadeUf(d))}:</b> ${esc(fraseRecomendacao(d, rec))}</p>`
+    + (b.mapaUrl
+      ? `<p style="${txt(13, "#1f1630", true)}margin:14px 0 2px 0;">Mapa de calor da cobertura 4G · ${esc(cidadeUf(d))}</p>`
         + `<p style="${txt(12, "#645a72")}margin:0 0 8px 0;">Cada área é um setor censitário do IBGE: verde, sinal em todo o setor; vermelho, sem sinal.</p>`
-        + `<img src="${esc(e.mapaUrl)}" width="640" alt="Mapa de calor da cobertura 4G da Claro e da Vivo em ${esc(cidadeUf(d))}" style="display:block;width:100%;max-width:640px;height:auto;border:1px solid #e3dcec;">`
-      : "")
+        + `<img src="${esc(b.mapaUrl)}" width="640" alt="Mapa de calor da cobertura 4G da Claro e da Vivo em ${esc(cidadeUf(d))}" style="display:block;width:100%;max-width:640px;height:auto;border:1px solid #e3dcec;">`
+      : "");
+}
+
+/** HTML do e-mail ao cliente (mesmas regras do e-mail ao Data Center para colar no Outlook). */
+export function emailHtmlCobertura(e: EmailCobertura): string {
+  const p0 = (texto: string, extra = "") => `<p style="${txt(14, "#1f1630")}margin:0;${extra}">${texto}</p>`;
+  const links = (Object.keys(MAPA_DA_OPERADORA) as OperadoraCobertura[])
+    .map(op => `<a href="${MAPA_DA_OPERADORA[op]}" style="${txt(13, "#4b1768", true)}">mapa da ${NOME_OPERADORA[op]}</a>`).join(" · ");
+  const periodo = e.cidades[0]?.dados.periodo ?? "";
+  return p0("Prezados,")
+    + p0(`Segue o comparativo de cobertura das operadoras Claro e Vivo em ${esc(listaCidades(e))}, com base nos dados oficiais da Anatel.`)
+    + e.cidades.map(blocoHtml).join("")
     + p0(`Para consultar um endereço específico: ${links}.`, "margin-top:16px;")
-    + `<p style="${txt(11, "#8a8197")}margin:10px 0 0 0;">${esc(FONTE_DADOS(d))}</p>`
+    + (periodo ? `<p style="${txt(11, "#8a8197")}margin:10px 0 0 0;">${esc(FONTE_DADOS(periodo))}</p>` : "")
     + p0("Atenciosamente,", "margin-top:16px;")
     + p0(`<b style="${txt(14, "#1f1630", true)}">${esc(e.remetente)}</b>`)
     + `<p style="${txt(13, "#645a72")}margin:0;">Transdata</p>`;
@@ -196,14 +213,18 @@ export function emailHtmlCobertura(e: EmailCobertura): string {
 
 /** Versão em texto (para quem colar onde não aceita formatação). */
 export function emailTextoCobertura(e: EmailCobertura): string {
-  const { dados: d } = e;
+  const periodo = e.cidades[0]?.dados.periodo ?? "";
   return [
     "Prezados,", "",
-    `Segue o comparativo de cobertura das operadoras Claro e Vivo em ${cidadeUf(d)}, com base nos dados oficiais da Anatel.`, "",
-    ...d.resumo.map(r => `${NOME_OPERADORA[r.operadora]}${r.operadora === e.recomendada ? " (recomendada)" : ""}: 4G em ${pctTexto(r.area4g)} da área e ${pctTexto(r.moradores4g)} dos moradores; 5G em ${pctTexto(r.area5g)} da área e ${pctTexto(r.moradores5g)} dos moradores.`),
-    "", `Recomendação: ${fraseRecomendacao(d, e.recomendada)}`, "",
+    `Segue o comparativo de cobertura das operadoras Claro e Vivo em ${listaCidades(e)}, com base nos dados oficiais da Anatel.`,
+    ...e.cidades.flatMap(({ dados: d, recomendada: rec }) => [
+      "", `${cidadeUf(d)}:`,
+      ...d.resumo.map(r => `${NOME_OPERADORA[r.operadora]}${r.operadora === rec ? " (recomendada)" : ""}: 4G em ${pctTexto(r.area4g)} da área e ${pctTexto(r.moradores4g)} dos moradores; 5G em ${pctTexto(r.area5g)} da área e ${pctTexto(r.moradores5g)} dos moradores.`),
+      `Recomendação: ${fraseRecomendacao(d, rec)}`,
+    ]),
+    "",
     ...(Object.keys(MAPA_DA_OPERADORA) as OperadoraCobertura[]).map(op => `Mapa da ${NOME_OPERADORA[op]}: ${MAPA_DA_OPERADORA[op]}`),
-    "", FONTE_DADOS(d), "", "Atenciosamente,", e.remetente, "Transdata",
+    ...(periodo ? ["", FONTE_DADOS(periodo)] : []), "", "Atenciosamente,", e.remetente, "Transdata",
   ].join("\n");
 }
 

@@ -25,6 +25,8 @@ import { LocationFields } from "@/components/LocationFields";
 import { useTenantBranding } from "@/contexts/TenantBrandingContext";
 import { teamRoleLabels } from "@/lib/teamRoleLabels";
 import { cnpjDigits, formatCnpj } from "@/lib/cnpj";
+import { lerCidadesOperacao, type CidadeOperacao } from "@/lib/cidadesOperacao";
+import { CidadesOperacaoField } from "@/components/CidadesOperacaoField";
 
 type BrazilianState = Database["public"]["Enums"]["brazilian_state"];
 type ProjectStatus = Database["public"]["Enums"]["project_status"];
@@ -105,6 +107,8 @@ export default function NewProject() {
   const [atlasPay, setAtlasPay] = useState(false);
   // Usado no pedido "Designação do GP" (Gerenciamento)
   const [clientManagerName, setClientManagerName] = useState("");
+  // Cidades onde a operação roda (mapa de calor das operadoras)
+  const [operationCities, setOperationCities] = useState<CidadeOperacao[]>([]);
 
   // Anexos por categoria
   const ATTACHMENT_CATEGORIES = [
@@ -191,13 +195,13 @@ export default function NewProject() {
     selectedSolutions, selectedIntegrations, selectedFeatures, selectedEquipments, equipmentQty,
     fleetSize, implDeadlineDays, contractualDeadlineDays, isPilot, pilotInfo, embeddedTraining,
     installationTransmobile, installationClient, complementarySale, complementaryFleet,
-    fleetUrbano, fleetSeccionado, attachmentLinks, cnpj, reserveFleet, atlasPay, clientManagerName,
+    fleetUrbano, fleetSeccionado, attachmentLinks, cnpj, reserveFleet, atlasPay, clientManagerName, operationCities,
   }), [companyName, city, state, countryCode, contractDate, dZeroDate, handoverDate, executiveProjectDate,
     executiveId, managerId, status, selectedProducts, projectTypeId, projectSegment, selectedSolutions,
     selectedIntegrations, selectedFeatures, selectedEquipments, equipmentQty, fleetSize, implDeadlineDays,
     contractualDeadlineDays, isPilot, pilotInfo, embeddedTraining, installationTransmobile,
     installationClient, complementarySale, complementaryFleet, fleetUrbano, fleetSeccionado, attachmentLinks,
-    cnpj, reserveFleet, atlasPay, clientManagerName]);
+    cnpj, reserveFleet, atlasPay, clientManagerName, operationCities]);
 
   // Carregar rascunho existente ao abrir a tela
   useEffect(() => {
@@ -259,6 +263,7 @@ export default function NewProject() {
     setReserveFleet(d.reserveFleet ?? "0");
     setAtlasPay(!!d.atlasPay);
     setClientManagerName(d.clientManagerName || "");
+    setOperationCities(lerCidadesOperacao(d.operationCities));
     setDraftFound(null);
     toast({ title: "Cadastro restaurado", description: "Os dados preenchidos anteriormente foram recuperados." });
   };
@@ -361,6 +366,7 @@ export default function NewProject() {
         implementation_deadline_days: implDays,
         contractual_deadline_days: contrDays,
         client_manager_name: clientManagerName.trim() || null,
+        operation_cities: countryCode === "BR" ? operationCities.map(c => ({ ...c })) : [],
         filled_by: user?.id || null,
         ...(isTransdata ? {
           fleet_size: isNaN(fleet) ? null : fleet,
@@ -526,6 +532,11 @@ export default function NewProject() {
               onStateChange={v => setState(v as BrazilianState)}
               cityMax={settings.cityMax}
             />
+            {countryCode === "BR" && (
+              <div className="sm:col-span-2">
+                <CidadesOperacaoField value={operationCities} onChange={setOperationCities} cidadeContrato={city} ufContrato={state || null} />
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Tipo do Projeto {isTransdata && <span className="text-destructive">*</span>}</Label>
               <Select value={projectTypeId || undefined} onValueChange={setProjectTypeId}>

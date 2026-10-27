@@ -41,6 +41,8 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { subPhasesByStatus } from "@/pages/ProjectManagement";
 import { teamRoleLabels } from "@/lib/teamRoleLabels";
 import { cnpjDigits, formatCnpj } from "@/lib/cnpj";
+import { cidadeOperacaoTexto, lerCidadesOperacao, type CidadeOperacao } from "@/lib/cidadesOperacao";
+import { CidadesOperacaoField } from "@/components/CidadesOperacaoField";
 import { useNoteDraft } from "@/hooks/useNoteDraft";
 import ProjectPendenciesSection from "@/components/kanban/ProjectPendenciesSection";
 import ProjectDsvPanel from "@/components/dsv/ProjectDsvPanel";
@@ -112,6 +114,7 @@ export default function ProjectDetail() {
   const [reserveFleet, setReserveFleet] = useState<string>("0");
   const [atlasPay, setAtlasPay] = useState(false);
   const [clientManagerName, setClientManagerName] = useState("");
+  const [operationCities, setOperationCities] = useState<CidadeOperacao[]>([]);
   const [implDeadlineDays, setImplDeadlineDays] = useState<string>("");
   const [contractualDeadlineDays, setContractualDeadlineDays] = useState<string>("");
   const [isPilot, setIsPilot] = useState(false);
@@ -188,6 +191,7 @@ export default function ProjectDetail() {
       setReserveFleet(data.reserve_fleet?.toString() || "0");
       setAtlasPay(!!data.atlas_pay);
       setClientManagerName(data.client_manager_name || "");
+      setOperationCities(lerCidadesOperacao(data.operation_cities));
       setImplDeadlineDays(data.implementation_deadline_days?.toString() || "");
       setContractualDeadlineDays(data.contractual_deadline_days?.toString() || "");
       setIsPilot(data.is_pilot || false);
@@ -372,6 +376,7 @@ export default function ProjectDetail() {
     const newMgr = managers.find(m => m.id === managerId)?.full_name || "—";
     add(teamRoleLabels.manager ?? "Gestor de Projetos", oldMgr, newMgr);
     add("GP no cliente", project.client_manager_name, clientManagerName.trim());
+    add("Cidades da operação", lerCidadesOperacao(project.operation_cities).map(cidadeOperacaoTexto).join(", "), operationCities.map(cidadeOperacaoTexto).join(", "));
 
     add("Data do Contrato", fmtDate(project.contract_date), contractDate ? format(contractDate, "dd/MM/yyyy") : "—");
     add("Data D-Zero", fmtDate(project.d_zero_date), dZeroDate ? format(dZeroDate, "dd/MM/yyyy") : "—");
@@ -460,6 +465,7 @@ export default function ProjectDetail() {
         cnpj: cnpj ? formatCnpj(cnpj) : null,
         atlas_pay: atlasPay,
         client_manager_name: clientManagerName.trim() || null,
+        operation_cities: countryCode === "BR" ? operationCities.map(c => ({ ...c })) : [],
         implementation_deadline_days: implDays,
         contractual_deadline_days: contrDays,
         is_pilot: isPilot,
@@ -971,6 +977,9 @@ export default function ProjectDetail() {
                     onStateChange={v => setState(v as BrazilianState)}
                   />
                 </div>
+                {countryCode === "BR" && (
+                  <CidadesOperacaoField value={operationCities} onChange={setOperationCities} cidadeContrato={city} ufContrato={state || null} compacto />
+                )}
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Tipo do Projeto</Label>
                   <Select value={projectTypeId} onValueChange={setProjectTypeId}>
@@ -1029,6 +1038,7 @@ export default function ProjectDetail() {
                 <div><span className="text-xs text-muted-foreground">Empresa</span><p className="font-medium">{project.company_name}</p></div>
                 <div><span className="text-xs text-muted-foreground">CNPJ</span><p className={cn(project.cnpj && "font-mono")}>{project.cnpj || "—"}</p></div>
                 <div><span className="text-xs text-muted-foreground">Localização</span><p>{formatLocation(project.city, project.state, project.country_code)}</p></div>
+                <div><span className="text-xs text-muted-foreground">Cidades da operação</span><p>{lerCidadesOperacao(project.operation_cities).map(cidadeOperacaoTexto).join(", ") || "A do contrato"}</p></div>
                 <div><span className="text-xs text-muted-foreground">Tipo do Projeto</span><p>{projectTypeName}</p></div>
                 <div><span className="text-xs text-muted-foreground">Seguimento do Projeto</span><p>{projectSegmentLabel((project as any).project_segment)}</p></div>
                 <div><span className="text-xs text-muted-foreground">Frota Contratada</span><p>{project.fleet_size ?? "—"} veículos{project.reserve_fleet > 0 && <span className="text-muted-foreground"> · {project.reserve_fleet} de reserva</span>}</p></div>
@@ -1484,7 +1494,7 @@ export default function ProjectDetail() {
                   fleet_size: "Frota Total", fleet_urbano: "Frota Urbano",
                   fleet_seccionado: "Frota Seccionado", complementary_fleet: "Frota Complementar",
                   implemented_fleet: "Frota Implementada", reserve_fleet: "Frota Reserva",
-                  cnpj: "CNPJ", atlas_pay: "AtlasPay", client_manager_name: "GP no cliente",
+                  cnpj: "CNPJ", atlas_pay: "AtlasPay", client_manager_name: "GP no cliente", operation_cities: "Cidades da operação",
                   is_pilot: "Piloto", pilot_info: "Info do Piloto",
                   embedded_install_training: "Treinamento de instalação embarcada",
                   complementary_sale: "Venda Complementar", observations: "Observações",

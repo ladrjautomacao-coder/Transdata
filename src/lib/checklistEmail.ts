@@ -4,6 +4,7 @@
 import { CHECKLIST_ITENS, RESP_CHECKLIST, dataBr, dataHoraBr, naoAplica, type GerProject, type Modulo01Estado } from "@/lib/gerenciamento";
 import { cidadeUf, razaoSocial } from "@/lib/dataCenterEmail";
 import { codigoProjetoBd } from "@/lib/codigoBd";
+import { cidadesOperacaoTexto, lerCidadesOperacao } from "@/lib/cidadesOperacao";
 import { escHtml, estiloTexto } from "@/lib/emailOutlook";
 
 const excecao = (e: Modulo01Estado) => e.checklist.resultado === "excecao";
@@ -15,7 +16,8 @@ export const assuntoChecklist = (p: GerProject, e: Modulo01Estado) =>
 export const linhasProjetoChecklist = (p: GerProject) => [
   { label: "Cliente", valor: razaoSocial(p) },
   { label: "Código do Projeto", valor: codigoProjetoBd(p) },
-  { label: "Cidade de atuação", valor: cidadeUf(p) || "—" },
+  // cidades da operação; sem elas, a cidade do contrato
+  { label: "Cidade de atuação", valor: cidadesOperacaoTexto(lerCidadesOperacao(p.operation_cities)) || cidadeUf(p) || "—" },
   { label: "Tipo do projeto", valor: p.project_type?.name ?? "—" },
   { label: "Executivo(a) de Vendas", valor: p.executive?.full_name ?? "—" },
   { label: "Gerente de Projetos", valor: p.manager?.full_name ?? "—" },

@@ -30,6 +30,10 @@ describe("e-mail ao GP com o checklist liberado", () => {
     expect(itens.find(i => i.texto === "Pagamento D-zero efetuado")).toMatchObject({ situacao: "ok", extra: " · vencimento 26/11/2026" });
     expect(itens.find(i => i.texto === "Abertura da Conta Sigo realizada")?.situacao).toBe("naoaplica");
   });
+  it("com cidades da operação, a cidade de atuação lista todas", () => {
+    const comOperacao = { ...projeto, operation_cities: [{ cod_ibge: 4203006, municipio: "Caçador", uf: "SC" }, { cod_ibge: 4219309, municipio: "Videira", uf: "SC" }] } as GerProject;
+    expect(emailTextoChecklist(comOperacao, atendido(), "Luiz Alves")).toContain("Cidade de atuação: Caçador/SC e Videira/SC");
+  });
   it("cumprimenta o GP pelo primeiro nome e traz a cidade de atuação", () => {
     const texto = emailTextoChecklist(projeto, atendido(), "Luiz Alves");
     expect(texto.startsWith("Olá, Luiz,")).toBe(true);

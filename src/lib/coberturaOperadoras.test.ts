@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  aneisDoSetor, dadosAtrasados, emailHtmlCobertura, emailTextoCobertura, fraseRecomendacao, normalizarMunicipio, pctTexto, periodoTexto,
+  aneisDoSetor, assuntoCobertura, dadosAtrasados, emailHtmlCobertura, emailTextoCobertura, fraseRecomendacao, normalizarMunicipio, pctTexto, periodoTexto,
   recomendada, resumir, type CoberturaMunicipio, type ResumoOperadora,
 } from "@/lib/coberturaOperadoras";
 import { precisaCobertura, type GerProject } from "@/lib/gerenciamento";
@@ -82,7 +82,8 @@ describe("textos", () => {
 describe("e-mail ao cliente", () => {
   const project = { id: "p1", company_name: "Empresa Teste Ltda", city: "Tubarão", state: "SC", country_code: "BR" } as GerProject;
   const dados: CoberturaMunicipio = { codIbge: 4218707, municipio: "Tubarão", uf: "SC", periodo: "2026-09", resumo: resumir(linhas) };
-  const html = emailHtmlCobertura({ project, dados, recomendada: "CLARO", remetente: "Luiz Alves", mapaUrl: "https://x.supabase.co/storage/v1/object/public/cobertura/mapas/p1/2026-09.png" });
+  const uma = (mapaUrl: string | null) => ({ project, cidades: [{ dados, recomendada: "CLARO" as const, mapaUrl }], remetente: "Luiz Alves" });
+  const html = emailHtmlCobertura(uma("https://x.supabase.co/storage/v1/object/public/cobertura/mapas/p1/2026-09-4218707.png"));
 
   it("só usa o que o Outlook mantém ao colar", () => {
     expect(html).not.toMatch(/text-transform|letter-spacing|border-radius|opacity|display:inline-block/);
@@ -92,15 +93,29 @@ describe("e-mail ao cliente", () => {
   });
   it("leva tabela, mapa, links das operadoras e a fonte", () => {
     expect(html).toContain("79,9%");
-    expect(html).toContain('src="https://x.supabase.co/storage/v1/object/public/cobertura/mapas/p1/2026-09.png"');
+    expect(html).toContain('src="https://x.supabase.co/storage/v1/object/public/cobertura/mapas/p1/2026-09-4218707.png"');
     expect(html).toContain("https://www.claro.com.br/mapa-de-cobertura");
     expect(html).toContain("período 09/2026");
   });
   it("sem a imagem, o e-mail vai sem o bloco do mapa", () => {
-    expect(emailHtmlCobertura({ project, dados, recomendada: "CLARO", remetente: "Luiz", mapaUrl: null })).not.toContain("<img");
+    expect(emailHtmlCobertura(uma(null))).not.toContain("<img");
   });
   it("tem versão em texto", () => {
-    expect(emailTextoCobertura({ project, dados, recomendada: "CLARO", remetente: "Luiz", mapaUrl: null })).toContain("Claro (recomendada): 4G em 79,9% da área");
+    expect(emailTextoCobertura(uma(null))).toContain("Claro (recomendada): 4G em 79,9% da área");
+  });
+  it("com várias cidades da operação, um bloco por cidade e todas no assunto", () => {
+    const videira: CoberturaMunicipio = { ...dados, codIbge: 4219309, municipio: "Videira", resumo: resumir(linhas).map(r => ({ ...r, area4g: r.operadora === "VIVO" ? 90 : 40 })) };
+    const e = { project, remetente: "Luiz", cidades: [
+      { dados, recomendada: recomendada(dados.resumo), mapaUrl: "https://x/a.png" },
+      { dados: videira, recomendada: recomendada(videira.resumo), mapaUrl: "https://x/b.png" },
+    ] };
+    expect(assuntoCobertura(e)).toBe("COBERTURA DAS OPERADORAS | TUBARÃO/SC, VIDEIRA/SC | EMPRESA TESTE LTDA");
+    const h = emailHtmlCobertura(e);
+    expect(h).toContain("em Tubarão/SC e Videira/SC");
+    expect(h).toContain("Recomendação em Tubarão/SC:</b> Claro");
+    expect(h).toContain("Recomendação em Videira/SC:</b> Vivo");
+    expect(h.match(/<img /g)).toHaveLength(2);
+    expect(emailTextoCobertura(e)).toContain("Videira/SC:\nClaro: 4G em 40% da área");
   });
 });
 

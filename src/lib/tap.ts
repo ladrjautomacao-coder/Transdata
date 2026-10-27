@@ -34,6 +34,12 @@ export interface DadosTap {
   aprovacao: { papel: string; nome: string }[];
 }
 
+/** "Claro" ou, com várias cidades da operação, "Caçador/SC: Claro; Videira/SC: Vivo". */
+const recomendadasTexto = (e: Modulo01Estado): string | null => {
+  const rs = e.carrier.recomendadas ?? [];
+  if (rs.length > 1) return rs.map(r => `${r.cidade}: ${r.operadora ? NOME_OPERADORA[r.operadora] : "nenhuma"}`).join("; ");
+  return e.carrier.recomendada ? NOME_OPERADORA[e.carrier.recomendada] : null;
+};
 const ou = (v: string | null | undefined, vazio = "—") => (v && v.trim() ? v.trim() : vazio);
 const lista = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} e ${xs.at(-1)}`);
 
@@ -83,7 +89,7 @@ export function montarTap({ project, estado, ordem, emitidoPor, fase, coordenado
     ["AtlasPay", project.atlas_pay ? "Sim" : "Não"],
   ];
   if (dc.email?.sistemas?.length) escopo.push(["Sistemas no Data Center", sistemasTexto(dc.email.sistemas)]);
-  if (cobertura) escopo.push(["Operadora recomendada", estado.carrier.recomendada ? NOME_OPERADORA[estado.carrier.recomendada] : "Não informada"]);
+  if (cobertura) escopo.push(["Operadora recomendada", recomendadasTexto(estado) ?? "Não informada"]);
 
   const objetivo = `Implantar ${solucoes.length ? lista(solucoes) : "as soluções contratadas"} para ${project.company_name.trim()}`
     + `${local ? ` em ${local}` : ""}${frota ? `, com frota contratada de ${frota} veículo${frota === 1 ? "" : "s"}` : ""}.`;
@@ -138,7 +144,7 @@ export function montarTap({ project, estado, ordem, emitidoPor, fase, coordenado
       case "handover": return { ...base, concluidaEm: dataBr(h.registradoEm), registro: h.agendadoPara ? `Reunião em ${dataHoraBr(h.agendadoPara)}` : "Reunião registrada" };
       case "carrier":
         if (!cobertura) return null;
-        return { ...base, concluidaEm: dataBr(estado.carrier.concluidoEm), registro: estado.carrier.recomendada ? `Recomendada: ${NOME_OPERADORA[estado.carrier.recomendada]}` : "E-mail enviado por fora do portal" };
+        return { ...base, concluidaEm: dataBr(estado.carrier.concluidoEm), registro: recomendadasTexto(estado) ? `Recomendada: ${recomendadasTexto(estado)}` : "E-mail enviado por fora do portal" };
     }
   };
 
