@@ -193,8 +193,11 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   const solucoes = solutionsOf(project);
   const statusNome = statusLabels[project.status as keyof typeof statusLabels] ?? project.status;
   const gerarTap = async () => {
-    // sem o coordenador (erro de rede), o TAP sai com a linha de assinatura em branco
-    const coordenador = await fetchCoordenadorImplantacao(profile?.tenant_id).catch(() => null);
+    // sem o coordenador (erro na busca), o TAP sai com a linha de assinatura em branco e o GP é avisado
+    const coordenador = await fetchCoordenadorImplantacao().catch(err => {
+      toast.warning("Não foi possível buscar o Coordenador de Implantação na Equipe.", { description: `A assinatura sai sem nome. ${errorMessage(err)}` });
+      return null;
+    });
     setTap(montarTap({
       project, estado, ordem, emitidoPor: profile?.full_name ?? "—", fase: phase ? `${statusNome} · ${phase}` : statusNome, coordenador,
     }));

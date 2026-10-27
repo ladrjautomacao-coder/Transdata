@@ -57,12 +57,13 @@ export async function fetchGerProject(id: string): Promise<GerProject | null> {
 /** Função "Coordenador de Implantação" em Equipe (Funções da equipe). */
 export const PAPEL_COORDENADOR_IMPLANTACAO = "coordenador_implantacao";
 
-/** Nome do Coordenador de Implantação do tenant; null se ninguém ou mais de uma pessoa ativa na função. */
-export async function fetchCoordenadorImplantacao(tenantId: string | null | undefined): Promise<string | null> {
-  let q = supabase.from("team_members").select("full_name").eq("role", PAPEL_COORDENADOR_IMPLANTACAO).eq("active", true);
-  // super admin enxerga todos os tenants: filtra pelo do usuário
-  if (tenantId) q = q.eq("tenant_id", tenantId);
-  const { data, error } = await q;
+/** Nome do Coordenador de Implantação; null se ninguém ou mais de uma pessoa ativa na função. */
+export async function fetchCoordenadorImplantacao(): Promise<string | null> {
+  // Sem filtro por tenant_id: em team_members o usuário só pode ler id, full_name, role, active e
+  // created_at (permissão por coluna) — filtrar por tenant_id dá "permissão negada". A separação
+  // por empresa fica com a regra "tenant guard" do banco, como nas outras telas que leem a Equipe.
+  const { data, error } = await supabase.from("team_members").select("full_name")
+    .eq("role", PAPEL_COORDENADOR_IMPLANTACAO).eq("active", true);
   if (error) throw error;
   return data?.length === 1 ? data[0].full_name : null;
 }
