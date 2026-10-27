@@ -7,7 +7,7 @@ import { teamRoleLabels } from "@/lib/teamRoleLabels";
 import { codigoCliente, sistemasTexto } from "@/lib/dataCenterEmail";
 import { NOME_OPERADORA } from "@/lib/coberturaOperadoras";
 import {
-  CHECKLIST_ITENS, MODULO_01, RESPONSAVEL_LABEL, RESP_CHECKLIST, dataBr, dataHoraBr, fimDoContrato, naoAplica, precisaCobertura, solutionsOf,
+  CHECKLIST_ITENS, MODULO_01, RESPONSAVEL_LABEL, RESP_CHECKLIST, dataBr, dataHoraBr, fimDoContrato, linkExterno, naoAplica, precisaCobertura, solutionsOf,
   type AtividadeId, type GerProject, type Modulo01Estado,
 } from "@/lib/gerenciamento";
 
@@ -119,14 +119,20 @@ export function montarTap({ project, estado, ordem, emitidoPor, fase, coordenado
     const base = { atividade: a.titulo, responsavel: resp(id) };
     switch (id) {
       case "portal": return { ...base, concluidaEm: dataBr(project.created_at), registro: "Código do projeto gerado" };
-      case "pedidos": case "totvs": {
-        const f = estado.feitos[id];
+      case "pedidos": {
+        const f = estado.feitos.pedidos, link = linkExterno(f?.valor);
+        if (link) return { ...base, concluidaEm: dataBr(f?.em), registro: "Pedido no sistema de pedidos", link };
+        return { ...base, concluidaEm: dataBr(f?.em), registro: f?.valor ? `Nº ${f.valor}` : "Sem link informado" };
+      }
+      case "totvs": {
+        const f = estado.feitos.totvs;
         return { ...base, concluidaEm: dataBr(f?.em), registro: f?.valor ? `Nº ${f.valor}` : "Sem número informado" };
       }
       case "drive": {
         const f = estado.feitos.drive;
-        return { ...base, concluidaEm: dataBr(f?.em), registro: f?.valor ? "Pasta do projeto no Drive" : "Sem link informado", link: f?.valor || undefined };
+        return { ...base, concluidaEm: dataBr(f?.em), registro: f?.valor ? "Pasta do projeto no Drive" : "Sem link informado", link: linkExterno(f?.valor) ?? undefined };
       }
+      case "codigobd": return { ...base, concluidaEm: dataBr(estado.codigobd.registradoEm), registro: estado.codigobd.codigo ? `Código BD ${estado.codigobd.codigo}` : "—" };
       case "checklist": return { ...base, concluidaEm: dataBr(c.em), registro: c.resultado === "excecao" ? `Exceção: ${ou(c.autorizadoPor)}` : "Atendido" };
       case "datacenter": return { ...base, concluidaEm: dataBr(dc.concluidoEm), registro: dc.email?.codigo ? codigoCliente(project, dc.email) : "Pedido feito por fora do portal" };
       case "handover": return { ...base, concluidaEm: dataBr(h.registradoEm), registro: h.agendadoPara ? `Reunião em ${dataHoraBr(h.agendadoPara)}` : "Reunião registrada" };

@@ -101,15 +101,26 @@ export const precisaCobertura = (p: GerProject) => solutionsOf(p).some(n => SOLU
 export type Responsavel = "portal" | "gp" | "assistente";
 export const RESPONSAVEL_LABEL: Record<Responsavel, string> = { portal: "Automático", gp: "GP", assistente: "Assistente de Projetos" };
 
-export type AtividadeId = "portal" | "pedidos" | "totvs" | "drive" | "checklist" | "datacenter" | "handover" | "carrier";
+export type AtividadeId = "portal" | "pedidos" | "totvs" | "drive" | "codigobd" | "checklist" | "datacenter" | "handover" | "carrier";
 
 export interface Atividade {
   id: AtividadeId;
   titulo: string;
   descricao: string;
   responsavel: Responsavel;
-  /** Campo de registro da tarefa simples (o que o GP anota ao concluir). */
-  campo?: { label: string; placeholder: string; url?: boolean };
+  /**
+   * Campo de registro da tarefa simples (o que o GP anota ao concluir). `url`: é um link, com
+   * botão para abrir em outra aba; `abrir`: texto desse link ("Abrir pasta").
+   */
+  campo?: { label: string; placeholder: string; url?: boolean; abrir?: string };
+}
+
+/** Link digitado pronto para abrir (completa o https:// se faltar); null se não for um link. */
+export function linkExterno(v: string | null | undefined): string | null {
+  const s = (v ?? "").trim();
+  if (/^https?:\/\/\S+$/i.test(s)) return s;
+  if (/^[\w-]+(\.[\w-]+)+(:\d+)?(\/\S*)?$/.test(s)) return `https://${s}`;
+  return null;
 }
 
 /** Nome provisório: os nomes dos módulos serão revistos depois. */
@@ -120,11 +131,12 @@ export const MODULO_01 = {
   atividades: [
     { id: "portal", titulo: "Cadastro do projeto no portal", descricao: "O portal gera o código do projeto e o projeto já sai com o GP responsável.", responsavel: "portal" },
     { id: "pedidos", titulo: "Cadastro no sistema de pedidos", descricao: "Cadastre o projeto no sistema de pedidos.", responsavel: "gp",
-      campo: { label: "Número no sistema de pedidos (opcional)", placeholder: "Ex.: 2026-00123" } },
-    { id: "totvs", titulo: "Cadastro no TOTVS", descricao: "Cadastre o projeto no TOTVS usando o código do projeto do portal.", responsavel: "gp",
+      campo: { label: "Link do pedido no sistema de pedidos (opcional)", placeholder: "https://...", url: true, abrir: "Abrir pedido" } },
+    { id: "totvs", titulo: "Baixar pedidos - TOTVS", descricao: "Baixe os pedidos do projeto no TOTVS usando o código do projeto do portal.", responsavel: "gp",
       campo: { label: "Número do projeto no TOTVS (opcional)", placeholder: "Ex.: 000457" } },
     { id: "drive", titulo: "Pastas do projeto no Drive", descricao: "Crie as pastas do projeto no Drive da Transdata, com todos os documentos padrão de projeto.", responsavel: "gp",
-      campo: { label: "Link da pasta no Drive", placeholder: "https://drive.google.com/...", url: true } },
+      campo: { label: "Link da pasta no Drive", placeholder: "https://drive.google.com/...", url: true, abrir: "Abrir pasta" } },
+    { id: "codigobd", titulo: "Cadastro do código BD", descricao: "Peça por e-mail o cadastro do cliente no banco de dados e anote o código BD que voltar.", responsavel: "gp" },
     { id: "checklist", titulo: "Checklist de pré-requisitos", descricao: "Confira se o projeto cumpre os pré-requisitos para virar projeto.", responsavel: "gp" },
     { id: "datacenter", titulo: "Sites e credenciais no Data Center", descricao: "Peça por e-mail ao Data Center a criação dos sites do cliente no banco de dados e as credenciais de acesso.", responsavel: "gp" },
     { id: "handover", titulo: "Reunião de Handover", descricao: "Passagem de bastão do Comercial para Projetos, com o Executivo de Vendas.", responsavel: "gp" },
@@ -178,6 +190,11 @@ export interface Modulo01Estado {
    * `email`: o que ele preencheu (volta preenchido ao reabrir).
    */
   datacenter: { concluidoEm: string | null; email: DataCenterForm | null };
+  /**
+   * Cadastro do código BD: `enviadoEm` quando o GP copiou o e-mail; `codigo` (5 dígitos) é o
+   * código do cliente no BD que voltou — fecha a atividade e preenche o e-mail ao Data Center.
+   */
+  codigobd: { enviadoEm: string | null; codigo: string; registradoEm: string | null; por: string };
   handover: { agendadoPara: string; participantes: string; particularidades: string; atencao: string; expectativas: string; registradoEm: string | null };
   /**
    * E-mail de cobertura ao cliente. `codIbge`: município escolhido à mão quando o nome do
@@ -190,6 +207,7 @@ export const modulo01Vazio = (): Modulo01Estado => ({
   feitos: {},
   checklist: { itens: {}, naoAplica: {}, vencimentoDzero: "", observacoes: "", emailComercialEm: null, autorizadoPor: "", resultado: null, em: null },
   datacenter: { concluidoEm: null, email: null },
+  codigobd: { enviadoEm: null, codigo: "", registradoEm: null, por: "" },
   handover: { agendadoPara: "", participantes: "", particularidades: "", atencao: "", expectativas: "", registradoEm: null },
   carrier: { concluidoEm: null, recomendada: null, para: "", codIbge: null },
 });
@@ -202,6 +220,7 @@ export function normalizarModulo01(raw: unknown): Modulo01Estado {
     feitos: { ...r.feitos },
     checklist: { ...v.checklist, ...r.checklist, itens: { ...r.checklist?.itens }, naoAplica: { ...r.checklist?.naoAplica } },
     datacenter: { ...v.datacenter, ...r.datacenter },
+    codigobd: { ...v.codigobd, ...r.codigobd },
     handover: { ...v.handover, ...r.handover },
     carrier: { ...v.carrier, ...r.carrier },
   };
@@ -259,10 +278,13 @@ export function situacao(a: AtividadeId, e: Modulo01Estado, p: GerProject, ordem
     : a === "datacenter" ? !!e.datacenter.concluidoEm
     : a === "handover" ? !!e.handover.registradoEm
     : a === "carrier" ? !!e.carrier.concluidoEm
+    : a === "codigobd" ? !!e.codigobd.registradoEm
     : !!e.feitos[a];
   if (feito) return "feito";
   const abaixoDoChecklist = ordem.indexOf(a) > ordem.indexOf("checklist");
   if ((abaixoDoChecklist || a === "handover") && !checklistLiberado(e)) return "bloqueado";
   if (a === "checklist" && e.checklist.emailComercialEm) return "aguardando";
+  // e-mail enviado: falta o código BD voltar
+  if (a === "codigobd" && e.codigobd.enviadoEm) return "aguardando";
   return "afazer";
 }

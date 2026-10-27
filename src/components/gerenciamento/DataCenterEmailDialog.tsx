@@ -44,7 +44,7 @@ export function Fixo({ label, valor, origem = "do cadastro" }: { label: string; 
     <div className="flex items-center gap-2 rounded-md bg-muted/60 px-2.5 py-1.5 text-[13px]">
       <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
       <span className="text-muted-foreground">{label}</span>
-      <span className="ml-auto min-w-0 truncate text-right font-medium">{valor}</span>
+      <span className="ml-auto min-w-0 text-right font-medium [overflow-wrap:anywhere]">{valor}</span>
       <span className="hidden shrink-0 text-[10.5px] text-muted-foreground sm:inline">{origem}</span>
     </div>
   );
@@ -98,13 +98,15 @@ function SimNao({ id, label, value, onChange }: { id: string; label: string; val
  * E-mail ao Data Center: o GP completa o que varia, confere a prévia e abre o Outlook
  * com destinatário e assunto prontos; o corpo formatado vai copiado para colar.
  */
-export function DataCenterEmailDialog({ open, onOpenChange, project, form, onForm, gp, onCopiado, onAtualizarProjeto }: {
+export function DataCenterEmailDialog({ open, onOpenChange, project, form, onForm, gp, codigoBD, onCopiado, onAtualizarProjeto }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   project: GerProject;
   form: DataCenterForm | null;
   onForm: (f: DataCenterForm) => void;
   gp: string;
+  /** Código BD anotado na atividade "Cadastro do código BD": preenche o código do cliente. */
+  codigoBD?: string;
   /** O GP copiou o e-mail: a atividade fica feita. */
   onCopiado: () => void;
   /** Relê o cadastro do projeto (depois de completar o CNPJ em outra aba). */
@@ -112,6 +114,8 @@ export function DataCenterEmailDialog({ open, onOpenChange, project, form, onFor
 }) {
   // completa com os padrões o que faltar (o formulário muda de forma entre versões)
   const f: DataCenterForm = { ...formInicial(project), ...form };
+  if (!f.codigo && codigoBD) f.codigo = codigoBD;
+  const doCodigoBD = !!codigoBD && f.codigo === codigoBD;
   const set = (patch: Partial<DataCenterForm>) => { onForm({ ...f, ...patch }); setConferido(false); setAberto(false); };
   const [conferido, setConferido] = useState(false);
   const [aberto, setAberto] = useState(false);
@@ -166,7 +170,10 @@ export function DataCenterEmailDialog({ open, onOpenChange, project, form, onFor
                     onBlur={() => { if (f.codigo && f.codigo.length < 5) set({ codigo: f.codigo.padStart(5, "0") }); }} />
                   <span className="min-w-0 flex-1 truncate rounded-md bg-muted/60 px-2.5 py-1.5 font-mono text-[12px]" title={codigoCliente(project, f)}>{codigoCliente(project, f)}</span>
                 </div>
-                <p className="mt-1 text-[11px] text-muted-foreground">Você digita os 5 dígitos; nome, cidade e UF vêm do cadastro e o final vem dos sistemas (TDMax Urbano e Seccionado viram "TDMax").</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {doCodigoBD ? <><b className="font-semibold text-foreground">Os 5 dígitos vieram da atividade "Cadastro do código BD".</b> </> : "Você digita os 5 dígitos; "}
+                  nome, cidade e UF vêm do cadastro e o final vem dos sistemas (TDMax Urbano e Seccionado viram "TDMax").
+                </p>
               </div>
               <div>
                 <Label className="text-xs">Sistema * <span className="font-normal text-muted-foreground">(um ou mais)</span></Label>

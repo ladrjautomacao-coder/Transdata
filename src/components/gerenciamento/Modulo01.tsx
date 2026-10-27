@@ -8,12 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  ATIVIDADE_FIXA, MODULO_01, RESPONSAVEL_LABEL, situacao,
+  ATIVIDADE_FIXA, MODULO_01, RESPONSAVEL_LABEL, linkExterno, situacao,
   type Atividade, type AtividadeId, type GerProject, type Modulo01Estado, type SituacaoAtividade,
 } from "@/lib/gerenciamento";
 import { NOME_OPERADORA, type OperadoraCobertura } from "@/lib/coberturaOperadoras";
+import { soDigitos } from "@/lib/dataCenterEmail";
 import { pedidoDesignacaoGp } from "@/lib/pedidoSelo";
 import { ChecklistPreRequisitos } from "./ChecklistPreRequisitos";
+import { CodigoBdEmailDialog } from "./CodigoBdEmailDialog";
 import { CoberturaEmailDialog } from "./CoberturaEmailDialog";
 import { DataCenterEmailDialog } from "./DataCenterEmailDialog";
 import { PedidoSeloDialog } from "./PedidoSeloDialog";
@@ -73,6 +75,18 @@ function Etapa({ n, a, sit, pill, last, mover, children }: { n: number; a: Ativi
   );
 }
 
+/** Abre em outra aba o link digitado no campo (desabilitado enquanto não for um link). */
+function AbrirLink({ href }: { href: string | null }) {
+  if (!href) {
+    return <Button variant="outline" className="h-9" disabled title="Cole o link no campo para abrir"><ExternalLink className="mr-1.5 h-4 w-4" />Abrir</Button>;
+  }
+  return (
+    <Button variant="outline" className="h-9" asChild>
+      <a href={href} target="_blank" rel="noopener noreferrer" title={href}><ExternalLink className="mr-1.5 h-4 w-4" />Abrir</a>
+    </Button>
+  );
+}
+
 /** Linha "Feito em … por …" com desfazer. */
 function Registro({ texto, onDesfazer, children }: { texto: string; onDesfazer?: () => void; children?: ReactNode }) {
   return (
@@ -104,6 +118,7 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
   const [campos, setCampos] = useState<Record<string, string>>({});
   const [emailDC, setEmailDC] = useState(false);
   const [emailCobertura, setEmailCobertura] = useState(false);
+  const [emailBD, setEmailBD] = useState(false);
   const [pedidoAberto, setPedidoAberto] = useState(false);
   const pedido = pedidoDesignacaoGp(project);
   const codigo = project.project_code ?? "—";
@@ -111,15 +126,22 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
 
   const desfazerTarefa = (id: "pedidos" | "totvs" | "drive") => onChange(e => { const feitos = { ...e.feitos }; delete feitos[id]; return { ...e, feitos }; });
 
+  /** O que o GP anotou: link vira "Abrir …" (outra aba); número (anotações antigas) fica em negrito. */
+  const valorAnotado = (a: Atividade, valor: string | undefined) => {
+    if (!valor) return null;
+    const href = linkExterno(valor);
+    return href
+      ? <> · <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">{a.campo?.abrir ?? "Abrir link"}<ExternalLink className="h-3 w-3" /></a></>
+      : <> · nº <b>{valor}</b></>;
+  };
+
   const tarefa = (a: Atividade) => {
     const id = a.id as "pedidos" | "totvs" | "drive";
     const f = estado.feitos[id];
     if (f) {
       return (
         <Registro texto={`Feito em ${quando(f.em)} por ${f.por}`} onDesfazer={() => desfazerTarefa(id)}>
-          {f.valor && (a.campo?.url
-            ? <> · <a href={f.valor} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">Abrir pasta<ExternalLink className="h-3 w-3" /></a></>
-            : <> · <b>{f.valor}</b></>)}
+          {valorAnotado(a, f.valor)}
         </Registro>
       );
     }
@@ -138,6 +160,7 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
               value={campos[id] ?? ""} onChange={ev => setCampos(c => ({ ...c, [id]: ev.target.value }))} />
           </div>
         )}
+        {a.campo?.url && <AbrirLink href={linkExterno(campos[id])} />}
         <Button className="h-9" onClick={() => onChange(e => ({ ...e, feitos: { ...e.feitos, [id]: { em: agora(), por: userName, valor: campos[id]?.trim() || undefined } } }))}>
           <Check className="mr-1.5 h-4 w-4" />Marcar como feito
         </Button>
@@ -151,24 +174,25 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
     const concluir = () => onChange(e => ({ ...e, feitos: { ...e.feitos, pedidos: {
       em: e.feitos.pedidos?.em ?? agora(), por: e.feitos.pedidos?.por ?? userName, valor: e.feitos.pedidos?.valor ?? (campos.pedidos?.trim() || undefined),
     } } }));
-    const numero = campos.pedidos?.trim() ?? "";
-    const salvarNumero = () => onChange(e => (e.feitos.pedidos ? { ...e, feitos: { ...e.feitos, pedidos: { ...e.feitos.pedidos, valor: numero } } } : e));
+    const link = campos.pedidos?.trim() ?? "";
+    const salvarLink = () => onChange(e => (e.feitos.pedidos ? { ...e, feitos: { ...e.feitos, pedidos: { ...e.feitos.pedidos, valor: link } } } : e));
     const verPedido = <button type="button" className="font-medium text-primary underline-offset-2 hover:underline" onClick={() => setPedidoAberto(true)}>Ver pedido</button>;
     return (
       <>
         {f ? (
           <div className="space-y-2">
             <Registro texto={`Feito em ${quando(f.em)} por ${f.por}`} onDesfazer={() => desfazerTarefa("pedidos")}>
-              {f.valor && <> · nº <b>{f.valor}</b></>}{" · "}{verPedido}
+              {valorAnotado(a, f.valor)}{" · "}{verPedido}
             </Registro>
             {!f.valor && (
               <div className="flex flex-wrap items-end gap-2">
                 <div className="min-w-0 flex-1 basis-56">
-                  <Label className="text-xs" htmlFor="ger-pedidos-num">Nº no sistema de pedidos (opcional, pode informar depois)</Label>
-                  <Input id="ger-pedidos-num" className="mt-1.5 h-9" placeholder={a.campo?.placeholder}
+                  <Label className="text-xs" htmlFor="ger-pedidos-link">Link do pedido no sistema de pedidos (opcional, pode informar depois)</Label>
+                  <Input id="ger-pedidos-link" className="mt-1.5 h-9" type="url" placeholder={a.campo?.placeholder}
                     value={campos.pedidos ?? ""} onChange={ev => setCampos(c => ({ ...c, pedidos: ev.target.value }))} />
                 </div>
-                <Button variant="outline" className="h-9" disabled={!numero} onClick={salvarNumero}><Check className="mr-1.5 h-4 w-4" />Salvar nº</Button>
+                <AbrirLink href={linkExterno(link)} />
+                <Button variant="outline" className="h-9" disabled={!link} onClick={salvarLink}><Check className="mr-1.5 h-4 w-4" />Salvar link</Button>
               </div>
             )}
           </div>
@@ -212,7 +236,48 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
         )}
         {/* fora do condicional: ao concluir, o diálogo aberto continua o mesmo */}
         <DataCenterEmailDialog open={emailDC} onOpenChange={setEmailDC} project={project} form={d.email} gp={userName}
+          codigoBD={estado.codigobd.registradoEm ? estado.codigobd.codigo : undefined}
           onForm={email => set({ email })} onCopiado={concluir} onAtualizarProjeto={onAtualizarProjeto} />
+      </>
+    );
+  };
+
+  const codigobd = () => {
+    const c = estado.codigobd;
+    const set = (patch: Partial<Modulo01Estado["codigobd"]>) => onChange(e => ({ ...e, codigobd: { ...e.codigobd, ...patch } }));
+    // copiar o e-mail deixa a atividade aguardando o código; copiar de novo mantém a 1ª data
+    const enviado = () => onChange(e => ({ ...e, codigobd: { ...e.codigobd, enviadoEm: e.codigobd.enviadoEm ?? agora() } }));
+    const digitado = soDigitos(campos.codigobd ?? "").slice(0, 5);
+    const registrar = () => set({ codigo: digitado.padStart(5, "0"), registradoEm: agora(), por: userName });
+    const verEmail = <button type="button" className="font-medium text-primary underline-offset-2 hover:underline" onClick={() => setEmailBD(true)}>Ver e-mail</button>;
+    return (
+      <>
+        {c.registradoEm ? (
+          <Registro texto={`Código BD `} onDesfazer={() => set({ registradoEm: null })}>
+            <b className="font-mono">{c.codigo}</b> registrado em {quando(c.registradoEm)} por {c.por || userName} · vai no e-mail ao Data Center · {verEmail}
+          </Registro>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <Button className="h-9" onClick={() => setEmailBD(true)}><Mail className="mr-1.5 h-4 w-4" />Montar e-mail do código BD</Button>
+              {c.enviadoEm
+                ? <span className="text-[12px] text-amber-800 dark:text-amber-200">E-mail enviado em {quando(c.enviadoEm)} · aguardando o código BD</span>
+                : <span className="text-[12px] text-muted-foreground">para meusuporte@itstransdata.com · copie e cole no Outlook</span>}
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="w-full sm:w-56">
+                <Label className="text-xs" htmlFor="ger-codigobd">Código BD do cliente (5 dígitos)</Label>
+                <Input id="ger-codigobd" inputMode="numeric" maxLength={5} placeholder="00745" className="mt-1.5 h-9 font-mono"
+                  value={campos.codigobd ?? ""} onChange={ev => setCampos(s => ({ ...s, codigobd: soDigitos(ev.target.value).slice(0, 5) }))} />
+              </div>
+              <Button className="h-9" disabled={!digitado} onClick={registrar}><Check className="mr-1.5 h-4 w-4" />Marcar como feito</Button>
+              <span className="min-w-0 flex-1 basis-56 pb-2 text-[12px] text-muted-foreground">O código vai direto para o e-mail ao Data Center.</span>
+            </div>
+          </div>
+        )}
+        {/* fora do condicional: ao registrar, o diálogo aberto continua o mesmo */}
+        <CodigoBdEmailDialog open={emailBD} onOpenChange={setEmailBD} project={project} gp={userName}
+          onCopiado={enviado} onAtualizarProjeto={onAtualizarProjeto} />
       </>
     );
   };
@@ -306,6 +371,7 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
       case "pedidos": return pedidos(a);
       case "totvs": case "drive": return tarefa(a);
       case "checklist": return <ChecklistPreRequisitos project={project} estado={estado} onChange={onChange} userName={userName} />;
+      case "codigobd": return codigobd();
       case "datacenter": return datacenter();
       case "handover": return handover();
       case "carrier": return carrier(sit);
@@ -313,7 +379,7 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
   };
 
   const pillDe = (a: Atividade, sit: SituacaoAtividade) =>
-    sit !== "aguardando" ? undefined : a.id === "checklist" ? "Com pendências" : "Aguardando o Data Center";
+    sit !== "aguardando" ? undefined : a.id === "checklist" ? "Com pendências" : a.id === "codigobd" ? "Aguardando o código" : "Aguardando o Data Center";
 
   return (
     <ol className="space-y-3.5">

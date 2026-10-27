@@ -23,8 +23,14 @@ const TRAVA_KEY = "gerenciamento:modulo01:ordem-travada";
 function lerOrdem(): AtividadeId[] {
   try {
     const salva = JSON.parse(localStorage.getItem(ORDEM_KEY) ?? "null") as AtividadeId[] | null;
-    // só aceita a ordem salva se tiver exatamente as atividades atuais
-    if (salva && salva.length === ORDEM_PADRAO.length && ORDEM_PADRAO.every(id => salva.includes(id)) && salva[0] === ORDEM_PADRAO[0]) return salva;
+    if (salva && salva[0] === ORDEM_PADRAO[0]) {
+      const ordem = salva.filter(id => ORDEM_PADRAO.includes(id));
+      if (new Set(ordem).size === ordem.length) {
+        // atividade nova (que a ordem salva não conhece) entra logo depois da que vem antes dela na ordem padrão
+        ORDEM_PADRAO.forEach((id, i) => { if (!ordem.includes(id)) ordem.splice(ordem.indexOf(ORDEM_PADRAO[i - 1]) + 1, 0, id); });
+        return ordem;
+      }
+    }
   } catch { /* ignore */ }
   return ORDEM_PADRAO;
 }

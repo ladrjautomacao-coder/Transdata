@@ -31,7 +31,7 @@ const temSolucao = (p: GerProject, re: RegExp) => solucoes(p).some(n => re.test(
 export const temCarrier = (p: GerProject) => temSolucao(p, /carrier/i);
 
 /** Sistemas sugeridos pelo cadastro (o GP marca ou desmarca). */
-function sistemasSugeridos(p: GerProject): SistemaDC[] {
+export function sistemasSugeridos(p: GerProject): SistemaDC[] {
   const its = temSolucao(p, /\bits\b/i), frota = temSolucao(p, /gest[aã]o de frota/i);
   const out: SistemaDC[] = [];
   if (temSolucao(p, /bilhet/i) || (!its && !frota)) {

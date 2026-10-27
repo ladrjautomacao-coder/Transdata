@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { modulo01Vazio, normalizarModulo01 } from "@/lib/gerenciamento";
+import { linkExterno, modulo01Vazio, normalizarModulo01 } from "@/lib/gerenciamento";
+
+describe("linkExterno", () => {
+  it("aceita link completo e completa o https:// de endereço sem ele", () => {
+    expect(linkExterno(" https://pedidos.transdata.com/pedido/123 ")).toBe("https://pedidos.transdata.com/pedido/123");
+    expect(linkExterno("pedidos.transdata.com/pedido/123")).toBe("https://pedidos.transdata.com/pedido/123");
+  });
+  it("número ou texto não vira link (anotações antigas do nº do pedido)", () => {
+    expect(linkExterno("2026-00123")).toBeNull();
+    expect(linkExterno("pedido 123")).toBeNull();
+    expect(linkExterno("")).toBeNull();
+    expect(linkExterno(undefined)).toBeNull();
+  });
+});
 
 describe("normalizarModulo01", () => {
   it("projeto sem nada gravado abre com o módulo vazio", () => {
