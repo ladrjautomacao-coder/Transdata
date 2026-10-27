@@ -157,7 +157,7 @@ export type ChecklistResultado = "atendido" | "excecao";
 /** Registro de uma atividade concluída. */
 export interface Feito { em: string; por: string; valor?: string }
 
-/** Estado do módulo 01 de um projeto (no protótipo, só na tela). */
+/** Estado do módulo 01 de um projeto (gravado inteiro em gerenciamento_modulo01.estado). */
 export interface Modulo01Estado {
   feitos: Partial<Record<"pedidos" | "totvs" | "drive", Feito>>;
   checklist: {
@@ -192,6 +192,39 @@ export const modulo01Vazio = (): Modulo01Estado => ({
   handover: { agendadoPara: "", participantes: "", particularidades: "", atencao: "", expectativas: "", registradoEm: null },
   carrier: { concluidoEm: null, recomendada: null, para: "", codIbge: null },
 });
+
+/** Completa com o estado vazio o que faltar no que veio do banco (o formato cresce junto com o módulo). */
+export function normalizarModulo01(raw: unknown): Modulo01Estado {
+  const v = modulo01Vazio();
+  const r = (raw && typeof raw === "object" ? raw : {}) as Partial<Modulo01Estado>;
+  return {
+    feitos: { ...r.feitos },
+    checklist: { ...v.checklist, ...r.checklist, itens: { ...r.checklist?.itens }, naoAplica: { ...r.checklist?.naoAplica } },
+    datacenter: { ...v.datacenter, ...r.datacenter },
+    handover: { ...v.handover, ...r.handover },
+    carrier: { ...v.carrier, ...r.carrier },
+  };
+}
+
+// gerenciamento_modulo01 ainda fora do types.ts
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
+
+/** O módulo 01 gravado do projeto (vazio se o GP ainda não marcou nada) e quando foi salvo. */
+export async function fetchModulo01(projectId: string): Promise<{ estado: Modulo01Estado; salvoEm: string | null }> {
+  const { data, error } = await db.from("gerenciamento_modulo01").select("estado, updated_at").eq("project_id", projectId).maybeSingle();
+  if (error) throw error;
+  return { estado: normalizarModulo01(data?.estado), salvoEm: data?.updated_at ?? null };
+}
+
+/** Grava o módulo 01 do projeto inteiro; devolve quando foi salvo. */
+export async function salvarModulo01(projectId: string, estado: Modulo01Estado): Promise<string> {
+  const { data, error } = await db.from("gerenciamento_modulo01")
+    .upsert({ project_id: projectId, estado }, { onConflict: "project_id" })
+    .select("updated_at").single();
+  if (error) throw error;
+  return data.updated_at as string;
+}
 
 export type SituacaoAtividade = "feito" | "afazer" | "aguardando" | "bloqueado" | "naoaplica";
 

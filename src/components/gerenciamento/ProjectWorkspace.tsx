@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowUpDown, FileText, FlaskConical, Gauge, Layers, Lock, LockOpen, RefreshCw, Rocket, RotateCcw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { AlertTriangle, ArrowLeft, ArrowUpDown, CheckCircle2, FileText, Gauge, Layers, Loader2, Lock, LockOpen, RefreshCw, Rocket, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,7 +9,8 @@ import { formatLocation } from "@/lib/location";
 import { subPhasesByStatus } from "@/pages/ProjectManagement";
 import { errorMessage } from "@/lib/implantationScheduling";
 import {
-  MODULO_01, ORDEM_PADRAO, fetchCoordenadorImplantacao, fetchGerProject, modulo01Vazio, situacao, solutionsOf, type AtividadeId, type GerProject, type Modulo01Estado,
+  MODULO_01, ORDEM_PADRAO, dataHoraBr, fetchCoordenadorImplantacao, fetchGerProject, fetchModulo01, modulo01Vazio, salvarModulo01, situacao, solutionsOf,
+  type AtividadeId, type GerProject, type Modulo01Estado,
 } from "@/lib/gerenciamento";
 import { montarTap, type DadosTap } from "@/lib/tap";
 import { MedidorModulo } from "./MedidorModulo";
@@ -46,12 +48,82 @@ function ProgressRing({ done, total }: { done: number; total: number }) {
   );
 }
 
+type Gravacao = { status: "ok" | "salvando" | "erro"; em: string | null };
+
+/** Situação da gravação automática do módulo no banco. */
+function SituacaoGravacao({ g, onTentar }: { g: Gravacao; onTentar: () => void }) {
+  if (g.status === "salvando") {
+    return <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" />Salvando…</span>;
+  }
+  if (g.status === "erro") {
+    return (
+      <span role="alert" className="inline-flex flex-wrap items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-2.5 py-1.5 text-xs text-destructive">
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />Não foi possível salvar as últimas marcações.
+        <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={onTentar}><RefreshCw className="mr-1 h-3.5 w-3.5" />Tentar de novo</Button>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground" title="Cada marcação do módulo é gravada no banco automaticamente.">
+      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+      {g.em ? `Salvo no banco · ${dataHoraBr(g.em)}` : "Salvo automaticamente a cada marcação"}
+    </span>
+  );
+}
+
 /** O projeto escolhido: cabeçalho, módulos e o módulo aberto. */
-export function ProjectWorkspace({ id, onBack, initial }: { id: string; onBack: () => void; initial?: Modulo01Estado }) {
+export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => void }) {
   const { profile } = useAuth();
   const [project, setProject] = useState<GerProject | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
-  const [estado, setEstado] = useState<Modulo01Estado>(() => initial ?? modulo01Vazio());
+  const [estado, setEstado] = useState<Modulo01Estado>(modulo01Vazio);
+
+  // Gravação automática: cada mudança do módulo vai ao banco ~0,6 s depois, uma gravação por vez.
+  const [gravacao, setGravacao] = useState<Gravacao>({ status: "ok", em: null });
+  const gravado = useRef<string | null>(null); // JSON do que está no banco (null: ainda carregando)
+  const atual = useRef(estado);
+  atual.current = estado;
+  const agendada = useRef<number | null>(null);
+  const emAndamento = useRef(false);
+  const deNovo = useRef(false);
+  const salvar = useRef(async () => { /* definida abaixo */ });
+  salvar.current = async () => {
+    if (agendada.current) { clearTimeout(agendada.current); agendada.current = null; }
+    if (emAndamento.current) { deNovo.current = true; return; }
+    const snapshot = atual.current, json = JSON.stringify(snapshot);
+    if (gravado.current === null || json === gravado.current) return;
+    emAndamento.current = true;
+    setGravacao(g => ({ ...g, status: "salvando" }));
+    try {
+      const em = await salvarModulo01(id, snapshot);
+      gravado.current = json;
+      setGravacao({ status: "ok", em });
+    } catch (err) {
+      setGravacao(g => ({ ...g, status: "erro" }));
+      toast.error("Não foi possível salvar o módulo.", { description: errorMessage(err) });
+    } finally {
+      emAndamento.current = false;
+      // mudou de novo enquanto gravava: grava a versão mais nova
+      if (deNovo.current) { deNovo.current = false; void salvar.current(); }
+    }
+  };
+  useEffect(() => {
+    if (gravado.current === null || JSON.stringify(estado) === gravado.current) return;
+    if (agendada.current) clearTimeout(agendada.current);
+    agendada.current = window.setTimeout(() => { void salvar.current(); }, 600);
+  }, [estado]);
+  useEffect(() => {
+    // fechar a aba com marcação ainda não gravada: o navegador pede confirmação
+    const aviso = (e: BeforeUnloadEvent) => {
+      if (gravado.current !== null && JSON.stringify(atual.current) !== gravado.current) { e.preventDefault(); e.returnValue = ""; }
+    };
+    window.addEventListener("beforeunload", aviso);
+    return () => {
+      window.removeEventListener("beforeunload", aviso);
+      // "Trocar projeto" logo depois de marcar: grava o que estava esperando
+      void salvar.current();
+    };
+  }, []);
   const [ordem, setOrdem] = useState<AtividadeId[]>(lerOrdem);
   const [travada, setTravada] = useState<boolean>(() => { try { return localStorage.getItem(TRAVA_KEY) === "true"; } catch { return false; } });
   const mover = (id: AtividadeId, dir: -1 | 1) => setOrdem(o => {
@@ -66,8 +138,17 @@ export function ProjectWorkspace({ id, onBack, initial }: { id: string; onBack: 
   const ordemMudou = ordem.some((id, i) => id !== ORDEM_PADRAO[i]);
 
   const load = () => {
-    setProject(undefined); setError(null);
-    fetchGerProject(id).then(setProject).catch(err => { setError(errorMessage(err)); setProject(null); });
+    setProject(undefined); setError(null); gravado.current = null;
+    // o projeto e o que já foi marcado no módulo chegam juntos: sem o módulo, a tela não abre
+    // (evita gravar um módulo vazio por cima do que está no banco)
+    Promise.all([fetchGerProject(id), fetchModulo01(id)])
+      .then(([p, m]) => {
+        gravado.current = JSON.stringify(m.estado);
+        setEstado(m.estado);
+        setGravacao({ status: "ok", em: m.salvoEm });
+        setProject(p);
+      })
+      .catch(err => { setError(errorMessage(err)); setProject(null); });
   };
   useEffect(load, [id]);
   // ao abrir o projeto, o módulo aparece no medidor; a lista de atividades só abre quando o GP pede
@@ -147,11 +228,8 @@ export function ProjectWorkspace({ id, onBack, initial }: { id: string; onBack: 
             </div>
           )}
         </div>
+        <div className="ml-auto"><SituacaoGravacao g={gravacao} onTentar={() => void salvar.current()} /></div>
       </div>
-
-      <p className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-900 dark:text-amber-100">
-        <FlaskConical className="mt-0.5 h-4 w-4 shrink-0" />Protótipo: as marcações ainda não são gravadas. Ao recarregar a página, o módulo volta ao início.
-      </p>
 
       <div className="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
         {/* Módulos do projeto */}
