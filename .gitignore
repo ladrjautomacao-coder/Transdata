@@ -28,3 +28,6 @@ scripts/cobertura/.cache
 *.njsproj
 *.sln
 *.sw?
+
+# Pacote do sistema atual da Gestão Operacional (material de trabalho, com dados reais): só local
+/Grandes Operacoes/
