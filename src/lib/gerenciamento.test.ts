@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { linkExterno, modulo01Vazio, normalizarModulo01 } from "@/lib/gerenciamento";
+import { faltandoHandover, linkExterno, modulo01Vazio, normalizarModulo01, respondidasHandover } from "@/lib/gerenciamento";
 
 describe("linkExterno", () => {
   it("aceita link completo e completa o https:// de endereço sem ele", () => {
@@ -35,5 +35,22 @@ describe("normalizarModulo01", () => {
     expect(e.handover.registradoEm).toBeNull();
     expect(e.carrier).toEqual(modulo01Vazio().carrier);
     expect(e.datacenter).toEqual({ concluidoEm: null, email: null });
+  });
+});
+
+describe("Handover: perguntas ao Executivo de Vendas", () => {
+  it("só fica pronto com a data, as cinco respostas e a previsão dos equipamentos", () => {
+    const h = modulo01Vazio().handover;
+    expect(faltandoHandover(h)).toEqual(["data da reunião", "5 perguntas", "previsão de entrega dos equipamentos"]);
+    const quase = { ...h, agendadoPara: "2026-10-28T10:00", previsaoEquipamentos: "2026-11-20",
+      respostas: { prometido: "Não.", escopo: "Recarga embarcada em todos os carros.", validacao: "  ", dependencias: "Obra da garagem.", risco: "Prazo da recarga." } };
+    expect(respondidasHandover(quase)).toBe(4);
+    expect(faltandoHandover(quase)).toEqual(["1 pergunta"]);
+    expect(faltandoHandover({ ...quase, respostas: { ...quase.respostas, validacao: "Não." } })).toEqual([]);
+  });
+  it("Handover gravado antes das perguntas abre sem quebrar", () => {
+    const e = normalizarModulo01({ handover: { agendadoPara: "2026-10-28T10:00", registradoEm: "2026-10-27T10:00:00Z" } });
+    expect(e.handover.respostas).toEqual({});
+    expect(e.handover.previsaoEquipamentos).toBe("");
   });
 });

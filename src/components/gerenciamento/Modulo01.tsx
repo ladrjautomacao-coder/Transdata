@@ -1,15 +1,15 @@
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
-  ArrowDown, ArrowUp, Check, CheckCircle2, ClipboardList, Copy, ExternalLink, Lock, Mail, RadioTower, RotateCcw,
+  AlertTriangle, ArrowDown, ArrowUp, Check, CheckCircle2, ClipboardList, Copy, ExternalLink, FileText, Lock, Mail, MessageSquareText, RadioTower, RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  ATIVIDADE_FIXA, MODULO_01, RESPONSAVEL_LABEL, linkExterno, situacao,
-  type Atividade, type AtividadeId, type GerProject, type Modulo01Estado, type SituacaoAtividade,
+  ATIVIDADE_FIXA, MODULO_01, PERGUNTAS_HANDOVER, RESPONSAVEL_LABEL, dataBr, faltandoHandover, linkExterno, respondidasHandover, situacao,
+  type Atividade, type AtividadeId, type GerProject, type Modulo01Estado, type PerguntaHandoverId, type SituacaoAtividade,
 } from "@/lib/gerenciamento";
 import { NOME_OPERADORA } from "@/lib/coberturaOperadoras";
 import { soDigitos } from "@/lib/dataCenterEmail";
@@ -102,8 +102,10 @@ function Registro({ texto, onDesfazer, children }: { texto: string; onDesfazer?:
  * Módulo 01 · Abertura do projeto: as atividades do GP do cadastro até o Handover.
  * Protótipo: o estado vem de quem chama e ainda não é gravado.
  */
-export function Modulo01({ project, estado, onChange, userName, ordem, travada, onMover, onAtualizarProjeto }: {
+export function Modulo01({ project, estado, onChange, userName, ordem, travada, onMover, onAtualizarProjeto, onGerarTap }: {
   project: GerProject;
+  /** O Handover foi salvo como última atividade: gera o TAP com o módulo já completo. */
+  onGerarTap?: (estado: Modulo01Estado) => void;
   /** Relê o cadastro do projeto sem sair da tela. */
   onAtualizarProjeto: () => Promise<unknown>;
   estado: Modulo01Estado;
@@ -290,10 +292,27 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
       { k: "atencao" as const, l: "Pontos de atenção" },
       { k: "expectativas" as const, l: "Expectativas do cliente" },
     ];
+    const respostas = h.respostas ?? {};
+    const responder = (id: PerguntaHandoverId, texto: string) => onChange(e => ({ ...e, handover: { ...e.handover, respostas: { ...e.handover.respostas, [id]: texto } } }));
     if (h.registradoEm) {
       return (
         <div className="space-y-3">
-          <Registro texto={`Handover registrado em ${quando(h.registradoEm)} por ${userName}`} onDesfazer={() => set({ registradoEm: null })} />
+          <Registro texto={`Handover registrado em ${quando(h.registradoEm)} por ${userName}`} onDesfazer={() => set({ registradoEm: null })}>
+            {h.previsaoEquipamentos && <> · equipamentos previstos para <b>{dataBr(h.previsaoEquipamentos)}</b></>}
+          </Registro>
+          {respondidasHandover(h) > 0 && (
+            <div className="rounded-lg border border-border/60 p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Perguntas ao Executivo de Vendas</p>
+              <dl className="mt-1.5 space-y-1.5 text-[13px]">
+                {PERGUNTAS_HANDOVER.map((q, i) => (
+                  <div key={q.id} className="grid gap-x-3 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                    <dt className="text-muted-foreground">{i + 1}. {q.curto}</dt>
+                    <dd className="whitespace-pre-line font-medium">{respostas[q.id]?.trim() || "—"}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
           <div className="grid gap-3 md:grid-cols-3">
             {blocos.map(b => (
               <div key={b.k} className="rounded-lg border border-border/60 p-3">
@@ -305,21 +324,90 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
         </div>
       );
     }
+    const respondidas = respondidasHandover(h);
+    const falta = faltandoHandover(h);
+    // é a última atividade que falta no módulo? salvar já gera o TAP
+    const fechaModulo = lista.every(a => a.id === "handover" || ["feito", "naoaplica"].includes(situacao(a.id, estado, project, ordem)));
+    const salvar = () => {
+      const novo: Modulo01Estado = { ...estado, handover: { ...estado.handover, registradoEm: agora() } };
+      onChange(() => novo);
+      if (fechaModulo) onGerarTap?.(novo);
+    };
     return (
-      <div className="space-y-3">
+      <div className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-[220px_minmax(0,1fr)]">
           <div><Label className="text-xs" htmlFor="ger-ho-data">Data e hora da reunião *</Label><Input id="ger-ho-data" type="datetime-local" className="mt-1.5 h-9" value={h.agendadoPara} onChange={ev => set({ agendadoPara: ev.target.value })} /></div>
           <div><Label className="text-xs" htmlFor="ger-ho-part">Participantes</Label><Input id="ger-ho-part" className="mt-1.5 h-9" placeholder={`Executivo de Vendas: ${project.executive?.full_name ?? "—"}, GP: ${project.manager?.full_name ?? "—"}`} value={h.participantes} onChange={ev => set({ participantes: ev.target.value })} /></div>
         </div>
-        <div className="grid gap-3 md:grid-cols-3">
-          {blocos.map(b => (
-            <div key={b.k}>
-              <Label className="text-xs" htmlFor={`ger-ho-${b.k}`}>{b.l}</Label>
-              <Textarea id={`ger-ho-${b.k}`} className="mt-1.5 min-h-[96px]" value={h[b.k]} onChange={ev => set({ [b.k]: ev.target.value })} />
-            </div>
-          ))}
+
+        {/* Questionário: tudo o que não pode deixar de ser perguntado ao Executivo de Vendas */}
+        <section aria-labelledby="ger-ho-perguntas" className="space-y-3 rounded-xl border border-primary/25 bg-primary/[0.03] p-3.5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <MessageSquareText className="h-4 w-4 text-primary" aria-hidden />
+            <h4 id="ger-ho-perguntas" className="text-[14px] font-semibold">Perguntas ao Executivo de Vendas</h4>
+            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${respondidas === PERGUNTAS_HANDOVER.length ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-primary/10 text-primary"}`}>
+              {respondidas} de {PERGUNTAS_HANDOVER.length} respondidas
+            </span>
+            <span className="h-1.5 min-w-24 flex-1 overflow-hidden rounded-full bg-primary/15" aria-hidden>
+              <span className="block h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${(respondidas / PERGUNTAS_HANDOVER.length) * 100}%` }} />
+            </span>
+          </div>
+          <p className="text-[12px] text-muted-foreground">
+            Faça as cinco perguntas a {project.executive?.full_name ?? "o Executivo de Vendas"}. Todas são obrigatórias: se não houver nada, responda "Não".
+          </p>
+          <ol className="space-y-2.5">
+            {PERGUNTAS_HANDOVER.map((q, i) => {
+              const r = respostas[q.id] ?? "";
+              const ok = !!r.trim();
+              return (
+                <li key={q.id} className={`rounded-lg border bg-card p-3 transition-colors ${ok ? "border-emerald-500/40" : "border-border/70"}`}>
+                  <div className="flex items-start gap-2.5">
+                    <span aria-hidden className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-bold ${ok ? "bg-emerald-600 text-white" : "bg-primary/10 text-primary"}`}>
+                      {ok ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                    </span>
+                    <Label htmlFor={`ger-ho-q-${q.id}`} className="text-[13.5px] font-medium leading-snug">{q.texto}</Label>
+                  </div>
+                  <Textarea id={`ger-ho-q-${q.id}`} className="mt-2 min-h-[64px]" placeholder="Resposta do Executivo de Vendas"
+                    value={r} onChange={ev => responder(q.id, ev.target.value)} />
+                  {!ok && (
+                    <Button type="button" variant="ghost" size="sm" className="mt-1 h-7 px-2 text-xs text-muted-foreground" onClick={() => responder(q.id, "Não.")}>
+                      Responder "Não"
+                    </Button>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+
+        <div className="grid items-end gap-3 sm:grid-cols-[220px_minmax(0,1fr)]">
+          <div>
+            <Label className="text-xs" htmlFor="ger-ho-equip">Previsão de entrega dos equipamentos *</Label>
+            <Input id="ger-ho-equip" type="date" className="mt-1.5 h-9" value={h.previsaoEquipamentos ?? ""} onChange={ev => set({ previsaoEquipamentos: ev.target.value })} />
+          </div>
+          <p className="pb-2 text-[12px] text-muted-foreground">Data combinada para os equipamentos chegarem ao cliente. Vai no TAP.</p>
         </div>
-        <Button disabled={!h.agendadoPara} onClick={() => set({ registradoEm: agora() })}><Check className="mr-1.5 h-4 w-4" />Registrar Handover</Button>
+
+        <div>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Anotações do Handover (opcional)</p>
+          <div className="grid gap-3 md:grid-cols-3">
+            {blocos.map(b => (
+              <div key={b.k}>
+                <Label className="text-xs" htmlFor={`ger-ho-${b.k}`}>{b.l}</Label>
+                <Textarea id={`ger-ho-${b.k}`} className="mt-1.5 min-h-[96px]" value={h[b.k]} onChange={ev => set({ [b.k]: ev.target.value })} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 border-t pt-3">
+          {falta.length > 0
+            ? <p className="flex min-w-0 flex-1 basis-60 items-start gap-1.5 text-[13px] text-amber-800 dark:text-amber-200"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />Falta: {falta.join(", ")}.</p>
+            : <p className="min-w-0 flex-1 basis-60 text-[13px] text-muted-foreground">{fechaModulo ? "É a última atividade do módulo: ao salvar, o módulo chega a 100% e o TAP já é gerado." : "Tudo respondido. Salve para registrar o Handover."}</p>}
+          <Button className="h-9" disabled={falta.length > 0} onClick={salvar}>
+            {fechaModulo ? <><FileText className="mr-1.5 h-4 w-4" />Salvar Handover e gerar o TAP</> : <><Check className="mr-1.5 h-4 w-4" />Salvar Handover</>}
+          </Button>
+        </div>
       </div>
     );
   };

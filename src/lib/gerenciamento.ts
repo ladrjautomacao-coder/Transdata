@@ -180,6 +180,34 @@ export const CHECKLIST_ITENS: { id: ChecklistItemId; texto: string; resp: RespCh
 /** Como o checklist foi liberado: com todos os itens ok ou por exceção autorizada pela diretoria. */
 export type ChecklistResultado = "atendido" | "excecao";
 
+/* ─── Handover: perguntas indispensáveis ao Executivo de Vendas ─── */
+export type PerguntaHandoverId = "prometido" | "escopo" | "validacao" | "dependencias" | "risco";
+/** `curto`: o assunto da pergunta, para registro e TAP. Todas obrigatórias ("Não." também vale). */
+export const PERGUNTAS_HANDOVER: { id: PerguntaHandoverId; texto: string; curto: string }[] = [
+  { id: "prometido", curto: "Promessas fora da proposta ou do contrato",
+    texto: "Existe algo que foi prometido ao cliente durante a negociação que não aparece claramente na proposta ou no contrato?" },
+  { id: "escopo", curto: "Entendimentos diferentes sobre o escopo",
+    texto: "Existe algo que o cliente acredita que receberá, mas que podemos ter uma interpretação diferente sobre estar ou não no escopo?" },
+  { id: "validacao", curto: "Itens sem validação técnica",
+    texto: "Existe alguma funcionalidade, integração ou prazo apresentado ao cliente que ainda não tenha sido tecnicamente validado?" },
+  { id: "dependencias", curto: "Dependências do cliente ou de terceiros",
+    texto: "Existe alguma dependência do cliente ou de terceiros que, se não acontecer, poderá impedir o cumprimento do que foi vendido?" },
+  { id: "risco", curto: "Possível \"isso foi prometido pelo Comercial\"",
+    texto: "Se daqui a três meses o cliente disser \"isso foi prometido pelo Comercial\", sobre qual assunto você acredita que poderá ser?" },
+];
+
+/** Perguntas do Handover já respondidas. */
+export const respondidasHandover = (h: Modulo01Estado["handover"]) => PERGUNTAS_HANDOVER.filter(q => (h.respostas?.[q.id] ?? "").trim()).length;
+/** O que ainda falta para salvar o Handover. */
+export function faltandoHandover(h: Modulo01Estado["handover"]): string[] {
+  const out: string[] = [];
+  if (!h.agendadoPara) out.push("data da reunião");
+  const faltam = PERGUNTAS_HANDOVER.length - respondidasHandover(h);
+  if (faltam) out.push(faltam === 1 ? "1 pergunta" : `${faltam} perguntas`);
+  if (!h.previsaoEquipamentos) out.push("previsão de entrega dos equipamentos");
+  return out;
+}
+
 /** Registro de uma atividade concluída. */
 export interface Feito { em: string; por: string; valor?: string }
 
@@ -210,7 +238,13 @@ export interface Modulo01Estado {
    * código do cliente no BD que voltou — fecha a atividade e preenche o e-mail ao Data Center.
    */
   codigobd: { enviadoEm: string | null; codigo: string; registradoEm: string | null; por: string };
-  handover: { agendadoPara: string; participantes: string; particularidades: string; atencao: string; expectativas: string; registradoEm: string | null };
+  handover: {
+    agendadoPara: string; participantes: string; particularidades: string; atencao: string; expectativas: string; registradoEm: string | null;
+    /** Respostas do Executivo de Vendas às perguntas indispensáveis (PERGUNTAS_HANDOVER). */
+    respostas: Partial<Record<PerguntaHandoverId, string>>;
+    /** Previsão de entrega dos equipamentos (AAAA-MM-DD). */
+    previsaoEquipamentos: string;
+  };
   /**
    * E-mail de cobertura ao cliente. `codIbge`: município escolhido à mão quando o nome do
    * cadastro não bate com a lista da Anatel; `para`: e-mail do cliente (opcional).
@@ -227,7 +261,7 @@ export const modulo01Vazio = (): Modulo01Estado => ({
   checklist: { itens: {}, naoAplica: {}, vencimentoDzero: "", observacoes: "", emailComercialEm: null, autorizadoPor: "", resultado: null, em: null, emailGpEm: null },
   datacenter: { concluidoEm: null, email: null },
   codigobd: { enviadoEm: null, codigo: "", registradoEm: null, por: "" },
-  handover: { agendadoPara: "", participantes: "", particularidades: "", atencao: "", expectativas: "", registradoEm: null },
+  handover: { agendadoPara: "", participantes: "", particularidades: "", atencao: "", expectativas: "", registradoEm: null, respostas: {}, previsaoEquipamentos: "" },
   carrier: { concluidoEm: null, recomendada: null, para: "", codIbge: null, recomendadas: [] },
 });
 
@@ -240,7 +274,7 @@ export function normalizarModulo01(raw: unknown): Modulo01Estado {
     checklist: { ...v.checklist, ...r.checklist, itens: { ...r.checklist?.itens }, naoAplica: { ...r.checklist?.naoAplica } },
     datacenter: { ...v.datacenter, ...r.datacenter },
     codigobd: { ...v.codigobd, ...r.codigobd },
-    handover: { ...v.handover, ...r.handover },
+    handover: { ...v.handover, ...r.handover, respostas: { ...r.handover?.respostas } },
     carrier: { ...v.carrier, ...r.carrier },
   };
 }

@@ -172,7 +172,14 @@ function TapDocumento({ d }: { d: DadosTap }) {
 
         {d.handover && (
           <Secao n={6} titulo="Reunião de Handover">
-            <Grade pares={[["Data da reunião", d.handover.data], ["Participantes", d.handover.participantes]]} />
+            <Grade pares={[["Data da reunião", d.handover.data], ["Participantes", d.handover.participantes], ["Previsão de entrega dos equipamentos", d.handover.previsaoEquipamentos]]} />
+            <Text style={[s.blocoTit, { marginTop: 9, fontSize: 9.5, color: COR.laranja }]}>Perguntas ao Executivo de Vendas</Text>
+            {d.handover.perguntas.map((q, i) => (
+              <View key={i} style={s.bloco} wrap={false}>
+                <Text style={s.blocoTit}>{i + 1}. {q.pergunta}</Text>
+                <Text>{q.resposta}</Text>
+              </View>
+            ))}
             <View style={s.bloco} wrap={false}><Text style={s.blocoTit}>Particularidades do projeto</Text><Text>{d.handover.particularidades}</Text></View>
             <View style={s.bloco} wrap={false}><Text style={s.blocoTit}>Pontos de atenção (riscos e restrições)</Text><Text>{d.handover.atencao}</Text></View>
             <View style={s.bloco} wrap={false}><Text style={s.blocoTit}>Expectativas do cliente (critérios de sucesso)</Text><Text>{d.handover.expectativas}</Text></View>

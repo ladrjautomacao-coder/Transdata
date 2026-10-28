@@ -198,16 +198,17 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   const phase = project.sub_phase ? subPhasesByStatus[project.status as keyof typeof subPhasesByStatus]?.find(s => s.id === project.sub_phase)?.label : null;
   const solucoes = solutionsOf(project);
   const statusNome = statusLabels[project.status as keyof typeof statusLabels] ?? project.status;
-  const gerarTap = async () => {
+  const gerarTapCom = async (atual: Modulo01Estado) => {
     // sem o coordenador (erro na busca), o TAP sai com a linha de assinatura em branco e o GP é avisado
     const coordenador = await fetchCoordenadorImplantacao().catch(err => {
       toast.warning("Não foi possível buscar o Coordenador de Implantação na Equipe.", { description: `A assinatura sai sem nome. ${errorMessage(err)}` });
       return null;
     });
     setTap(montarTap({
-      project, estado, ordem, emitidoPor: profile?.full_name ?? "—", fase: phase ? `${statusNome} · ${phase}` : statusNome, coordenador,
+      project, estado: atual, ordem, emitidoPor: profile?.full_name ?? "—", fase: phase ? `${statusNome} · ${phase}` : statusNome, coordenador,
     }));
   };
+  const gerarTap = () => { void gerarTapCom(estado); };
   const DOC_TAP = {
     botao: "Gerar documento TAP",
     bloqueado: "O documento TAP (Termo de Abertura do Projeto) é liberado quando o módulo chegar a 100%.",
@@ -305,7 +306,7 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
           </div>
 
           <Modulo01 project={project} estado={estado} onChange={u => setEstado(u)} userName={profile?.full_name ?? "Você"}
-            ordem={ordem} travada={travada} onMover={mover} onAtualizarProjeto={reler} />
+            ordem={ordem} travada={travada} onMover={mover} onAtualizarProjeto={reler} onGerarTap={e => void gerarTapCom(e)} />
         </div>
         )}
       </div>

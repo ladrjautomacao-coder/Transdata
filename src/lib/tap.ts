@@ -7,7 +7,7 @@ import { teamRoleLabels } from "@/lib/teamRoleLabels";
 import { codigoCliente, sistemasTexto } from "@/lib/dataCenterEmail";
 import { NOME_OPERADORA } from "@/lib/coberturaOperadoras";
 import {
-  CHECKLIST_ITENS, MODULO_01, RESPONSAVEL_LABEL, RESP_CHECKLIST, dataBr, dataHoraBr, fimDoContrato, linkExterno, naoAplica, precisaCobertura, solutionsOf,
+  CHECKLIST_ITENS, MODULO_01, PERGUNTAS_HANDOVER, RESPONSAVEL_LABEL, RESP_CHECKLIST, dataBr, dataHoraBr, fimDoContrato, linkExterno, naoAplica, precisaCobertura, solutionsOf,
   type AtividadeId, type GerProject, type Modulo01Estado,
 } from "@/lib/gerenciamento";
 
@@ -30,7 +30,12 @@ export interface DadosTap {
     observacoes: string | null;
   };
   marcos: { atividade: string; responsavel: string; concluidaEm: string; registro: string; link?: string }[];
-  handover: { data: string; participantes: string; particularidades: string; atencao: string; expectativas: string } | null;
+  handover: {
+    data: string; participantes: string; previsaoEquipamentos: string;
+    /** Perguntas indispensáveis feitas ao Executivo de Vendas, com as respostas. */
+    perguntas: { pergunta: string; resposta: string }[];
+    particularidades: string; atencao: string; expectativas: string;
+  } | null;
   aprovacao: { papel: string; nome: string }[];
 }
 
@@ -163,6 +168,8 @@ export function montarTap({ project, estado, ordem, emitidoPor, fase, coordenado
     handover: h.registradoEm ? {
       data: dataHoraBr(h.agendadoPara || h.registradoEm),
       participantes: ou(h.participantes, `${papelExec}: ${executivo}; ${papelGp}: ${gp}`),
+      previsaoEquipamentos: dataBr(h.previsaoEquipamentos),
+      perguntas: PERGUNTAS_HANDOVER.map(q => ({ pergunta: q.texto, resposta: ou(h.respostas?.[q.id], "Não registrado.") })),
       particularidades: ou(h.particularidades, "Nada registrado."),
       atencao: ou(h.atencao, "Nada registrado."),
       expectativas: ou(h.expectativas, "Nada registrado."),
