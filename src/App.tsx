@@ -25,6 +25,8 @@ import ProjectDetail from "./pages/ProjectDetail";
 import ProjectManagement from "./pages/ProjectManagement";
 import Cronograma from "./pages/Cronograma";
 import Gerenciamento from "./pages/Gerenciamento";
+import GestaoOperacional from "./pages/GestaoOperacional";
+import AreaOperacional from "./pages/AreaOperacional";
 import VisaoComercial from "./pages/VisaoComercial";
 import TeamMembers from "./pages/TeamMembers";
 import Products from "./pages/Products";
@@ -81,6 +83,9 @@ function AppRoutes() {
           <Route path="/implantacao/aprovacao" element={<PermissionRoute module="agenda_solicitacao" action="approve"><SolicitacaoAgenda key="ap" view="ap" /></PermissionRoute>} />
           <Route path="/implantacao/calendario" element={<PermissionRoute module="agenda_calendario"><CalendarioImplantacao /></PermissionRoute>} />
           <Route path="/implantacao/implantador" element={<PermissionRoute module="area_implantador"><AreaImplantador /></PermissionRoute>} />
+          {/* em desenvolvimento: só Super Admin; um quadrante por área (src/lib/gestaoOperacional.ts) */}
+          <Route path="/gestao-operacional" element={<SuperAdminRoute><GestaoOperacional /></SuperAdminRoute>} />
+          <Route path="/gestao-operacional/:area" element={<SuperAdminRoute><AreaOperacional /></SuperAdminRoute>} />
 
           <Route path="/suporte" element={<Suporte />} />
           <Route path="/financeiro" element={<Financeiro />} />

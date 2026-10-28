@@ -26,9 +26,12 @@ export interface NavItem {
   title: string;
   url: string;
   icon: LucideIcon;
-  module: PermModule;
+  /** Módulo de permissão do item (todo item tem um, menos os `superAdminOnly`). */
+  module?: PermModule;
   /** Ação exigida para o item aparecer (padrão: "view"). */
   action?: PermAction;
+  /** Módulo em desenvolvimento: só o Super Admin vê (rota com SuperAdminRoute). */
+  superAdminOnly?: boolean;
   end?: boolean;
   badge?: number;
 }

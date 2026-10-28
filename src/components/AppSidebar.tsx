@@ -2,8 +2,9 @@ import { useMemo, useState } from "react";
 import {
   FolderKanban, LayoutDashboard, HardHat, BookOpenCheck, Users, LogOut, ShieldCheck,
   Settings, KeyRound, LifeBuoy, Wallet, ChevronsLeft, Search, MoreVertical, UserRound, Eye, FileUp, Building2, Tag,
-  CalendarPlus, CalendarRange, BookOpen, ClipboardCheck,
+  CalendarPlus, CalendarRange, BookOpen, ClipboardCheck, LayoutGrid, Workflow,
 } from "lucide-react";
+import { URL_GESTAO_OPERACIONAL } from "@/lib/gestaoOperacional";
 import type { LucideIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -64,6 +65,14 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
       ],
     },
     {
+      // em desenvolvimento: só o Super Admin vê; as áreas abrem pelos quadrantes da página, como em Projetos
+      label: "Gestão Operacional",
+      icon: Workflow,
+      items: [
+        { title: "Visão geral", url: URL_GESTAO_OPERACIONAL, icon: LayoutGrid, superAdminOnly: true },
+      ],
+    },
+    {
       label: "Gestão de Contratos",
       icon: Wallet,
       items: [{ title: "Gestão de Contratos", url: "/financeiro", icon: Wallet, module: "financeiro", badge: badges.financeiro }],
@@ -95,7 +104,7 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
     .map(g => ({
       ...g,
       items: g.items.filter(i =>
-        can(i.module, i.action ?? "view") &&
+        (i.superAdminOnly ? isSuperAdmin : !!i.module && can(i.module, i.action ?? "view")) &&
         (query.trim() === "" || i.title.toLowerCase().includes(query.trim().toLowerCase()))
       ),
     }))
