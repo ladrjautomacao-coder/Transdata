@@ -10,7 +10,7 @@ import { formatLocation } from "@/lib/location";
 import { subPhasesByStatus } from "@/pages/ProjectManagement";
 import { errorMessage } from "@/lib/implantationScheduling";
 import {
-  MODULO_01, ORDEM_PADRAO, dataHoraBr, fetchCoordenadorImplantacao, fetchGerProject, fetchModulo01, modulo01Vazio, salvarModulo01, situacao, solutionsOf,
+  MODULO_01, ORDEM_PADRAO, dataHoraBr, fetchAssistenteProjetos, fetchCoordenadorImplantacao, fetchGerProject, fetchModulo01, modulo01Vazio, salvarModulo01, situacao, solutionsOf,
   type Atividade, type AtividadeId, type GerProject, type Modulo01Estado, type SituacaoAtividade,
 } from "@/lib/gerenciamento";
 import { MODULO_02, fetchModulo02, modulo02Vazio, salvarModulo02, situacao02, type Modulo02Estado } from "@/lib/modulo02";
@@ -229,12 +229,16 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   const statusNome = statusLabels[project.status as keyof typeof statusLabels] ?? project.status;
   const gerarTapCom = async (atual: Modulo01Estado) => {
     // sem o coordenador (erro na busca), o TAP sai com a linha de assinatura em branco e o GP é avisado
-    const coordenador = await fetchCoordenadorImplantacao().catch(err => {
-      toast.warning("Não foi possível buscar o Coordenador de Implantação na Equipe.", { description: `A assinatura sai sem nome. ${errorMessage(err)}` });
-      return null;
-    });
+    const [coordenador, assistente] = await Promise.all([
+      fetchCoordenadorImplantacao().catch(err => {
+        toast.warning("Não foi possível buscar o Coordenador de Implantação na Equipe.", { description: `A assinatura sai sem nome. ${errorMessage(err)}` });
+        return null;
+      }),
+      // sem a Assistente, o TAP mostra só a função
+      fetchAssistenteProjetos().catch(() => null),
+    ]);
     setTap(montarTap({
-      project, estado: atual, ordem, emitidoPor: profile?.full_name ?? "—", fase: phase ? `${statusNome} · ${phase}` : statusNome, coordenador,
+      project, estado: atual, ordem, emitidoPor: profile?.full_name ?? "—", fase: phase ? `${statusNome} · ${phase}` : statusNome, coordenador, assistente,
     }));
   };
   const gerarTap = () => { void gerarTapCom(estado); };

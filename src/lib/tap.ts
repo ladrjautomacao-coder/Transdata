@@ -49,7 +49,7 @@ const ou = (v: string | null | undefined, vazio = "—") => (v && v.trim() ? v.t
 const lista = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} e ${xs.at(-1)}`);
 
 /** Monta o TAP a partir do cadastro do projeto e do que foi registrado no módulo 01. */
-export function montarTap({ project, estado, ordem, emitidoPor, fase, coordenador = null, agora = new Date() }: {
+export function montarTap({ project, estado, ordem, emitidoPor, fase, coordenador = null, assistente = null, agora = new Date() }: {
   project: GerProject;
   estado: Modulo01Estado;
   ordem: AtividadeId[];
@@ -58,6 +58,8 @@ export function montarTap({ project, estado, ordem, emitidoPor, fase, coordenado
   fase: string;
   /** Coordenador de Implantação da Equipe (null: assinatura sem nome). */
   coordenador?: string | null;
+  /** Assistente de Projetos da Equipe (null: só a função, sem nome). */
+  assistente?: string | null;
   agora?: Date;
 }): DadosTap {
   const gp = project.manager?.full_name ?? "—";
@@ -99,11 +101,15 @@ export function montarTap({ project, estado, ordem, emitidoPor, fase, coordenado
   const objetivo = `Implantar ${solucoes.length ? lista(solucoes) : "as soluções contratadas"} para ${project.company_name.trim()}`
     + `${local ? ` em ${local}` : ""}${frota ? `, com frota contratada de ${frota} veículo${frota === 1 ? "" : "s"}` : ""}.`;
 
+  // as atividades do módulo que ficam com a Assistente ("checklist de pré-requisitos"); o mapa de calor só com cobertura
+  const daAssistente = MODULO_01.atividades
+    .filter(a => a.responsavel === "assistente" && (a.id !== "carrier" || cobertura))
+    .map(a => a.titulo.charAt(0).toLowerCase() + a.titulo.slice(1));
   const partes = [
     { papel: `${papelGp} (designado)`, nome: gp, responsabilidade: "Conduz o projeto do planejamento à entrega e responde pelas atividades deste termo." },
     { papel: papelExec, nome: executivo, responsabilidade: "Responsável comercial; repassa o contexto da venda e os combinados com o cliente no Handover." },
     ...(coordenador ? [{ papel: papelCoord, nome: coordenador, responsabilidade: "Coordena a implantação do projeto em campo junto ao GP." }] : []),
-    ...(cobertura ? [{ papel: "Assistente de Projetos", nome: "—", responsabilidade: "Apoia o GP; envia ao cliente o comparativo de cobertura das operadoras." }] : []),
+    { papel: RESPONSAVEL_LABEL.assistente, nome: assistente ?? "—", responsabilidade: `Apoia o GP; responde por ${lista(daAssistente)}.` },
     { papel: "Cliente", nome: project.company_name.trim(), responsabilidade: "Contratante; providencia os pré-requisitos sob sua responsabilidade." },
     ...(project.client_manager_name?.trim() ? [{ papel: "Gerente de Projetos no cliente", nome: project.client_manager_name.trim(), responsabilidade: "Conduz o projeto do lado do cliente; ponto de contato do GP Transdata." }] : []),
   ];
@@ -123,7 +129,9 @@ export function montarTap({ project, estado, ordem, emitidoPor, fase, coordenado
 
   const resp = (id: AtividadeId) => {
     const a = MODULO_01.atividades.find(x => x.id === id)!;
-    return a.responsavel === "gp" ? `GP · ${gp}` : RESPONSAVEL_LABEL[a.responsavel];
+    if (a.responsavel === "gp") return `GP · ${gp}`;
+    if (a.responsavel === "assistente" && assistente) return `${RESPONSAVEL_LABEL.assistente} · ${assistente}`;
+    return RESPONSAVEL_LABEL[a.responsavel];
   };
   const marco = (id: AtividadeId): DadosTap["marcos"][number] | null => {
     const a = MODULO_01.atividades.find(x => x.id === id)!;

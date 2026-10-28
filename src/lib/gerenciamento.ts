@@ -67,19 +67,24 @@ export async function fetchEmailDaEquipe(memberId: string | null | undefined): P
   return data?.find(m => m.id === memberId)?.email?.trim() || null;
 }
 
-/** Função "Coordenador de Implantação" em Equipe (Funções da equipe). */
+/** Funções em Equipe (Funções da equipe): Coordenador de Implantação e Assistente de Projetos. */
 export const PAPEL_COORDENADOR_IMPLANTACAO = "coordenador_implantacao";
+export const PAPEL_ASSISTENTE_PROJETOS = "assistente";
 
-/** Nome do Coordenador de Implantação; null se ninguém ou mais de uma pessoa ativa na função. */
-export async function fetchCoordenadorImplantacao(): Promise<string | null> {
+/** Nome de quem está na função em Equipe; null se ninguém ou mais de uma pessoa ativa nela. */
+async function nomeNaFuncao(papel: string): Promise<string | null> {
   // Sem filtro por tenant_id: em team_members o usuário só pode ler id, full_name, role, active e
   // created_at (permissão por coluna) — filtrar por tenant_id dá "permissão negada". A separação
   // por empresa fica com a regra "tenant guard" do banco, como nas outras telas que leem a Equipe.
   const { data, error } = await supabase.from("team_members").select("full_name")
-    .eq("role", PAPEL_COORDENADOR_IMPLANTACAO).eq("active", true);
+    .eq("role", papel).eq("active", true);
   if (error) throw error;
   return data?.length === 1 ? data[0].full_name : null;
 }
+/** Nome do Coordenador de Implantação (assina o TAP). */
+export const fetchCoordenadorImplantacao = () => nomeNaFuncao(PAPEL_COORDENADOR_IMPLANTACAO);
+/** Nome da Assistente de Projetos (responsável por atividades do módulo 01 no TAP). */
+export const fetchAssistenteProjetos = () => nomeNaFuncao(PAPEL_ASSISTENTE_PROJETOS);
 
 const p2 = (n: number) => String(n).padStart(2, "0");
 /** ISO ou AAAA-MM-DD → dd/mm/aaaa */
@@ -150,12 +155,12 @@ export const MODULO_01 = {
     { id: "portal", titulo: "Cadastro do projeto no portal", descricao: "O portal gera o código do projeto e o projeto já sai com o GP responsável.", responsavel: "portal" },
     { id: "pedidos", titulo: "Cadastro no sistema de pedidos", descricao: "Cadastre o projeto no sistema de pedidos.", responsavel: "gp",
       campo: { label: "Link do pedido no sistema de pedidos (opcional)", placeholder: "https://...", url: true, abrir: "Abrir pedido" } },
-    { id: "totvs", titulo: "Baixar pedidos - TOTVS", descricao: "Baixe os pedidos do projeto no TOTVS usando o código do projeto do portal.", responsavel: "gp",
+    { id: "totvs", titulo: "Baixar pedidos - TOTVS", descricao: "Baixe os pedidos do projeto no TOTVS usando o código do projeto do portal.", responsavel: "assistente",
       campo: { label: "Número do projeto no TOTVS (opcional)", placeholder: "Ex.: 000457" } },
-    { id: "drive", titulo: "Pastas do projeto no Drive", descricao: "Crie as pastas do projeto no Drive da Transdata, com todos os documentos padrão de projeto.", responsavel: "gp",
+    { id: "drive", titulo: "Pastas do projeto no Drive", descricao: "Crie as pastas do projeto no Drive da Transdata, com todos os documentos padrão de projeto.", responsavel: "assistente",
       campo: { label: "Link da pasta no Drive", placeholder: "https://drive.google.com/...", url: true, abrir: "Abrir pasta" } },
-    { id: "codigobd", titulo: "Cadastro do código BD", descricao: "Peça por e-mail o cadastro do cliente no banco de dados e anote o código BD que voltar.", responsavel: "gp" },
-    { id: "checklist", titulo: "Checklist de pré-requisitos", descricao: "Confira se o projeto cumpre os pré-requisitos para virar projeto.", responsavel: "gp" },
+    { id: "codigobd", titulo: "Cadastro do código BD", descricao: "Peça por e-mail o cadastro do cliente no banco de dados e anote o código BD que voltar.", responsavel: "assistente" },
+    { id: "checklist", titulo: "Checklist de pré-requisitos", descricao: "Confira se o projeto cumpre os pré-requisitos para virar projeto.", responsavel: "assistente" },
     { id: "datacenter", titulo: "Sites e credenciais no Data Center", descricao: "Peça por e-mail ao Data Center a criação dos sites do cliente no banco de dados e as credenciais de acesso.", responsavel: "gp" },
     { id: "handover", titulo: "Reunião de Handover", descricao: "Passagem de bastão do Comercial para Projetos, com o Executivo de Vendas.", responsavel: "gp" },
     { id: "carrier", titulo: "Mapa de calor das operadoras", descricao: "Envie ao cliente o comparativo de cobertura Claro × Vivo de cada cidade da operação, com o mapa de calor e a operadora recomendada.", responsavel: "assistente" },
