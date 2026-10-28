@@ -2,6 +2,7 @@
 // primeiro contato com o cliente até os cartões, as leitoras e o notebook prontos para a viagem.
 import { supabase } from "@/integrations/supabase/client";
 import type { Atividade, SituacaoAtividade } from "@/lib/gerenciamento";
+import type { CartaoExtra } from "@/lib/termoCartoes";
 
 export type AtividadeId02 =
   | "contato" | "custos" | "aprovacao" | "reservas" | "financeiro" | "adiantamento" | "cartoes" | "termo" | "leitoras" | "software";
@@ -54,9 +55,13 @@ export interface Modulo02Estado {
   financeiro: { para: string; enviadoEm: string | null; por: string };
   /** `necessario` false: não precisa de adiantamento (a atividade sai da conta). */
   adiantamento: { necessario: boolean | null; valor: string; registradoEm: string | null; por: string };
-  /** Só o lembrete: as senhas não entram no portal. */
-  cartoes: { registradoEm: string | null; por: string };
-  termo: { registradoEm: string | null; por: string };
+  /**
+   * Os cartões a levar (as senhas não entram no portal). `ajustes`: quantidade que o GP mudou nos
+   * cartões do modelo do termo (por id); `extras`: cartões acrescentados (src/lib/termoCartoes.ts).
+   */
+  cartoes: { registradoEm: string | null; por: string; ajustes: Partial<Record<string, number>>; extras: CartaoExtra[] };
+  /** Termo de Recebimento dos Cartões: em branco, vale o padrão (camposTermo); `registradoEm`: PDF baixado. */
+  termo: { local: string; data: string; recebedor: string; cargo: string; registradoEm: string | null; por: string };
   leitoras: { registradoEm: string | null; por: string };
   /** Quando cada software foi conferido (instalado e funcionando). */
   software: { saminit: string | null; sasm: string | null; por: string };
@@ -69,8 +74,8 @@ export const modulo02Vazio = (): Modulo02Estado => ({
   reservas: { deslocamento: "", hospedagem: "", registradoEm: null, por: "" },
   financeiro: { para: "", enviadoEm: null, por: "" },
   adiantamento: { necessario: null, valor: "", registradoEm: null, por: "" },
-  cartoes: { registradoEm: null, por: "" },
-  termo: { registradoEm: null, por: "" },
+  cartoes: { registradoEm: null, por: "", ajustes: {}, extras: [] },
+  termo: { local: "", data: "", recebedor: "", cargo: "", registradoEm: null, por: "" },
   leitoras: { registradoEm: null, por: "" },
   software: { saminit: null, sasm: null, por: "" },
 });
@@ -205,7 +210,7 @@ export function bloqueio02(a: AtividadeId02, e: Modulo02Estado): { pill: string;
     case "financeiro":
       if (!aprovado(e)) return semAprovacao;
       return e.reservas.registradoEm ? null : { pill: "Aguarda as reservas", texto: "Liberada quando as reservas de deslocamento e hospedagem estiverem feitas." };
-    case "termo": return e.cartoes.registradoEm ? null : { pill: "Aguarda os cartões", texto: "Liberado quando os cartões-chave e as senhas estiverem preparados." };
+    case "termo": return e.cartoes.registradoEm ? null : { pill: "Aguarda os cartões", texto: "Liberado quando os cartões estiverem separados." };
     default: return null;
   }
 }

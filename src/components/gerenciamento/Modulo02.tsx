@@ -14,8 +14,11 @@ import {
 import {
   assuntoCustos, assuntoFinanceiro, emailHtmlCustos, emailHtmlFinanceiro, emailTextoCustos, emailTextoFinanceiro, linhasVisita, periodoViagem,
 } from "@/lib/visitaPeEmail";
+import { cartoesDoTermo, qtdTermo } from "@/lib/termoCartoes";
+import { CartoesTermo } from "./CartoesTermo";
 import { Seg } from "./DataCenterEmailDialog";
 import { Etapa, Registro } from "./Etapa";
+import { TermoCartoesDialog } from "./TermoCartoesDialog";
 import { VisitaPeEmailDialog } from "./VisitaPeEmailDialog";
 
 const p2 = (n: number) => String(n).padStart(2, "0");
@@ -105,6 +108,7 @@ export function Modulo02({ project, estado, onChange, userName, emailCliente }: 
 }) {
   const [emailCustos, setEmailCustos] = useState(false);
   const [emailFinanceiro, setEmailFinanceiro] = useState(false);
+  const [termoAberto, setTermoAberto] = useState(false);
   const set = <K extends keyof Modulo02Estado>(k: K, patch: Partial<Modulo02Estado[K]>) =>
     onChange(e => ({ ...e, [k]: { ...e[k], ...patch } }));
   const verEmail = (abrir: () => void) => <button type="button" className="font-medium text-primary underline-offset-2 hover:underline" onClick={abrir}>Ver e-mail</button>;
@@ -325,8 +329,8 @@ export function Modulo02({ project, estado, onChange, userName, emailCliente }: 
     );
   };
 
-  /** Lembrete com um botão de conferido (cartões, leitoras). */
-  const conferido = (k: "cartoes" | "leitoras", icone: ReactNode, lembrete: ReactNode, botao: string, feito: string) => {
+  /** Lembrete com um botão de conferido (leitoras). */
+  const conferido = (k: "leitoras", icone: ReactNode, lembrete: ReactNode, botao: string, feito: string) => {
     const r = estado[k];
     if (r.registradoEm) return <Registro texto={`${feito} · conferido em ${quando(r.registradoEm)} por ${r.por || userName}`} onDesfazer={() => set(k, { registradoEm: null })} />;
     return (
@@ -337,19 +341,39 @@ export function Modulo02({ project, estado, onChange, userName, emailCliente }: 
     );
   };
 
-  const termo = () => {
-    const t = estado.termo;
-    if (t.registradoEm) return <Registro texto={`Termo de Recebimento dos Cartões gerado em ${quando(t.registradoEm)} por ${t.por || userName}`} onDesfazer={() => set("termo", { registradoEm: null })} />;
+  const cartoes = () => {
+    const c = estado.cartoes;
+    // "01 Chave · 05 Senha · 40 Acesso · 01 MK TRANSPORT"
+    const resumo = cartoesDoTermo(project, c).filter(x => x.quantidade > 0).map(x => `${qtdTermo(x.quantidade)} ${x.tipo.trim() || "outro"}`).join(" · ");
+    if (c.registradoEm) {
+      return (
+        <Registro texto={`Cartões separados em ${quando(c.registradoEm)} por ${c.por || userName} · `} onDesfazer={() => set("cartoes", { registradoEm: null })}>
+          <b>{resumo}</b>
+        </Registro>
+      );
+    }
     return (
       <div className="space-y-3">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <Button className="h-9" disabled title="O PDF entra quando o modelo do termo for cadastrado"><FileText className="mr-1.5 h-4 w-4" />Gerar Termo em PDF</Button>
-          <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground">Aguardando o modelo do termo</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button className="h-9" onClick={() => set("termo", { registradoEm: agora(), por: userName })}><Check className="mr-1.5 h-4 w-4" />Marcar como feito</Button>
-          <span className="text-[12px] text-muted-foreground">se o termo foi gerado por fora do portal</span>
-        </div>
+        <Lembrete icone={<KeyRound className="h-4 w-4" />}>
+          <b>Não esqueça os cartões-chave e as respectivas senhas</b> para a reunião de PE. As senhas não são registradas no portal. Os cartões abaixo vão no Termo de Recebimento.
+        </Lembrete>
+        <CartoesTermo project={project} cartoes={c} onChange={patch => set("cartoes", patch)} />
+        <Button className="h-9" onClick={() => set("cartoes", { registradoEm: agora(), por: userName })}><Check className="mr-1.5 h-4 w-4" />Cartões e senhas separados</Button>
+      </div>
+    );
+  };
+
+  const termo = () => {
+    const t = estado.termo;
+    const verTermo = <button type="button" className="font-medium text-primary underline-offset-2 hover:underline" onClick={() => setTermoAberto(true)}>Ver termo</button>;
+    if (t.registradoEm) {
+      return <Registro texto={`Termo de Recebimento dos Cartões gerado em ${quando(t.registradoEm)} por ${t.por || userName} · `} onDesfazer={() => set("termo", { registradoEm: null })}>{verTermo}</Registro>;
+    }
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <Button className="h-9" onClick={() => setTermoAberto(true)}><FileText className="mr-1.5 h-4 w-4" />Gerar Termo em PDF</Button>
+        <Button className="h-9" onClick={() => set("termo", { registradoEm: agora(), por: userName })}><Check className="mr-1.5 h-4 w-4" />Marcar como feito</Button>
+        <span className="text-[12px] text-muted-foreground">se o termo foi gerado por fora do portal</span>
       </div>
     );
   };
@@ -402,10 +426,7 @@ export function Modulo02({ project, estado, onChange, userName, emailCliente }: 
       case "reservas": return reservas();
       case "financeiro": return financeiro();
       case "adiantamento": return adiantamento(sit);
-      case "cartoes":
-        return conferido("cartoes", <KeyRound className="h-4 w-4" />,
-          <><b>Não esqueça os cartões-chave e as respectivas senhas</b> para a reunião de PE. As senhas não são registradas no portal.</>,
-          "Cartões e senhas separados", "Cartões-chave e senhas separados para a viagem");
+      case "cartoes": return cartoes();
       case "termo": return termo();
       case "leitoras":
         return conferido("leitoras", <ScanLine className="h-4 w-4" />,
@@ -447,6 +468,10 @@ export function Modulo02({ project, estado, onChange, userName, emailCliente }: 
         texto={emailTextoFinanceiro(project, { ...estado, custos: custosParaEmail }, userName)}
         anexos="Anexe os comprovantes das reservas (passagens e hotel) no Outlook antes de enviar."
         onCopiado={() => onChange(e => ({ ...e, financeiro: { ...e.financeiro, enviadoEm: e.financeiro.enviadoEm ?? agora(), por: e.financeiro.por || userName } }))} />
+      {/* baixar o PDF registra o termo; baixar de novo mantém a 1ª data */}
+      <TermoCartoesDialog open={termoAberto} onOpenChange={setTermoAberto} project={project} estado={estado}
+        onCartoes={patch => set("cartoes", patch)} onTermo={patch => set("termo", patch)}
+        onBaixado={() => onChange(e => ({ ...e, termo: { ...e.termo, registradoEm: e.termo.registradoEm ?? agora(), por: e.termo.por || userName } }))} />
     </>
   );
 }
