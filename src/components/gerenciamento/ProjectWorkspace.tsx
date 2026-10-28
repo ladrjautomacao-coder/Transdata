@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AlertTriangle, ArrowLeft, ArrowUpDown, CheckCircle2, FileText, Gauge, Layers, Loader2, Lock, LockOpen, RefreshCw, Rocket, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,12 +11,15 @@ import { subPhasesByStatus } from "@/pages/ProjectManagement";
 import { errorMessage } from "@/lib/implantationScheduling";
 import {
   MODULO_01, ORDEM_PADRAO, dataHoraBr, fetchCoordenadorImplantacao, fetchGerProject, fetchModulo01, modulo01Vazio, salvarModulo01, situacao, solutionsOf,
-  type AtividadeId, type GerProject, type Modulo01Estado,
+  type Atividade, type AtividadeId, type GerProject, type Modulo01Estado, type SituacaoAtividade,
 } from "@/lib/gerenciamento";
+import { MODULO_02, fetchModulo02, modulo02Vazio, salvarModulo02, situacao02, type Modulo02Estado } from "@/lib/modulo02";
 import { montarTap, type DadosTap } from "@/lib/tap";
 import { MedidorModulo } from "./MedidorModulo";
 import { TapDialog } from "./TapDialog";
 import { Modulo01 } from "./Modulo01";
+import { Modulo02, ReuniaoPe } from "./Modulo02";
+import { juntarGravacoes, useModuloGravado, type Gravacao } from "./useModuloGravado";
 
 // Ordem em discussão com os GPs: fica guardada neste navegador até virar a ordem oficial
 const ORDEM_KEY = "gerenciamento:modulo01:ordem";
@@ -54,9 +58,7 @@ function ProgressRing({ done, total }: { done: number; total: number }) {
   );
 }
 
-type Gravacao = { status: "ok" | "salvando" | "erro"; em: string | null };
-
-/** Situação da gravação automática do módulo no banco. */
+/** Situação da gravação automática dos módulos no banco. */
 function SituacaoGravacao({ g, onTentar }: { g: Gravacao; onTentar: () => void }) {
   if (g.status === "salvando") {
     return <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" />Salvando…</span>;
@@ -70,66 +72,84 @@ function SituacaoGravacao({ g, onTentar }: { g: Gravacao; onTentar: () => void }
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground" title="Cada marcação do módulo é gravada no banco automaticamente.">
+    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground" title="Cada marcação dos módulos é gravada no banco automaticamente.">
       <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
       {g.em ? `Salvo no banco · ${dataHoraBr(g.em)}` : "Salvo automaticamente a cada marcação"}
     </span>
   );
 }
 
-/** O projeto escolhido: cabeçalho, módulos e o módulo aberto. */
+type ModuloNum = "01" | "02";
+
+/** Um módulo na lista de módulos do projeto, com o andamento. */
+function CartaoModulo({ numero, nome, feitas, total, ativo, aberto, onClick }: {
+  numero: string; nome: string; feitas: number; total: number; ativo: boolean; aberto: boolean; onClick: () => void;
+}) {
+  const completo = total > 0 && feitas === total;
+  return (
+    <button type="button" aria-current={ativo ? "page" : undefined} aria-expanded={ativo ? aberto : undefined} onClick={onClick}
+      title={!ativo ? `Abrir o módulo ${numero}` : aberto ? "Voltar ao medidor do módulo" : "Abrir as atividades do módulo"}
+      className={`flex flex-col gap-2 rounded-xl border p-3 text-left transition-colors ${ativo
+        ? "border-primary bg-primary/[0.06] ring-1 ring-primary hover:bg-primary/[0.1]"
+        : "border-border/60 bg-card hover:border-primary/40 hover:bg-primary/[0.03]"}`}>
+      <span className="flex items-center gap-2">
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[13px] font-bold ${ativo ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"}`}>{numero}</span>
+        <span className="min-w-0 flex-1 text-sm font-semibold leading-tight">{nome}</span>
+        {completo
+          ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-label="Módulo concluído" />
+          : <span className="text-xs font-semibold tabular-nums text-primary">{feitas}/{total}</span>}
+      </span>
+      <span className="h-1.5 overflow-hidden rounded-full bg-primary/15">
+        <span className={`block h-full rounded-full transition-[width] duration-500 ${completo ? "bg-emerald-500" : "bg-primary"}`} style={{ width: `${total ? (feitas / total) * 100 : 0}%` }} />
+      </span>
+    </button>
+  );
+}
+
+/** Destaque do módulo aberto: nome, próximo passo e o anel de progresso. */
+function DestaqueModulo({ numero, nome, resumo, proxima, feitas, total, children }: {
+  numero: string; nome: string; resumo: string; proxima?: string; feitas: number; total: number; children?: ReactNode;
+}) {
+  return (
+    <section aria-labelledby="ger-mod-titulo" className="flex flex-wrap items-center gap-5 overflow-hidden rounded-2xl bg-gradient-to-br from-primary to-primary/80 p-5 text-primary-foreground shadow-sm sm:p-6">
+      <div className="min-w-0 flex-1 basis-64">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-80">Módulo {numero}</p>
+        <h2 id="ger-mod-titulo" className="text-xl font-bold sm:text-2xl">{nome}</h2>
+        <p className="mt-1 max-w-xl text-sm opacity-85">{resumo}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <p className="inline-flex items-center gap-1.5 rounded-lg bg-primary-foreground/15 px-2.5 py-1.5 text-[13px] font-medium">
+            <Rocket className="h-4 w-4" />{proxima ? <>Próximo passo: <b>{proxima}</b></> : "Módulo concluído"}
+          </p>
+          {children}
+        </div>
+      </div>
+      <ProgressRing done={feitas} total={total} />
+    </section>
+  );
+}
+
+/** Feitas, aplicáveis e a próxima atividade de um módulo. */
+function andamento<Id extends string>(lista: { a: Atividade<Id>; sit: SituacaoAtividade }[]) {
+  const aplicaveis = lista.filter(x => x.sit !== "naoaplica");
+  return {
+    feitas: aplicaveis.filter(x => x.sit === "feito").length,
+    total: aplicaveis.length,
+    proxima: aplicaveis.find(x => x.sit !== "feito")?.a,
+  };
+}
+
+/** O projeto escolhido: cabeçalho, módulos e o módulo aberto (?modulo=02; sem ele, o 01). */
 export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => void }) {
   const { profile } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const modulo: ModuloNum = params.get("modulo") === "02" ? "02" : "01";
   const [project, setProject] = useState<GerProject | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
-  const [estado, setEstado] = useState<Modulo01Estado>(modulo01Vazio);
+  // cada módulo é gravado sozinho no banco a cada mudança
+  const m1 = useModuloGravado<Modulo01Estado>(e => salvarModulo01(id, e), modulo01Vazio);
+  const m2 = useModuloGravado<Modulo02Estado>(e => salvarModulo02(id, e), modulo02Vazio);
+  const estado = m1.estado;
 
-  // Gravação automática: cada mudança do módulo vai ao banco ~0,6 s depois, uma gravação por vez.
-  const [gravacao, setGravacao] = useState<Gravacao>({ status: "ok", em: null });
-  const gravado = useRef<string | null>(null); // JSON do que está no banco (null: ainda carregando)
-  const atual = useRef(estado);
-  atual.current = estado;
-  const agendada = useRef<number | null>(null);
-  const emAndamento = useRef(false);
-  const deNovo = useRef(false);
-  const salvar = useRef(async () => { /* definida abaixo */ });
-  salvar.current = async () => {
-    if (agendada.current) { clearTimeout(agendada.current); agendada.current = null; }
-    if (emAndamento.current) { deNovo.current = true; return; }
-    const snapshot = atual.current, json = JSON.stringify(snapshot);
-    if (gravado.current === null || json === gravado.current) return;
-    emAndamento.current = true;
-    setGravacao(g => ({ ...g, status: "salvando" }));
-    try {
-      const em = await salvarModulo01(id, snapshot);
-      gravado.current = json;
-      setGravacao({ status: "ok", em });
-    } catch (err) {
-      setGravacao(g => ({ ...g, status: "erro" }));
-      toast.error("Não foi possível salvar o módulo.", { description: errorMessage(err) });
-    } finally {
-      emAndamento.current = false;
-      // mudou de novo enquanto gravava: grava a versão mais nova
-      if (deNovo.current) { deNovo.current = false; void salvar.current(); }
-    }
-  };
-  useEffect(() => {
-    if (gravado.current === null || JSON.stringify(estado) === gravado.current) return;
-    if (agendada.current) clearTimeout(agendada.current);
-    agendada.current = window.setTimeout(() => { void salvar.current(); }, 600);
-  }, [estado]);
-  useEffect(() => {
-    // fechar a aba com marcação ainda não gravada: o navegador pede confirmação
-    const aviso = (e: BeforeUnloadEvent) => {
-      if (gravado.current !== null && JSON.stringify(atual.current) !== gravado.current) { e.preventDefault(); e.returnValue = ""; }
-    };
-    window.addEventListener("beforeunload", aviso);
-    return () => {
-      window.removeEventListener("beforeunload", aviso);
-      // "Trocar projeto" logo depois de marcar: grava o que estava esperando
-      void salvar.current();
-    };
-  }, []);
   const [ordem, setOrdem] = useState<AtividadeId[]>(lerOrdem);
   const [travada, setTravada] = useState<boolean>(() => { try { return localStorage.getItem(TRAVA_KEY) === "true"; } catch { return false; } });
   const mover = (id: AtividadeId, dir: -1 | 1) => setOrdem(o => {
@@ -143,20 +163,21 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   const alternarTrava = () => setTravada(t => { guardar(TRAVA_KEY, !t); return !t; });
   const ordemMudou = ordem.some((id, i) => id !== ORDEM_PADRAO[i]);
 
-  const load = () => {
-    setProject(undefined); setError(null); gravado.current = null;
-    // o projeto e o que já foi marcado no módulo chegam juntos: sem o módulo, a tela não abre
+  const { carregar: carregar1, descarregar: descarregar1 } = m1;
+  const { carregar: carregar2, descarregar: descarregar2 } = m2;
+  const load = useCallback(() => {
+    setProject(undefined); setError(null); descarregar1(); descarregar2();
+    // o projeto e o que já foi marcado nos módulos chegam juntos: sem os módulos, a tela não abre
     // (evita gravar um módulo vazio por cima do que está no banco)
-    Promise.all([fetchGerProject(id), fetchModulo01(id)])
-      .then(([p, m]) => {
-        gravado.current = JSON.stringify(m.estado);
-        setEstado(m.estado);
-        setGravacao({ status: "ok", em: m.salvoEm });
+    Promise.all([fetchGerProject(id), fetchModulo01(id), fetchModulo02(id)])
+      .then(([p, a, b]) => {
+        carregar1(a.estado, a.salvoEm);
+        carregar2(b.estado, b.salvoEm);
         setProject(p);
       })
       .catch(err => { setError(errorMessage(err)); setProject(null); });
-  };
-  useEffect(load, [id]);
+  }, [id, carregar1, descarregar1, carregar2, descarregar2]);
+  useEffect(load, [load]);
   // ao abrir o projeto, o módulo aparece no medidor; a lista de atividades só abre quando o GP pede
   const [aberto, setAberto] = useState(false);
   const [foco, setFoco] = useState<string | null>(null);
@@ -171,6 +192,14 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
     }, 60);
     return () => clearTimeout(t);
   }, [aberto, foco]);
+  // o módulo de cada vez: clicar no aberto alterna medidor e atividades; outro módulo abre no medidor
+  const escolherModulo = (m: ModuloNum) => {
+    if (m === modulo) { if (aberto) setAberto(false); else abrir(); return; }
+    const n = new URLSearchParams(params);
+    if (m === "01") n.delete("modulo"); else n.set("modulo", m);
+    setParams(n);
+    setAberto(false);
+  };
   // sem esqueleto: a tela e o que o GP preencheu continuam onde estão
   const reler = () => fetchGerProject(id).then(p => { if (p) setProject(p); });
 
@@ -191,10 +220,10 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
     );
   }
 
-  const emOrdem = ordem.map(id => MODULO_01.atividades.find(a => a.id === id)!);
-  const aplicaveis = emOrdem.filter(a => situacao(a.id, estado, project, ordem) !== "naoaplica");
-  const feitas = aplicaveis.filter(a => situacao(a.id, estado, project, ordem) === "feito").length;
-  const proxima = aplicaveis.find(a => situacao(a.id, estado, project, ordem) !== "feito");
+  const lista01 = ordem.map(id => MODULO_01.atividades.find(a => a.id === id)!).map(a => ({ a, sit: situacao(a.id, estado, project, ordem) }));
+  const and01 = andamento(lista01);
+  const lista02 = MODULO_02.atividades.map(a => ({ a, sit: situacao02(a.id, m2.estado) }));
+  const and02 = andamento(lista02);
   const phase = project.sub_phase ? subPhasesByStatus[project.status as keyof typeof subPhasesByStatus]?.find(s => s.id === project.sub_phase)?.label : null;
   const solucoes = solutionsOf(project);
   const statusNome = statusLabels[project.status as keyof typeof statusLabels] ?? project.status;
@@ -214,6 +243,13 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
     bloqueado: "O documento TAP (Termo de Abertura do Projeto) é liberado quando o módulo chegar a 100%.",
     concluido: "Gere o documento TAP para assinatura.",
   };
+  const userName = profile?.full_name ?? "Você";
+  const voltarAoMedidor = (
+    <Button variant="ghost" size="sm" className="-mb-1 -ml-2 h-8 w-fit text-muted-foreground" onClick={() => setAberto(false)}>
+      <Gauge className="mr-1.5 h-4 w-4" />Voltar ao medidor do módulo
+    </Button>
+  );
+  const reuniaoPe = m2.estado.contato.registradoEm ? m2.estado.contato.reuniaoPe : null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -238,77 +274,70 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
             </div>
           )}
         </div>
-        <div className="ml-auto"><SituacaoGravacao g={gravacao} onTentar={() => void salvar.current()} /></div>
+        <div className="ml-auto">
+          <SituacaoGravacao g={juntarGravacoes([m1.gravacao, m2.gravacao])} onTentar={() => { m1.salvarAgora(); m2.salvarAgora(); }} />
+        </div>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
         {/* Módulos do projeto */}
         <nav aria-label="Módulos do projeto" className="flex flex-col gap-2">
           <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">Módulos do projeto</p>
-          <button type="button" aria-current="page" aria-expanded={aberto} onClick={() => (aberto ? setAberto(false) : abrir())}
-            title={aberto ? "Voltar ao medidor do módulo" : "Abrir as atividades do módulo"}
-            className="flex flex-col gap-2 rounded-xl border border-primary bg-primary/[0.06] p-3 text-left ring-1 ring-primary transition-colors hover:bg-primary/[0.1]">
-            <span className="flex items-center gap-2">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-[13px] font-bold text-primary-foreground">{MODULO_01.numero}</span>
-              <span className="min-w-0 flex-1 text-sm font-semibold leading-tight">{MODULO_01.nome}</span>
-              <span className="text-xs font-semibold tabular-nums text-primary">{feitas}/{aplicaveis.length}</span>
-            </span>
-            <span className="h-1.5 overflow-hidden rounded-full bg-primary/15"><span className="block h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${(feitas / aplicaveis.length) * 100}%` }} /></span>
-          </button>
+          <CartaoModulo numero={MODULO_01.numero} nome={MODULO_01.nome} feitas={and01.feitas} total={and01.total}
+            ativo={modulo === "01"} aberto={aberto} onClick={() => escolherModulo("01")} />
+          <CartaoModulo numero={MODULO_02.numero} nome={MODULO_02.nome} feitas={and02.feitas} total={and02.total}
+            ativo={modulo === "02"} aberto={aberto} onClick={() => escolherModulo("02")} />
           <div className="flex items-center gap-2 rounded-xl border border-dashed border-border p-3 text-[13px] text-muted-foreground">
             <Layers className="h-4 w-4 shrink-0" />Próximos módulos: em definição
           </div>
         </nav>
 
-        {!aberto ? (
+        {modulo === "01" ? (!aberto ? (
           <MedidorModulo numero={MODULO_01.numero} nome={MODULO_01.nome} resumo={MODULO_01.resumo}
-            atividades={emOrdem.map(a => ({ a, sit: situacao(a.id, estado, project, ordem) }))} onAbrir={abrir}
-            documento={DOC_TAP} onGerarDocumento={gerarTap} />
+            atividades={lista01} onAbrir={abrir} documento={DOC_TAP} onGerarDocumento={gerarTap} />
         ) : (
-        <div className="flex min-w-0 flex-col gap-4">
-          <Button variant="ghost" size="sm" className="-mb-1 -ml-2 h-8 w-fit text-muted-foreground" onClick={() => setAberto(false)}>
-            <Gauge className="mr-1.5 h-4 w-4" />Voltar ao medidor do módulo
-          </Button>
-          {/* Destaque do módulo */}
-          <section aria-labelledby="ger-mod-titulo" className="flex flex-wrap items-center gap-5 overflow-hidden rounded-2xl bg-gradient-to-br from-primary to-primary/80 p-5 text-primary-foreground shadow-sm sm:p-6">
-            <div className="min-w-0 flex-1 basis-64">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-80">Módulo {MODULO_01.numero}</p>
-              <h2 id="ger-mod-titulo" className="text-xl font-bold sm:text-2xl">{MODULO_01.nome}</h2>
-              <p className="mt-1 max-w-xl text-sm opacity-85">{MODULO_01.resumo}</p>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <p className="inline-flex items-center gap-1.5 rounded-lg bg-primary-foreground/15 px-2.5 py-1.5 text-[13px] font-medium">
-                  <Rocket className="h-4 w-4" />{proxima ? <>Próximo passo: <b>{proxima.titulo}</b></> : "Módulo concluído"}
-                </p>
-                {!proxima && (
-                  <Button size="sm" className="h-8 bg-primary-foreground text-primary hover:bg-primary-foreground/90" onClick={gerarTap}>
-                    <FileText className="mr-1.5 h-4 w-4" />{DOC_TAP.botao}
-                  </Button>
-                )}
+          <div className="flex min-w-0 flex-col gap-4">
+            {voltarAoMedidor}
+            <DestaqueModulo numero={MODULO_01.numero} nome={MODULO_01.nome} resumo={MODULO_01.resumo} proxima={and01.proxima?.titulo} feitas={and01.feitas} total={and01.total}>
+              {!and01.proxima && (
+                <Button size="sm" className="h-8 bg-primary-foreground text-primary hover:bg-primary-foreground/90" onClick={gerarTap}>
+                  <FileText className="mr-1.5 h-4 w-4" />{DOC_TAP.botao}
+                </Button>
+              )}
+            </DestaqueModulo>
+
+            {/* Ordem das atividades: em ajuste com os GPs até a definição oficial */}
+            <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-3.5 py-2.5 ${travada ? "border-border/60 bg-card" : "border-dashed border-primary/40 bg-primary/[0.04]"}`}>
+              {travada ? <Lock className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ArrowUpDown className="h-4 w-4 shrink-0 text-primary" />}
+              <p className="min-w-0 flex-1 basis-60 text-[13px]">
+                {travada
+                  ? <><b>Ordem travada.</b> <span className="text-muted-foreground">As atividades não podem mais ser movidas.</span></>
+                  : <><b>Ordem em ajuste.</b> <span className="text-muted-foreground">Use as setas de cada atividade para subir ou descer enquanto a ordem é definida com os GPs. O que fica abaixo do checklist depende dele.</span></>}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {!travada && ordemMudou && <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={restaurar}><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Ordem original</Button>}
+                <Button variant="outline" size="sm" className="h-8 bg-background text-xs" onClick={alternarTrava}>
+                  {travada ? <><LockOpen className="mr-1.5 h-3.5 w-3.5" />Destravar ordem</> : <><Lock className="mr-1.5 h-3.5 w-3.5" />Travar ordem</>}
+                </Button>
               </div>
             </div>
-            <ProgressRing done={feitas} total={aplicaveis.length} />
-          </section>
 
-          {/* Ordem das atividades: em ajuste com os GPs até a definição oficial */}
-          <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-3.5 py-2.5 ${travada ? "border-border/60 bg-card" : "border-dashed border-primary/40 bg-primary/[0.04]"}`}>
-            {travada ? <Lock className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ArrowUpDown className="h-4 w-4 shrink-0 text-primary" />}
-            <p className="min-w-0 flex-1 basis-60 text-[13px]">
-              {travada
-                ? <><b>Ordem travada.</b> <span className="text-muted-foreground">As atividades não podem mais ser movidas.</span></>
-                : <><b>Ordem em ajuste.</b> <span className="text-muted-foreground">Use as setas de cada atividade para subir ou descer enquanto a ordem é definida com os GPs. O que fica abaixo do checklist depende dele.</span></>}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {!travada && ordemMudou && <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={restaurar}><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Ordem original</Button>}
-              <Button variant="outline" size="sm" className="h-8 bg-background text-xs" onClick={alternarTrava}>
-                {travada ? <><LockOpen className="mr-1.5 h-3.5 w-3.5" />Destravar ordem</> : <><Lock className="mr-1.5 h-3.5 w-3.5" />Travar ordem</>}
-              </Button>
-            </div>
+            <Modulo01 project={project} estado={estado} onChange={u => m1.setEstado(u)} userName={userName}
+              ordem={ordem} travada={travada} onMover={mover} onAtualizarProjeto={reler} onGerarTap={e => void gerarTapCom(e)} />
           </div>
-
-          <Modulo01 project={project} estado={estado} onChange={u => setEstado(u)} userName={profile?.full_name ?? "Você"}
-            ordem={ordem} travada={travada} onMover={mover} onAtualizarProjeto={reler} onGerarTap={e => void gerarTapCom(e)} />
-        </div>
-        )}
+        )) : (!aberto ? (
+          <MedidorModulo numero={MODULO_02.numero} nome={MODULO_02.nome} resumo={MODULO_02.resumo}
+            atividades={lista02} onAbrir={abrir} rotuloBloqueado="Esperando outra etapa"
+            destaque={<ReuniaoPe reuniaoPe={reuniaoPe} />} />
+        ) : (
+          <div className="flex min-w-0 flex-col gap-4">
+            {voltarAoMedidor}
+            <DestaqueModulo numero={MODULO_02.numero} nome={MODULO_02.nome} resumo={MODULO_02.resumo} proxima={and02.proxima?.titulo} feitas={and02.feitas} total={and02.total}>
+              <ReuniaoPe reuniaoPe={reuniaoPe} sobreMarca />
+            </DestaqueModulo>
+            <Modulo02 project={project} estado={m2.estado} onChange={u => m2.setEstado(u)} userName={userName} emailCliente={estado.carrier.para} />
+          </div>
+        ))}
       </div>
       <TapDialog dados={tap} onOpenChange={o => { if (!o) setTap(null); }} />
     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowRight, Check, CheckCircle2, Clock3, FileText, ListChecks, Lock, Minus, PartyPopper, Rocket, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RESPONSAVEL_LABEL, type Atividade, type SituacaoAtividade } from "@/lib/gerenciamento";
@@ -64,12 +64,16 @@ function Velocimetro({ pct, nivel }: { pct: number; nivel: Nivel }) {
  * Visão geral de um módulo ao abrir o projeto: medidor de 0 a 100%, o que falta e a trilha das
  * atividades. A lista completa só abre quando o GP pede ("Abrir atividades" ou uma bolinha).
  */
-export function MedidorModulo({ numero, nome, resumo, atividades, onAbrir, documento, onGerarDocumento }: {
+export function MedidorModulo({ numero, nome, resumo, atividades, onAbrir, documento, onGerarDocumento, rotuloBloqueado, destaque }: {
   numero: string;
   nome: string;
   resumo: string;
   /** Atividades na ordem atual, com a situação de cada uma. */
-  atividades: { a: Atividade; sit: SituacaoAtividade }[];
+  atividades: { a: Atividade<string>; sit: SituacaoAtividade }[];
+  /** Como contar as atividades bloqueadas (o padrão é o módulo 01, que espera o checklist). */
+  rotuloBloqueado?: string;
+  /** Data ou aviso do módulo, embaixo do nome (ex.: a reunião de PE no módulo 02). */
+  destaque?: ReactNode;
   /** Abre a lista; com id, rola até a atividade. */
   onAbrir: (atividadeId?: string) => void;
   /** Documento que o módulo gera ao chegar a 100% (ex.: o TAP no módulo 01). */
@@ -87,6 +91,7 @@ export function MedidorModulo({ numero, nome, resumo, atividades, onAbrir, docum
   const contagem = (Object.keys(SIT) as SituacaoAtividade[])
     .map(s => ({ s, n: atividades.filter(x => x.sit === s).length }))
     .filter(x => x.n > 0 || x.s === "feito");
+  const rotulo = (s: SituacaoAtividade) => (s === "bloqueado" && rotuloBloqueado ? rotuloBloqueado : SIT[s].rotulo);
 
   return (
     <section aria-labelledby="ger-medidor-titulo" className="relative overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
@@ -97,6 +102,7 @@ export function MedidorModulo({ numero, nome, resumo, atividades, onAbrir, docum
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Módulo {numero}</p>
           <h2 id="ger-medidor-titulo" className="text-xl font-bold leading-tight">{nome}</h2>
           <p className="mt-0.5 text-[13px] text-muted-foreground">{resumo}</p>
+          {destaque && <div className="mt-2">{destaque}</div>}
         </div>
       </div>
 
@@ -130,7 +136,7 @@ export function MedidorModulo({ numero, nome, resumo, atividades, onAbrir, docum
                   <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${S.bolinha}`}><S.icone className="h-3.5 w-3.5" aria-hidden /></span>
                   <span className="min-w-0">
                     <span className={`block text-lg font-bold leading-none tabular-nums ${S.cor}`}>{n}</span>
-                    <span className="block text-[11.5px] leading-tight text-muted-foreground">{S.rotulo}</span>
+                    <span className="block text-[11.5px] leading-tight text-muted-foreground">{rotulo(s)}</span>
                   </span>
                 </li>
               );
@@ -166,11 +172,11 @@ export function MedidorModulo({ numero, nome, resumo, atividades, onAbrir, docum
             const S = SIT[sit];
             const ehProxima = a.id === proxima?.a.id && nivel !== "concluido";
             return (
-              <li key={a.id} className="flex min-w-[88px] flex-1 flex-col items-center">
+              <li key={a.id} className="flex min-w-[76px] flex-1 flex-col items-center">
                 <div className="flex w-full items-center">
                   <span aria-hidden className={`h-0.5 flex-1 ${i === 0 ? "opacity-0" : atividades[i - 1].sit === "feito" ? "bg-emerald-500" : "bg-border"}`} />
-                  <button type="button" onClick={() => onAbrir(a.id)} title={`${a.titulo}: ${S.rotulo.toLowerCase()}`}
-                    aria-label={`${i + 1}. ${a.titulo}: ${S.rotulo}`}
+                  <button type="button" onClick={() => onAbrir(a.id)} title={`${a.titulo}: ${rotulo(sit).toLowerCase()}`}
+                    aria-label={`${i + 1}. ${a.titulo}: ${rotulo(sit)}`}
                     className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${S.bolinha} ${ehProxima ? "ring-4 ring-primary/25" : ""}`}>
                     {sit === "feito" ? <CheckCircle2 className="h-4 w-4" /> : sit === "bloqueado" ? <Lock className="h-3.5 w-3.5" /> : i + 1}
                   </button>

@@ -54,7 +54,7 @@ export function Fixo({ label, valor, origem = "do cadastro" }: { label: string; 
 }
 
 /** Botões de escolha única (segmentado). */
-function Seg<T extends string>({ value, options, onChange, label }: { value: T | ""; options: { v: T; l: string }[]; onChange: (v: T) => void; label: string }) {
+export function Seg<T extends string>({ value, options, onChange, label }: { value: T | ""; options: { v: T; l: string }[]; onChange: (v: T) => void; label: string }) {
   return (
     <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1.5">
       {options.map(o => (

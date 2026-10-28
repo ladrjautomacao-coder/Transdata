@@ -1,5 +1,5 @@
 // Gerenciamento do projeto (em desenvolvimento): os módulos com as rotinas do GP.
-// Protótipo: as atividades do módulo 01 ainda não são gravadas no banco.
+// Este arquivo traz o projeto e o módulo 01; o módulo 02 fica em src/lib/modulo02.ts.
 import { supabase } from "@/integrations/supabase/client";
 import type { DataCenterForm } from "@/lib/dataCenterEmail";
 import type { OperadoraCobertura } from "@/lib/coberturaOperadoras";
@@ -94,6 +94,10 @@ export const dataHoraBr = (v: string | null | undefined) => {
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? "—" : `${dataBr(v)} às ${p2(d.getHours())}:${p2(d.getMinutes())}`;
 };
+/** Quando uma atividade foi registrada: 25/10/2026 às 14:30 */
+export const quando = (iso: string) => dataHoraBr(iso);
+/** Agora, para registrar uma atividade (ISO). */
+export const agora = () => new Date().toISOString();
 
 /** Fim do contrato (AAAA-MM-DD): contratação + prazo contratual, a mesma conta do detalhe do projeto. */
 export function fimDoContrato(p: Pick<GerProject, "contract_date" | "contractual_deadline_days">): string | null {
@@ -116,8 +120,9 @@ export const RESPONSAVEL_LABEL: Record<Responsavel, string> = { portal: "Automá
 
 export type AtividadeId = "portal" | "pedidos" | "totvs" | "drive" | "codigobd" | "checklist" | "datacenter" | "handover" | "carrier";
 
-export interface Atividade {
-  id: AtividadeId;
+/** Atividade de um módulo (`Id`: as atividades daquele módulo; o padrão é o módulo 01). */
+export interface Atividade<Id extends string = AtividadeId> {
+  id: Id;
   titulo: string;
   descricao: string;
   responsavel: Responsavel;
