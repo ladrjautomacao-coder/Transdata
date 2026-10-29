@@ -6,19 +6,12 @@ import { cidadeUf, razaoSocial } from "@/lib/dataCenterEmail";
 import { codigoProjetoBd } from "@/lib/codigoBd";
 import { cidadesOperacaoTexto, lerCidadesOperacao } from "@/lib/cidadesOperacao";
 import { escHtml, estiloTexto } from "@/lib/emailOutlook";
-import { contaCustos, linhasCustos, moeda, type Modulo02Estado } from "@/lib/modulo02";
+import type { Modulo02Estado } from "@/lib/modulo02";
 
 const txt = estiloTexto;
 const primeiroNome = (nome: string | null | undefined) => (nome ?? "").trim().split(/\s+/)[0] || "";
 /** Cidades da operação; sem elas, a cidade do contrato. */
 const destino = (p: GerProject) => cidadesOperacaoTexto(lerCidadesOperacao(p.operation_cities)) || cidadeUf(p) || "—";
-
-/** "10/11/2026 a 13/11/2026 (3 diárias)" */
-export function periodoViagem(c: Modulo02Estado["custos"]): string {
-  const { noites } = contaCustos(c);
-  const diarias = noites ? ` (${noites} ${noites === 1 ? "diária" : "diárias"})` : " (sem pernoite)";
-  return c.ida === c.volta ? `${dataBr(c.ida)}${diarias}` : `${dataBr(c.ida)} a ${dataBr(c.volta)}${diarias}`;
-}
 
 /** Reunião de PE: "10/11/2026 às 09:00" (+ local). */
 const reuniaoTexto = (e: Modulo02Estado) =>
@@ -36,11 +29,6 @@ const topo = (faixa: string, titulo: string) =>
   + `<tr><td colspan="2" bgcolor="#4b1768" style="background-color:#4b1768;padding:14px 16px;">`
   + `<p style="${txt(11, "#dcc8ec", true)}margin:0;">${faixa}</p>`
   + `<p style="${txt(16, "#ffffff", true)}margin:4px 0 0 0;">${escHtml(titulo)}</p></td></tr>`;
-/** Linhas de custo com o total em destaque. */
-const custosHtml = (c: Modulo02Estado["custos"]) =>
-  linhasCustos(c).map(l => par(`${escHtml(l.item)}<br><span style="${txt(11, "#8a8197")}">${escHtml(l.detalhe)}</span>`, escHtml(moeda(l.valor)))).join("")
-  + `<tr><td width="42%" bgcolor="#f6f4f9" style="${txt(14, "#1f1630", true)}background-color:#f6f4f9;width:42%;padding:10px 16px;${LINHA}">TOTAL</td>`
-  + `<td bgcolor="#f6f4f9" style="${txt(15, "#4b1768", true)}background-color:#f6f4f9;padding:10px 16px;${LINHA}">${escHtml(moeda(contaCustos(c).total))}</td></tr>`;
 const assinatura = (remetente: string) =>
   p0("Atenciosamente,", "margin-top:16px;")
   + p0(`<b style="${txt(14, "#1f1630", true)}">${escHtml(remetente)}</b>`)
@@ -54,13 +42,10 @@ export const assuntoCustos = (p: GerProject) => `Custos da visita de Projeto Exe
 export const linhasVisita = (p: GerProject, e: Modulo02Estado) => [
   { label: "Reunião de Projeto Executivo", valor: reuniaoTexto(e) },
   { label: "Destino", valor: destino(p) },
-  { label: "Período da viagem", valor: e.custos.ida ? periodoViagem(e.custos) : "—" },
-  { label: "Equipe Transdata", valor: e.custos.viajantes.trim() || p.manager?.full_name || "—" },
 ];
 
-const INTRO_CUSTOS = "Conforme conversamos, seguem os custos estimados de deslocamento e hospedagem da equipe Transdata para a visita de Projeto Executivo.";
-const PEDIDO_APROVACAO = "Pedimos, por gentileza, a aprovação dos valores para seguirmos com as reservas.";
-const NOTA_ESTIMATIVA = "Valores estimados nesta data; podem mudar até a emissão das reservas.";
+const INTRO_CUSTOS = "Conforme conversamos, seguem em anexo os custos estimados de deslocamento e hospedagem da equipe Transdata para a visita de Projeto Executivo, simulados na Onfly.";
+const PEDIDO_APROVACAO = "Os valores são estimados nesta data e podem mudar até a emissão das reservas. Pedimos, por gentileza, a aprovação para seguirmos com as reservas.";
 
 export function emailHtmlCustos(p: GerProject, e: Modulo02Estado, remetente: string): string {
   const nome = primeiroNome(e.contato.com || p.client_manager_name);
@@ -69,10 +54,7 @@ export function emailHtmlCustos(p: GerProject, e: Modulo02Estado, remetente: str
     + topo("CUSTOS DA VISITA DE PROJETO EXECUTIVO", razaoSocial(p))
     + grupo("VISITA")
     + linhasVisita(p, e).map(l => par(escHtml(l.label), escHtml(l.valor))).join("")
-    + grupo("CUSTOS ESTIMADOS")
-    + custosHtml(e.custos)
     + `</table>`
-    + `<p style="${txt(12, "#645a72")}margin:6px 0 0 0;">${NOTA_ESTIMATIVA}</p>`
     + p0(PEDIDO_APROVACAO, "margin-top:14px;")
     + assinatura(remetente);
 }
@@ -82,9 +64,6 @@ export function emailTextoCustos(p: GerProject, e: Modulo02Estado, remetente: st
   return [
     `Olá${nome ? `, ${nome}` : ""},`, "", INTRO_CUSTOS, "",
     ...linhasVisita(p, e).map(l => `${l.label}: ${l.valor}`), "",
-    "Custos estimados:",
-    ...linhasCustos(e.custos).map(l => `- ${l.item} (${l.detalhe}): ${moeda(l.valor)}`),
-    `TOTAL: ${moeda(contaCustos(e.custos).total)}`, NOTA_ESTIMATIVA, "",
     PEDIDO_APROVACAO, "",
     "Atenciosamente,", remetente, "Gerente de Projetos | Transdata",
   ].join("\n");
@@ -100,10 +79,9 @@ export const linhasFinanceiro = (p: GerProject, e: Modulo02Estado) => [
   { label: "Código do Projeto", valor: codigoProjetoBd(p) },
   { label: "Gerente de Projetos", valor: p.manager?.full_name ?? "—" },
   { label: "Destino", valor: destino(p) },
-  { label: "Período da viagem", valor: e.custos.ida ? periodoViagem(e.custos) : "—" },
-  { label: "Viajantes", valor: e.custos.viajantes.trim() || p.manager?.full_name || "—" },
   { label: "Reserva do deslocamento", valor: e.reservas.deslocamento.trim() || "—" },
   { label: "Reserva da hospedagem", valor: e.reservas.hospedagem.trim() || "—" },
+  { label: "Aprovação dos custos", valor: aprovacaoTexto(e) },
 ];
 
 /** "Aprovados por Carla Souza em 30/10/2026" */
@@ -118,9 +96,6 @@ export function emailHtmlFinanceiro(p: GerProject, e: Modulo02Estado, remetente:
     + topo("COMPROVANTES DE VIAGEM &nbsp;|&nbsp; VISITA DE PROJETO EXECUTIVO", codigoProjetoBd(p))
     + grupo("PROJETO E VIAGEM")
     + linhasFinanceiro(p, e).map(l => par(escHtml(l.label), escHtml(l.valor))).join("")
-    + grupo("CUSTOS APROVADOS PELO CLIENTE")
-    + custosHtml(e.custos)
-    + par("Aprovação", escHtml(aprovacaoTexto(e)))
     + `</table>`
     + p0("Os comprovantes seguem em anexo.", "margin-top:14px;")
     + assinatura(remetente);
@@ -130,10 +105,6 @@ export function emailTextoFinanceiro(p: GerProject, e: Modulo02Estado, remetente
   return [
     "Olá, equipe do Financeiro,", "", INTRO_FINANCEIRO, "",
     ...linhasFinanceiro(p, e).map(l => `${l.label}: ${l.valor}`), "",
-    "Custos aprovados pelo cliente:",
-    ...linhasCustos(e.custos).map(l => `- ${l.item} (${l.detalhe}): ${moeda(l.valor)}`),
-    `TOTAL: ${moeda(contaCustos(e.custos).total)}`,
-    `Aprovação: ${aprovacaoTexto(e)}`, "",
     "Os comprovantes seguem em anexo.", "",
     "Atenciosamente,", remetente, "Gerente de Projetos | Transdata",
   ].join("\n");

@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { GerProject } from "@/lib/gerenciamento";
 import {
-  bloqueio02, contaCustos, diasAtePe, faltandoCustos, linhasCustos, moeda, modulo02Vazio, noitesEntre, normalizarModulo02, prazoPe, situacao02, valorBr,
-  type Modulo02Estado,
+  bloqueio02, diasAtePe, moeda, modulo02Vazio, normalizarModulo02, prazoPe, situacao02, valorBr,
 } from "@/lib/modulo02";
-import { emailHtmlCustos, emailHtmlFinanceiro, emailTextoCustos, emailTextoFinanceiro, periodoViagem } from "@/lib/visitaPeEmail";
-
-const custos = (patch: Partial<Modulo02Estado["custos"]>): Modulo02Estado["custos"] => ({ ...modulo02Vazio().custos, ...patch });
+import { emailHtmlCustos, emailHtmlFinanceiro, emailTextoCustos, emailTextoFinanceiro } from "@/lib/visitaPeEmail";
 
 describe("valorBr", () => {
   it("lê o valor como o GP digita", () => {
@@ -27,33 +24,6 @@ describe("valorBr", () => {
 describe("moeda", () => {
   it("formata em reais com espaço comum", () => {
     expect(moeda(1250.5)).toBe("R$ 1.250,50");
-  });
-});
-
-describe("custos da visita", () => {
-  it("diárias são as noites entre a ida e a volta", () => {
-    expect(noitesEntre("2026-11-10", "2026-11-13")).toBe(3);
-    expect(noitesEntre("2026-11-10", "2026-11-10")).toBe(0);
-    expect(noitesEntre("2026-11-13", "2026-11-10")).toBe(0);
-    expect(noitesEntre("", "2026-11-10")).toBe(0);
-  });
-  it("soma deslocamento, hospedagem (diárias × diária) e outros", () => {
-    const c = custos({ ida: "2026-11-10", volta: "2026-11-13", meio: "aereo", deslocamento: "1.980,40", diaria: "320", outros: "150,00", outrosDescricao: "Táxi" });
-    expect(contaCustos(c)).toMatchObject({ noites: 3, deslocamento: 1980.4, hospedagem: 960, outros: 150, total: 3090.4 });
-    expect(linhasCustos(c).map(l => l.item)).toEqual(["Deslocamento", "Hospedagem", "Outros"]);
-    expect(linhasCustos(c)[1].detalhe).toBe("3 diárias × R$ 320,00");
-  });
-  it("ida e volta no mesmo dia: sem hospedagem e sem diária obrigatória", () => {
-    const c = custos({ ida: "2026-11-10", volta: "2026-11-10", meio: "carro", deslocamento: "400" });
-    expect(faltandoCustos(c)).toEqual([]);
-    expect(linhasCustos(c).map(l => l.item)).toEqual(["Deslocamento"]);
-    expect(periodoViagem(c)).toBe("10/11/2026 (sem pernoite)");
-  });
-  it("diz o que falta para salvar", () => {
-    expect(faltandoCustos(custos({}))).toEqual(["datas de ida e volta", "meio de deslocamento", "valor do deslocamento"]);
-    expect(faltandoCustos(custos({ ida: "2026-11-13", volta: "2026-11-10", meio: "aereo", deslocamento: "100" }))).toEqual(["volta depois da ida"]);
-    expect(faltandoCustos(custos({ ida: "2026-11-10", volta: "2026-11-12", meio: "aereo", deslocamento: "100" }))).toEqual(["valor da diária"]);
-    expect(faltandoCustos(custos({ ida: "2026-11-10", volta: "2026-11-10", meio: "aereo", deslocamento: "100", outros: "50" }))).toEqual(["o que são os outros custos"]);
   });
 });
 
@@ -112,11 +82,11 @@ describe("normalizarModulo02", () => {
     expect(normalizarModulo02("lixo")).toEqual(modulo02Vazio());
   });
   it("mantém o que foi gravado e completa os campos que surgiram depois", () => {
-    const e = normalizarModulo02({ contato: { reuniaoPe: "2026-11-10T09:00", registradoEm: "2026-10-28T10:00:00Z" }, custos: { ida: "2026-11-10" } });
+    const e = normalizarModulo02({ contato: { reuniaoPe: "2026-11-10T09:00", registradoEm: "2026-10-28T10:00:00Z" }, custos: { registradoEm: "2026-10-28T11:00:00Z" } });
     expect(e.contato.reuniaoPe).toBe("2026-11-10T09:00");
     expect(e.contato.local).toBe("");
-    expect(e.custos.ida).toBe("2026-11-10");
-    expect(e.custos.onfly).toBe(false);
+    expect(e.custos.registradoEm).toBe("2026-10-28T11:00:00Z");
+    expect(e.custos.por).toBe("");
     expect(e.software).toEqual(modulo02Vazio().software);
   });
 });
@@ -128,22 +98,21 @@ describe("e-mails da visita de PE", () => {
   } as unknown as GerProject;
   const e = modulo02Vazio();
   e.contato = { com: "", reuniaoPe: "2026-11-10T09:00", local: "Garagem central", registradoEm: "2026-10-28T10:00:00Z", por: "Luiz" };
-  e.custos = custos({ ida: "2026-11-09", volta: "2026-11-11", meio: "aereo", deslocamento: "1.980,40", diaria: "320" });
+  e.custos = { registradoEm: "2026-10-29T09:00:00Z", por: "Luiz" };
   e.aprovacao = { para: "carla@cliente.com", enviadoEm: null, aprovadoPor: "Carla Souza", aprovadoEm: "2026-10-30", registradoEm: "2026-10-30T12:00:00Z" };
   e.reservas = { deslocamento: "LATAM XKQ7PL", hospedagem: "Hotel Central", registradoEm: "2026-10-31T09:00:00Z", por: "Luiz" };
 
-  it("custos ao cliente: saudação ao GP no cliente, visita, custos e total", () => {
+  it("custos ao cliente: saudação ao GP no cliente, visita e a simulação da Onfly em anexo", () => {
     const t = emailTextoCustos(project, e, "Luiz Alves");
     expect(t).toContain("Olá, Carla,");
+    expect(t).toContain("seguem em anexo os custos estimados");
     expect(t).toContain("Reunião de Projeto Executivo: 10/11/2026 às 09:00, Garagem central");
-    expect(t).toContain("Período da viagem: 09/11/2026 a 11/11/2026 (2 diárias)");
-    expect(t).toContain("- Hospedagem (2 diárias × R$ 320,00): R$ 640,00");
-    expect(t).toContain("TOTAL: R$ 2.620,40");
+    expect(t).not.toContain("TOTAL");
   });
   it("comprovantes ao Financeiro: reservas e aprovação do cliente", () => {
     const t = emailTextoFinanceiro(project, e, "Luiz Alves");
     expect(t).toContain("Reserva do deslocamento: LATAM XKQ7PL");
-    expect(t).toContain("Aprovação: Aprovados por Carla Souza em 30/10/2026");
+    expect(t).toContain("Aprovação dos custos: Aprovados por Carla Souza em 30/10/2026");
   });
   it("o HTML escapa o que vem do cadastro", () => {
     expect(emailHtmlCustos(project, e, "Luiz")).toContain("VIAÇÃO &lt;TESTE&gt; &amp; CIA");

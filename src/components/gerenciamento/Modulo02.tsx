@@ -1,22 +1,20 @@
 import { useState, type ReactNode } from "react";
 import {
-  AlertTriangle, CalendarCheck, CalendarClock, Check, CheckCircle2, Circle, FileText, KeyRound, Laptop, Lock, Mail, Plane, ReceiptText, ScanLine, Send, Wallet,
+  AlertTriangle, CalendarCheck, CalendarClock, Check, CheckCircle2, Circle, ExternalLink, FileText, KeyRound, Laptop, Lock, Mail, Plane, ReceiptText, ScanLine, Send, Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { agora, dataBr, dataHoraBr, quando, type GerProject, type SituacaoAtividade } from "@/lib/gerenciamento";
 import {
-  MEIO_LABEL, MODULO_02, bloqueio02, contaCustos, diasAtePe, faltandoCustos, linhasCustos, moeda, prazoPe, situacao02, valorBr,
-  type AtividadeId02, type MeioDeslocamento, type Modulo02Estado,
+  MODULO_02, ONFLY_URL, bloqueio02, diasAtePe, moeda, prazoPe, situacao02, valorBr,
+  type AtividadeId02, type Modulo02Estado,
 } from "@/lib/modulo02";
 import {
-  assuntoCustos, assuntoFinanceiro, emailHtmlCustos, emailHtmlFinanceiro, emailTextoCustos, emailTextoFinanceiro, linhasVisita, periodoViagem,
+  aprovacaoTexto, assuntoCustos, assuntoFinanceiro, emailHtmlCustos, emailHtmlFinanceiro, emailTextoCustos, emailTextoFinanceiro, linhasVisita,
 } from "@/lib/visitaPeEmail";
 import { cartoesDoTermo, qtdTermo } from "@/lib/termoCartoes";
 import { CartoesTermo } from "./CartoesTermo";
-import { Seg } from "./DataCenterEmailDialog";
 import { Etapa, Registro } from "./Etapa";
 import { TermoCartoesDialog } from "./TermoCartoesDialog";
 import { VisitaPeEmailDialog } from "./VisitaPeEmailDialog";
@@ -75,25 +73,6 @@ export function ReuniaoPe({ reuniaoPe, sobreMarca = false }: { reuniaoPe: string
   );
 }
 
-/** Tabela dos custos (registro dos custos e da aprovação). */
-function TabelaCustos({ c }: { c: Modulo02Estado["custos"] }) {
-  return (
-    <dl className="divide-y overflow-hidden rounded-lg border border-border/60 text-[13px]">
-      {linhasCustos(c).map(l => (
-        <div key={l.item} className="flex flex-wrap items-baseline gap-x-3 px-3 py-1.5">
-          <dt className="font-medium">{l.item}</dt>
-          <dd className="min-w-0 flex-1 text-muted-foreground">{l.detalhe}</dd>
-          <dd className="font-semibold tabular-nums">{moeda(l.valor)}</dd>
-        </div>
-      ))}
-      <div className="flex items-baseline gap-3 bg-muted/50 px-3 py-2">
-        <dt className="flex-1 font-semibold">Total</dt>
-        <dd className="text-base font-bold tabular-nums text-primary">{moeda(contaCustos(c).total)}</dd>
-      </div>
-    </dl>
-  );
-}
-
 /**
  * Módulo 02 · Preparação da visita de PE: do contato com o cliente até o material da gravação
  * dos cartões pronto para a viagem. O estado vem de quem chama, que o grava no banco.
@@ -112,8 +91,6 @@ export function Modulo02({ project, estado, onChange, userName, emailCliente }: 
   const set = <K extends keyof Modulo02Estado>(k: K, patch: Partial<Modulo02Estado[K]>) =>
     onChange(e => ({ ...e, [k]: { ...e[k], ...patch } }));
   const verEmail = (abrir: () => void) => <button type="button" className="font-medium text-primary underline-offset-2 hover:underline" onClick={abrir}>Ver e-mail</button>;
-  const gp = project.manager?.full_name ?? userName;
-  const total = moeda(contaCustos(estado.custos).total);
 
   const contato = () => {
     const c = estado.contato;
@@ -153,71 +130,26 @@ export function Modulo02({ project, estado, onChange, userName, emailCliente }: 
 
   const custos = () => {
     const c = estado.custos;
-    const k = contaCustos(c);
     if (c.registradoEm) {
       const aprovado = !!estado.aprovacao.registradoEm;
       return (
         <div className="space-y-2">
-          <Registro texto={`Custos salvos em ${quando(c.registradoEm)} por ${c.por || userName} · `} rotulo="Alterar"
-            onDesfazer={aprovado ? undefined : () => set("custos", { registradoEm: null })}>
-            <b>{periodoViagem(c)}</b>{c.onfly && " · simulado na Onfly"}
-          </Registro>
-          <TabelaCustos c={c} />
-          {aprovado && <p className="text-[12px] text-muted-foreground">Aprovados pelo cliente. Para mudar os valores, desfaça a aprovação primeiro.</p>}
+          <Registro texto={`Custos levantados na Onfly em ${quando(c.registradoEm)} por ${c.por || userName}`}
+            onDesfazer={aprovado ? undefined : () => set("custos", { registradoEm: null })} />
+          {aprovado && <p className="text-[12px] text-muted-foreground">Aprovados pelo cliente. Para desfazer, desfaça a aprovação primeiro.</p>}
         </div>
       );
     }
-    const falta = faltandoCustos(c);
-    const datas = !!c.ida && !!c.volta && c.volta >= c.ida;
     return (
-      <div className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-[170px_170px_minmax(0,1fr)]">
-          <div><Label className="text-xs" htmlFor="pe-ida">Ida *</Label><Input id="pe-ida" type="date" className="mt-1.5 h-9" value={c.ida} onChange={ev => set("custos", { ida: ev.target.value })} /></div>
-          <div><Label className="text-xs" htmlFor="pe-volta">Volta *</Label><Input id="pe-volta" type="date" className="mt-1.5 h-9" min={c.ida || undefined} value={c.volta} onChange={ev => set("custos", { volta: ev.target.value })} /></div>
-          <div><Label className="text-xs" htmlFor="pe-viajantes">Quem viaja</Label><Input id="pe-viajantes" className="mt-1.5 h-9" placeholder={gp} value={c.viajantes} onChange={ev => set("custos", { viajantes: ev.target.value })} /></div>
+      <div className="space-y-3">
+        <Lembrete icone={<Plane className="h-4 w-4" />}>
+          <b>Simule na Onfly</b> o deslocamento (aéreo, rodoviário ou carro) e a hospedagem da viagem para a reunião de PE.
+          Guarde a simulação: ela vai anexada no e-mail de aprovação ao cliente, na próxima atividade.
+        </Lembrete>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button className="h-9" asChild><a href={ONFLY_URL} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-4 w-4" />Abrir a Onfly</a></Button>
+          <Button variant="outline" className="h-9" onClick={() => set("custos", { registradoEm: agora(), por: userName })}><Check className="mr-1.5 h-4 w-4" />Marcar como feito</Button>
         </div>
-
-        <div className="grid gap-3 lg:grid-cols-2">
-          {/* Deslocamento */}
-          <fieldset className="space-y-3 rounded-lg border border-border/60 p-3">
-            <legend className="px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Deslocamento</legend>
-            <div>
-              <p className="text-xs font-medium">Meio *</p>
-              <div className="mt-1.5"><Seg<MeioDeslocamento> label="Meio de deslocamento" value={c.meio} onChange={v => set("custos", { meio: v })}
-                options={(Object.keys(MEIO_LABEL) as MeioDeslocamento[]).map(v => ({ v, l: MEIO_LABEL[v] }))} /></div>
-            </div>
-            <CampoValor id="pe-desl" label="Valor total, ida e volta *" value={c.deslocamento} onChange={v => set("custos", { deslocamento: v })} />
-          </fieldset>
-          {/* Hospedagem */}
-          <fieldset className="space-y-3 rounded-lg border border-border/60 p-3">
-            <legend className="px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Hospedagem</legend>
-            {!datas ? <p className="text-[13px] text-muted-foreground">Informe a ida e a volta: as diárias são as noites entre as duas datas.</p>
-              : k.noites === 0 ? <p className="text-[13px] text-muted-foreground">Ida e volta no mesmo dia: sem hospedagem.</p>
-              : (
-                <div className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-                  <CampoValor id="pe-diaria" label={`Valor da diária * · ${k.noites} ${k.noites === 1 ? "diária" : "diárias"}`} value={c.diaria} onChange={v => set("custos", { diaria: v })} />
-                  <p className="pb-2 text-[13px]">= <b className="tabular-nums">{moeda(k.hospedagem)}</b></p>
-                </div>
-              )}
-          </fieldset>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_200px]">
-          <div><Label className="text-xs" htmlFor="pe-outros-desc">Outros custos (opcional)</Label><Input id="pe-outros-desc" className="mt-1.5 h-9" placeholder="Ex.: locação de carro, alimentação" value={c.outrosDescricao} onChange={ev => set("custos", { outrosDescricao: ev.target.value })} /></div>
-          <CampoValor id="pe-outros" label="Valor" value={c.outros} onChange={v => set("custos", { outros: v })} />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-muted/50 px-3.5 py-2.5">
-          <label htmlFor="pe-onfly" className="flex min-w-0 flex-1 basis-60 cursor-pointer items-center gap-2 text-[13px] font-medium">
-            <Checkbox id="pe-onfly" checked={c.onfly} onCheckedChange={v => set("custos", { onfly: v === true })} />
-            Valores simulados na Onfly <span className="font-normal text-muted-foreground">(quando possível)</span>
-          </label>
-          <p className="text-[13px]">Total estimado <b className="ml-1 text-lg tabular-nums text-primary">{moeda(k.total)}</b></p>
-        </div>
-
-        <Rodape falta={falta} dica="Tudo preenchido. Salve os custos para enviar ao cliente.">
-          <Button className="h-9" disabled={falta.length > 0} onClick={() => set("custos", { registradoEm: agora(), por: userName })}><Check className="mr-1.5 h-4 w-4" />Salvar custos</Button>
-        </Rodape>
       </div>
     );
   };
@@ -226,8 +158,8 @@ export function Modulo02({ project, estado, onChange, userName, emailCliente }: 
     const a = estado.aprovacao;
     if (a.registradoEm) {
       return (
-        <Registro texto={`Custos aprovados por ${a.aprovadoPor || "—"} em ${dataBr(a.aprovadoEm)} · total `} onDesfazer={() => set("aprovacao", { registradoEm: null })}>
-          <b>{total}</b>{a.enviadoEm && <> · {verEmail(() => setEmailCustos(true))}</>}
+        <Registro texto={`Custos aprovados por ${a.aprovadoPor || "—"} em ${dataBr(a.aprovadoEm)}`} onDesfazer={() => set("aprovacao", { registradoEm: null })}>
+          {a.enviadoEm && <> · {verEmail(() => setEmailCustos(true))}</>}
         </Registro>
       );
     }
@@ -242,7 +174,7 @@ export function Modulo02({ project, estado, onChange, userName, emailCliente }: 
           </Button>
           {a.enviadoEm
             ? <span className="text-[12px] text-amber-800 dark:text-amber-200">E-mail enviado em {quando(a.enviadoEm)} · aguardando a aprovação do cliente</span>
-            : <span className="text-[12px] text-muted-foreground">Total de <b className="font-semibold text-foreground">{total}</b> · copie e cole no Outlook</span>}
+            : <span className="text-[12px] text-muted-foreground">Anexe a simulação da Onfly · copie e cole no Outlook</span>}
         </div>
         <div className="rounded-lg border border-border/60 p-3">
           <p className="text-xs font-semibold">Aprovação do cliente</p>
@@ -269,19 +201,16 @@ export function Modulo02({ project, estado, onChange, userName, emailCliente }: 
       const det = [r.deslocamento.trim() && `deslocamento: ${r.deslocamento.trim()}`, r.hospedagem.trim() && `hospedagem: ${r.hospedagem.trim()}`].filter(Boolean).join(" · ");
       return <Registro texto={`Reservas feitas em ${quando(r.registradoEm)} por ${r.por || userName}${det ? ` · ${det}` : ""}`} onDesfazer={() => set("reservas", { registradoEm: null })} />;
     }
-    const k = contaCustos(estado.custos);
     return (
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-0 flex-1 basis-56">
           <Label className="text-xs" htmlFor="pe-res-desl">Deslocamento: localizador ou empresa (opcional)</Label>
-          <Input id="pe-res-desl" className="mt-1.5 h-9" placeholder={estado.custos.meio === "aereo" ? "Ex.: LATAM · localizador XKQ7PL" : "Ex.: Viação Catarinense"} value={r.deslocamento} onChange={ev => set("reservas", { deslocamento: ev.target.value })} />
+          <Input id="pe-res-desl" className="mt-1.5 h-9" placeholder="Ex.: LATAM · localizador XKQ7PL" value={r.deslocamento} onChange={ev => set("reservas", { deslocamento: ev.target.value })} />
         </div>
-        {k.noites > 0 && (
-          <div className="min-w-0 flex-1 basis-56">
-            <Label className="text-xs" htmlFor="pe-res-hosp">Hospedagem: hotel (opcional)</Label>
-            <Input id="pe-res-hosp" className="mt-1.5 h-9" placeholder="Ex.: Hotel Central · reserva 88213" value={r.hospedagem} onChange={ev => set("reservas", { hospedagem: ev.target.value })} />
-          </div>
-        )}
+        <div className="min-w-0 flex-1 basis-56">
+          <Label className="text-xs" htmlFor="pe-res-hosp">Hospedagem: hotel (opcional)</Label>
+          <Input id="pe-res-hosp" className="mt-1.5 h-9" placeholder="Ex.: Hotel Central · reserva 88213" value={r.hospedagem} onChange={ev => set("reservas", { hospedagem: ev.target.value })} />
+        </div>
         <Button className="h-9" onClick={() => set("reservas", { registradoEm: agora(), por: userName })}><Check className="mr-1.5 h-4 w-4" />Marcar como feito</Button>
       </div>
     );
@@ -440,7 +369,6 @@ export function Modulo02({ project, estado, onChange, userName, emailCliente }: 
     sit === "bloqueado" ? bloqueio02(id, estado)?.pill : sit === "aguardando" ? "Aguardando o cliente" : undefined;
 
   const para = (k: "aprovacao" | "financeiro") => (v: string) => set(k, { para: v });
-  const custosParaEmail = { ...estado.custos, viajantes: estado.custos.viajantes || gp };
 
   return (
     <>
@@ -452,20 +380,19 @@ export function Modulo02({ project, estado, onChange, userName, emailCliente }: 
       </ol>
       <VisitaPeEmailDialog open={emailCustos} onOpenChange={setEmailCustos}
         icone={<Plane className="h-5 w-5 text-primary" />} titulo="E-mail ao cliente: custos da visita de PE"
-        descricao="Envie ao cliente os custos estimados de deslocamento e hospedagem e peça a aprovação. Confira a prévia e abra no Outlook já com destinatário e assunto."
+        descricao="Envie ao cliente os custos estimados de deslocamento e hospedagem, simulados na Onfly, e peça a aprovação. Confira a prévia e abra no Outlook já com destinatário e assunto."
         paraLabel="E-mail do cliente" paraPlaceholder="contato@cliente.com.br" para={estado.aprovacao.para} onPara={para("aprovacao")}
-        linhas={[...linhasVisita(project, { ...estado, custos: custosParaEmail }), { label: "Total estimado", valor: total }]}
-        assunto={assuntoCustos(project)} html={emailHtmlCustos(project, { ...estado, custos: custosParaEmail }, userName)}
-        texto={emailTextoCustos(project, { ...estado, custos: custosParaEmail }, userName)}
+        linhas={linhasVisita(project, estado)}
+        assunto={assuntoCustos(project)} html={emailHtmlCustos(project, estado, userName)} texto={emailTextoCustos(project, estado, userName)}
+        anexos="Anexe a simulação dos custos feita na Onfly (PDF ou print) no Outlook antes de enviar."
         onCopiado={() => onChange(e => ({ ...e, aprovacao: { ...e.aprovacao, enviadoEm: e.aprovacao.enviadoEm ?? agora() } }))} />
       <VisitaPeEmailDialog open={emailFinanceiro} onOpenChange={setEmailFinanceiro}
         icone={<Send className="h-5 w-5 text-primary" />} titulo="E-mail ao Financeiro: comprovantes da viagem"
-        descricao="Encaminhe ao Financeiro da Transdata os comprovantes das reservas, com os custos aprovados pelo cliente."
+        descricao="Encaminhe ao Financeiro da Transdata os comprovantes das reservas da viagem, com a aprovação do cliente."
         paraLabel="E-mail do Financeiro" paraPlaceholder="financeiro@itstransdata.com" para={estado.financeiro.para} onPara={para("financeiro")}
-        linhas={[{ label: "Período da viagem", valor: estado.custos.ida ? periodoViagem(estado.custos) : "—" }, { label: "Total aprovado", valor: total },
-          { label: "Reserva do deslocamento", valor: estado.reservas.deslocamento.trim() || "—" }, { label: "Reserva da hospedagem", valor: estado.reservas.hospedagem.trim() || "—" }]}
-        assunto={assuntoFinanceiro(project)} html={emailHtmlFinanceiro(project, { ...estado, custos: custosParaEmail }, userName)}
-        texto={emailTextoFinanceiro(project, { ...estado, custos: custosParaEmail }, userName)}
+        linhas={[{ label: "Reserva do deslocamento", valor: estado.reservas.deslocamento.trim() || "—" }, { label: "Reserva da hospedagem", valor: estado.reservas.hospedagem.trim() || "—" },
+          { label: "Aprovação dos custos", valor: aprovacaoTexto(estado) }]}
+        assunto={assuntoFinanceiro(project)} html={emailHtmlFinanceiro(project, estado, userName)} texto={emailTextoFinanceiro(project, estado, userName)}
         anexos="Anexe os comprovantes das reservas (passagens e hotel) no Outlook antes de enviar."
         onCopiado={() => onChange(e => ({ ...e, financeiro: { ...e.financeiro, enviadoEm: e.financeiro.enviadoEm ?? agora(), por: e.financeiro.por || userName } }))} />
       {/* baixar o PDF registra o termo; baixar de novo mantém a 1ª data */}
