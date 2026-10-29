@@ -31,3 +31,6 @@ scripts/cobertura/.cache
 
 # Pacote do sistema atual da Gestão Operacional (material de trabalho, com dados reais): só local
 /Grandes Operacoes/
+# Arquivos temporários dos mockups locais (podem ter dados reais): nunca commitar
+/mock-*.html
+/src/__mock_*

@@ -27,6 +27,8 @@ import Cronograma from "./pages/Cronograma";
 import Gerenciamento from "./pages/Gerenciamento";
 import GestaoOperacional from "./pages/GestaoOperacional";
 import AreaOperacional from "./pages/AreaOperacional";
+import GrandesOperacoes from "./pages/GrandesOperacoes";
+import GrandesOperacoesPainel from "./pages/GrandesOperacoesPainel";
 import VisaoComercial from "./pages/VisaoComercial";
 import TeamMembers from "./pages/TeamMembers";
 import Products from "./pages/Products";
@@ -85,6 +87,10 @@ function AppRoutes() {
           <Route path="/implantacao/implantador" element={<PermissionRoute module="area_implantador"><AreaImplantador /></PermissionRoute>} />
           {/* em desenvolvimento: só Super Admin; um quadrante por área (src/lib/gestaoOperacional.ts) */}
           <Route path="/gestao-operacional" element={<SuperAdminRoute><GestaoOperacional /></SuperAdminRoute>} />
+          {/* Grandes Operações: o Hub trazido do sistema do departamento */}
+          <Route path="/gestao-operacional/grandes-operacoes" element={<SuperAdminRoute><GrandesOperacoes /></SuperAdminRoute>} />
+          <Route path="/gestao-operacional/grandes-operacoes/cliente/:cli" element={<SuperAdminRoute><GrandesOperacoesPainel /></SuperAdminRoute>} />
+          <Route path="/gestao-operacional/grandes-operacoes/projeto/:proj" element={<SuperAdminRoute><GrandesOperacoesPainel /></SuperAdminRoute>} />
           <Route path="/gestao-operacional/:area" element={<SuperAdminRoute><AreaOperacional /></SuperAdminRoute>} />
 
           <Route path="/suporte" element={<Suporte />} />
