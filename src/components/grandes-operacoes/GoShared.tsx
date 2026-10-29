@@ -2,8 +2,10 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SITUACAO_NOME, STATUS_NOME, type GoSituacao, type GoStats, type GoStatus } from "@/lib/grandesOperacoes/dados";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SITUACAO_NOME, STATUS_NOME, STATUS_ORDEM, type GoSituacao, type GoStats, type GoStatus } from "@/lib/grandesOperacoes/dados";
 import { COR_STATUS } from "@/lib/grandesOperacoes/ui";
+import { cn } from "@/lib/utils";
 
 // Peças comuns das telas do Hub de Grandes Operações.
 
@@ -20,6 +22,25 @@ export function RelTag({ pred, succ, curto = false }: { pred: boolean; succ: boo
 
 export function StatusPill({ status }: { status: GoStatus }) {
   return <span className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${COR_STATUS[status].pill}`}>{STATUS_NOME[status]}</span>;
+}
+
+/** O selo de status que abre a lista dos quatro status (para quem pode editar). */
+export function StatusSelect({ status, onChange, codigo, className }: { status: GoStatus; onChange: (s: GoStatus) => void; codigo: string; className?: string }) {
+  return (
+    <Select value={status} onValueChange={v => onChange(v as GoStatus)}>
+      <SelectTrigger aria-label={`Status de ${codigo}`} onClick={e => e.stopPropagation()}
+        className={cn("h-7 w-auto shrink-0 gap-1.5 rounded-full border-0 px-2.5 text-[11px] font-semibold shadow-none focus:ring-2 focus:ring-ring focus:ring-offset-0 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:opacity-70", COR_STATUS[status].pill, className)}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent onClick={e => e.stopPropagation()}>
+        {STATUS_ORDEM.map(s => (
+          <SelectItem key={s} value={s} className="text-[13px]">
+            <span className="inline-flex items-center gap-2"><Dot status={s} />{STATUS_NOME[s]}</span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 }
 
 /** Selo da situação do projeto (só aparece quando não é "ativo"). */
@@ -40,8 +61,8 @@ export function Barra({ s, className = "h-1.5" }: { s: GoStats; className?: stri
   );
 }
 
-/** Cabeçalho das telas do Hub: volta, sobretítulo, selo de desenvolvimento, título e ações. */
-export function GoCabecalho({ voltar, titulo, sub, acoes }: { voltar: { to: string; label: string }; titulo: string; sub: ReactNode; acoes?: ReactNode }) {
+/** Cabeçalho das telas do Hub: volta, sobretítulo, selo de desenvolvimento, título, ações e o que vem embaixo (`meta`). */
+export function GoCabecalho({ voltar, titulo, sub, acoes, meta }: { voltar: { to: string; label: string }; titulo: string; sub: ReactNode; acoes?: ReactNode; meta?: ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
       <Button variant="ghost" size="sm" className="-ml-2 h-8 w-fit text-muted-foreground" asChild>
@@ -55,6 +76,7 @@ export function GoCabecalho({ voltar, titulo, sub, acoes }: { voltar: { to: stri
           </div>
           <h1 className="text-2xl font-bold tracking-tight">{titulo}</h1>
           <p className="text-sm text-muted-foreground">{sub}</p>
+          {meta && <div className="mt-2 flex flex-wrap items-center gap-1.5">{meta}</div>}
         </div>
         {acoes && <div className="ml-auto flex flex-wrap items-center gap-2">{acoes}</div>}
       </div>

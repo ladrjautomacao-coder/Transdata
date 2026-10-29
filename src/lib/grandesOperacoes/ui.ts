@@ -6,11 +6,16 @@ export const GO_BASE = "/gestao-operacional/grandes-operacoes";
 export const urlProjeto = (id: number) => `${GO_BASE}/projeto/${id}`;
 export const urlCliente = (id: number | "todos") => `${GO_BASE}/cliente/${id}`;
 
-export const COR_STATUS: Record<GoStatus, { dot: string; pill: string; texto: string; barra: string }> = {
-  concluido: { dot: "bg-emerald-500", pill: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", texto: "text-emerald-700 dark:text-emerald-300", barra: "bg-emerald-500" },
-  andamento: { dot: "bg-sky-500", pill: "bg-sky-500/15 text-sky-700 dark:text-sky-300", texto: "text-sky-700 dark:text-sky-300", barra: "bg-sky-500" },
-  espera: { dot: "bg-amber-500", pill: "bg-amber-500/15 text-amber-800 dark:text-amber-200", texto: "text-amber-800 dark:text-amber-200", barra: "bg-amber-400" },
-  removido: { dot: "bg-muted-foreground/50", pill: "bg-muted text-muted-foreground line-through", texto: "text-muted-foreground", barra: "bg-muted-foreground/40" },
+/** `topo`: borda de cima da coluna do quadro; `alvo`: a coluna quando um card é arrastado sobre ela. */
+export const COR_STATUS: Record<GoStatus, { dot: string; pill: string; texto: string; barra: string; topo: string; alvo: string }> = {
+  concluido: { dot: "bg-emerald-500", pill: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", texto: "text-emerald-700 dark:text-emerald-300", barra: "bg-emerald-500",
+    topo: "border-t-emerald-500", alvo: "bg-emerald-500/10 ring-2 ring-emerald-500/40" },
+  andamento: { dot: "bg-sky-500", pill: "bg-sky-500/15 text-sky-700 dark:text-sky-300", texto: "text-sky-700 dark:text-sky-300", barra: "bg-sky-500",
+    topo: "border-t-sky-500", alvo: "bg-sky-500/10 ring-2 ring-sky-500/40" },
+  espera: { dot: "bg-amber-500", pill: "bg-amber-500/15 text-amber-800 dark:text-amber-200", texto: "text-amber-800 dark:text-amber-200", barra: "bg-amber-400",
+    topo: "border-t-amber-500", alvo: "bg-amber-500/10 ring-2 ring-amber-500/40" },
+  removido: { dot: "bg-muted-foreground/50", pill: "bg-muted text-muted-foreground line-through", texto: "text-muted-foreground", barra: "bg-muted-foreground/40",
+    topo: "border-t-muted-foreground/40", alvo: "bg-destructive/10 ring-2 ring-destructive/40" },
 };
 
 /** Destaque de uma linha: selecionada, predecessora (roxo) ou sucessora (laranja) da selecionada. */

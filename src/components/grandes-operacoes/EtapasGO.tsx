@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
-import { etapaStatus, etapasOf, stats, subLevel, type GoAtividade, type GoDados, type GoRel } from "@/lib/grandesOperacoes/dados";
-import { Barra, RelTag, StatusPill } from "./GoShared";
+import { etapaStatus, etapasOf, stats, subLevel, type GoAtividade, type GoDados, type GoRel, type GoStatus } from "@/lib/grandesOperacoes/dados";
+import { Barra, RelTag, StatusPill, StatusSelect } from "./GoShared";
 
 /**
  * Visão Etapas: projeto → etapa → atividades, que abrem e fecham. Subatividades (1.4.6.1) vêm
- * logo após a mãe, com recuo; cada linha mostra a última observação.
+ * logo após a mãe, com recuo; cada linha mostra a última observação. Quem pode editar troca o
+ * status no selo de cada linha.
  */
-export function EtapasGO({ dados, visiveis, act, onSelect, umProjeto, rel }: {
+export function EtapasGO({ dados, visiveis, act, onSelect, umProjeto, rel, podeEditar, onStatus }: {
   dados: GoDados;
   visiveis: GoAtividade[];
   act: number | null;
@@ -15,6 +16,8 @@ export function EtapasGO({ dados, visiveis, act, onSelect, umProjeto, rel }: {
   /** Painel de um projeto só: ele já começa aberto. */
   umProjeto: boolean;
   rel: GoRel;
+  podeEditar: boolean;
+  onStatus: (id: number, status: GoStatus) => void;
 }) {
   // o que o GP abriu ou fechou fica como está ao trocar de filtro
   const [abertoProj, setAbertoProj] = useState<Record<number, boolean>>({});
@@ -62,9 +65,9 @@ export function EtapasGO({ dados, visiveis, act, onSelect, umProjeto, rel }: {
                             const lv = subLevel(a.codigo), ultima = a.observacoes[a.observacoes.length - 1];
                             const isP = rel.pred.has(a.id), isS = rel.succ.has(a.id), sel = act === a.id;
                             return (
-                              <li key={a.id}>
+                              <li key={a.id} className={`flex items-start transition-colors ${sel ? "bg-primary/[0.07]" : isP ? "bg-primary/[0.05]" : isS ? "bg-orange-500/[0.06]" : "hover:bg-muted/40"}`}>
                                 <button type="button" onClick={() => onSelect(a.id)}
-                                  className={`grid w-full grid-cols-[52px_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 py-2 pr-3 text-left transition-colors md:grid-cols-[52px_minmax(0,1fr)_minmax(0,160px)_auto] ${sel ? "bg-primary/[0.07]" : isP ? "bg-primary/[0.05]" : isS ? "bg-orange-500/[0.06]" : "hover:bg-muted/40"} ${a.status === "removido" || a.status === "concluido" ? "text-muted-foreground" : ""}`}
+                                  className={`grid min-w-0 flex-1 grid-cols-[52px_minmax(0,1fr)] items-start gap-x-3 gap-y-1 py-2 pr-3 text-left md:grid-cols-[52px_minmax(0,1fr)_minmax(0,160px)] ${a.status === "removido" || a.status === "concluido" ? "text-muted-foreground" : ""}`}
                                   style={{ paddingLeft: 12 + lv * 20 }}>
                                   <span className="pt-px font-mono text-[11.5px] text-muted-foreground">{a.codigo}</span>
                                   <span className="min-w-0">
@@ -72,8 +75,10 @@ export function EtapasGO({ dados, visiveis, act, onSelect, umProjeto, rel }: {
                                     {ultima && <small className="mt-0.5 block truncate text-[11.5px] text-muted-foreground" title={ultima.texto}>{ultima.texto}</small>}
                                   </span>
                                   <span className="hidden truncate text-[12px] text-muted-foreground md:block">{a.responsavel}</span>
-                                  <StatusPill status={a.status} />
                                 </button>
+                                <span className="shrink-0 py-1.5 pr-3">
+                                  {podeEditar ? <StatusSelect status={a.status} codigo={a.codigo} onChange={s => onStatus(a.id, s)} className="w-[140px] justify-between" /> : <span className="inline-block pt-0.5"><StatusPill status={a.status} /></span>}
+                                </span>
                               </li>
                             );
                           })}

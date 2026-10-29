@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  etapaStatus, hubGrupos, indexar, matchResp, openUpstream, relDe, respOptions, stats, FILTROS_HUB_PADRAO,
+  camposParaStatus, comAtividade, etapaStatus, hubGrupos, indexar, matchResp, openUpstream, podeComecar, relDe, respOptions, stats, FILTROS_HUB_PADRAO,
   type GoAtividade, type GoCliente, type GoProjeto,
 } from "@/lib/grandesOperacoes/dados";
 import { calcularPrevisao, chaveCodigo, lerDuracao, paraTexto, somarUteis, temBarra, voltarUteis, lerData, type ResultadoPrevisao } from "@/lib/grandesOperacoes/previsao";
@@ -104,5 +104,21 @@ describe("consultas do Hub e do painel", () => {
     expect(hubGrupos(d, { ...FILTROS_HUB_PADRAO, sit: "encerrado" }).grupos.map(g => g.ps.map(p => p.id))).toEqual([[11]]);
     expect(hubGrupos(d, { ...FILTROS_HUB_PADRAO, q: "validacao" }).ps).toEqual([]);
     expect(hubGrupos(d, { ...FILTROS_HUB_PADRAO, q: "recife" }).ps.map(p => p.id)).toEqual([10]);
+  });
+});
+
+describe("troca de status", () => {
+  it("concluir sem Realizado em grava a data de hoje; os outros status mantêm a data", () => {
+    expect(camposParaStatus({ status: "andamento", data_realizada: null }, "concluido", "2026-10-29")).toEqual({ status: "concluido", data_realizada: "2026-10-29" });
+    expect(camposParaStatus({ status: "espera", data_realizada: "2026-10-01" }, "concluido", "2026-10-29")).toEqual({ status: "concluido", data_realizada: "2026-10-01" });
+    expect(camposParaStatus({ status: "concluido", data_realizada: "2026-10-01" }, "andamento", "2026-10-29")).toEqual({ status: "andamento", data_realizada: "2026-10-01" });
+  });
+  it("a tela troca o status e recalcula o que pode começar", () => {
+    const d = indexar([], [proj({ id: 1 })], [], [atv({ id: 1, codigo: "1.1.1", status: "andamento" }), atv({ id: 2, codigo: "1.1.2", predecessoras: [1] })]);
+    expect(podeComecar(d, d.act.get(2)!)).toBe(false);
+    const n = comAtividade(d, 1, { status: "concluido", data_realizada: "2026-10-29" });
+    expect(n.act.get(1)!.status).toBe("concluido");
+    expect(podeComecar(n, n.act.get(2)!)).toBe(true);
+    expect(d.act.get(1)!.status).toBe("andamento");
   });
 });

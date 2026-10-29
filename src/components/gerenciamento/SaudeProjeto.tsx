@@ -1,17 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, ArrowRight, Check, CheckCircle2, Clock3, Gauge, Lock, Minus, PartyPopper, TrendingUp, X } from "lucide-react";
+import { ArrowRight, Check, CheckCircle2, Clock3, Gauge, Lock, Minus, X } from "lucide-react";
+import { Velocimetro } from "@/components/Velocimetro";
 import { RESPONSAVEL_LABEL, type Atividade, type SituacaoAtividade } from "@/lib/gerenciamento";
+import { NIVEL, nivelDe } from "@/lib/nivelMedidor";
 import { cn } from "@/lib/utils";
-
-/** Faixas do medidor: até 40% atenção, até 70% em andamento, depois quase lá; 100% tudo feito. */
-type Nivel = "atencao" | "andamento" | "quase" | "concluido";
-const nivelDe = (pct: number): Nivel => (pct >= 100 ? "concluido" : pct >= 70 ? "quase" : pct >= 40 ? "andamento" : "atencao");
-const NIVEL: Record<Nivel, { titulo: string; arco: string; faixa: string; caixa: string; icone: typeof AlertTriangle }> = {
-  atencao: { titulo: "Atenção", arco: "stroke-red-500", faixa: "bg-red-500", caixa: "border-red-500/40 bg-red-500/10 text-red-800 dark:text-red-200", icone: AlertTriangle },
-  andamento: { titulo: "Em andamento", arco: "stroke-amber-500", faixa: "bg-amber-500", caixa: "border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-100", icone: TrendingUp },
-  quase: { titulo: "Quase lá", arco: "stroke-emerald-500", faixa: "bg-emerald-500", caixa: "border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200", icone: TrendingUp },
-  concluido: { titulo: "Tudo feito", arco: "stroke-emerald-500", faixa: "bg-emerald-500", caixa: "border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200", icone: PartyPopper },
-};
 
 /**
  * Como cada atividade aparece na trilha e na contagem. `anel` e `caixa`: o destaque quando o
@@ -51,44 +43,6 @@ function conta(modulos: ModuloSaude[]) {
 }
 /** A próxima atividade do módulo: a primeira que se aplica e ainda não está feita. */
 const proximaDe = (m: ModuloSaude) => m.atividades.find(x => x.sit !== "naoaplica" && x.sit !== "feito");
-
-// Medidor em meio círculo: 0% à esquerda, 100% à direita
-const CX = 130, CY = 128, R = 100;
-const ponto = (pct: number, r = R) => {
-  const a = Math.PI * (1 - pct / 100);
-  return [CX + r * Math.cos(a), CY - r * Math.sin(a)] as const;
-};
-const arco = (de: number, ate: number) => {
-  const [x0, y0] = ponto(de), [x1, y1] = ponto(ate);
-  return `M${x0.toFixed(2)},${y0.toFixed(2)} A${R},${R} 0 0 1 ${x1.toFixed(2)},${y1.toFixed(2)}`;
-};
-
-function Velocimetro({ pct, nivel }: { pct: number; nivel: Nivel }) {
-  // o ponteiro sobe do zero ao abrir (sem animação para quem prefere menos movimento)
-  const [mostrado, setMostrado] = useState(0);
-  useEffect(() => { const t = requestAnimationFrame(() => setMostrado(pct)); return () => cancelAnimationFrame(t); }, [pct]);
-  const angulo = -90 + (mostrado / 100) * 180;
-  return (
-    <svg viewBox="0 0 260 150" className="w-full max-w-[320px]" role="img" aria-label={`Saúde do projeto: ${pct}% das atividades feitas`}>
-      {/* faixas de fundo: atenção, em andamento, quase lá */}
-      <path d={arco(0, 40)} className="fill-none stroke-red-500/20" strokeWidth={22} />
-      <path d={arco(40, 70)} className="fill-none stroke-amber-500/25" strokeWidth={22} />
-      <path d={arco(70, 100)} className="fill-none stroke-emerald-500/25" strokeWidth={22} />
-      {pct > 0 && <path d={arco(0, pct)} className={`fill-none ${NIVEL[nivel].arco}`} strokeWidth={22} strokeLinecap="round" />}
-      {[0, 25, 50, 75, 100].map(t => {
-        const [x0, y0] = ponto(t, R - 17), [x1, y1] = ponto(t, R - 11);
-        return <line key={t} x1={x0} y1={y0} x2={x1} y2={y1} className="stroke-muted-foreground/50" strokeWidth={1.5} />;
-      })}
-      <text x={CX - R} y={CY + 18} textAnchor="middle" className="fill-muted-foreground text-[11px]">0</text>
-      <text x={CX + R} y={CY + 18} textAnchor="middle" className="fill-muted-foreground text-[11px]">100</text>
-      <g style={{ transform: `rotate(${angulo}deg)`, transformOrigin: `${CX}px ${CY}px`, transition: "transform 900ms cubic-bezier(.2,.8,.2,1)" }} className="motion-reduce:!transition-none">
-        <path d={`M${CX - 4},${CY} L${CX},${CY - R + 26} L${CX + 4},${CY} Z`} className="fill-foreground" />
-      </g>
-      <circle cx={CX} cy={CY} r={9} className="fill-foreground" />
-      <circle cx={CX} cy={CY} r={3.5} className="fill-background" />
-    </svg>
-  );
-}
 
 const cartao = (ativo: boolean) => `flex flex-col gap-2 rounded-xl border p-3 text-left transition-colors ${ativo
   ? "border-primary bg-primary/[0.06] ring-1 ring-primary hover:bg-primary/[0.1]"
@@ -252,7 +206,7 @@ export function SaudeProjeto({ modulos, onAbrir }: {
       <div className="grid gap-6 p-5 md:grid-cols-[minmax(0,320px)_minmax(0,1fr)] md:items-center">
         {/* Medidor */}
         <div className="flex flex-col items-center">
-          <Velocimetro pct={pct} nivel={nivel} />
+          <Velocimetro pct={pct} nivel={nivel} rotulo={`Saúde do projeto: ${pct}% das atividades feitas`} />
           <p className="-mt-3 text-5xl font-bold leading-none tabular-nums">{pct}<span className="text-2xl">%</span></p>
           <p className="mt-1.5 text-sm text-muted-foreground"><b className="text-foreground">{feitas}</b> de <b className="text-foreground">{total}</b> atividades feitas</p>
         </div>

@@ -1,21 +1,25 @@
-import { useEffect, useRef, useState } from "react";
-import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Activity, CalendarRange, CheckCircle2, Columns3, Hourglass, ListChecks, ListTree, Search, TrendingUp } from "lucide-react";
+import { CalendarRange, Columns3, Eye, ListTree, Pencil, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Kpi } from "@/components/agendamento/AgendaShared";
 import { DetalheGO } from "@/components/grandes-operacoes/DetalheGO";
 import { EtapasGO } from "@/components/grandes-operacoes/EtapasGO";
 import { GanttGO } from "@/components/grandes-operacoes/GanttGO";
-import { Barra, GoCabecalho, GoErro, SituacaoPill } from "@/components/grandes-operacoes/GoShared";
+import { GoCabecalho, GoErro, SituacaoPill } from "@/components/grandes-operacoes/GoShared";
+import { LateralGO } from "@/components/grandes-operacoes/LateralGO";
 import { QuadroGO } from "@/components/grandes-operacoes/QuadroGO";
+import { SaudeGO } from "@/components/grandes-operacoes/SaudeGO";
 import { useGoDados } from "@/components/grandes-operacoes/useGoDados";
+import { errorMessage } from "@/lib/implantationScheduling";
 import {
-  SITUACAO_NOME, atvsDe, matchQ, matchResp, nomeCurto, projsDoCliente, relDe, respOptions, resumo, stats,
+  STATUS_NOME, atvsDe, camposParaStatus, comAtividade, fmtD, gravarStatus, hojeTexto, matchQ, matchResp, nomeCurto, predsAbertas,
+  projsDoCliente, relDe, respOptions, type GoCamposStatus, type GoStatus, type ResultadoStatus,
 } from "@/lib/grandesOperacoes/dados";
-import { GO_BASE, urlCliente, urlProjeto } from "@/lib/grandesOperacoes/ui";
+import { calcularPrevisao } from "@/lib/grandesOperacoes/previsao";
+import { GO_BASE, urlCliente } from "@/lib/grandesOperacoes/ui";
 
 type Visao = "quadro" | "etapas" | "gantt";
 const VISAO_KEY = "go-visao";
@@ -26,22 +30,25 @@ const lerVisao = (): Visao => { try { const v = localStorage.getItem(VISAO_KEY);
 
 /**
  * Painel de acompanhamento do Hub de Grandes Operações: um projeto (…/projeto/<id>) ou todos os
- * projetos de um cliente (…/cliente/<id>, "todos" = todos os clientes), nas visões Quadro,
- * Etapas e Gantt, com os detalhes da atividade selecionada. Somente leitura nesta etapa.
+ * projetos de um cliente (…/cliente/<id>, "todos" = todos os clientes). No desenho do
+ * Gerenciamento: projetos na lateral, a saúde com o medidor e as trilhas das etapas, e as visões
+ * Quadro, Etapas e Gantt. Quem pode editar troca o status (arrastando no quadro ou no selo).
  */
 export default function GrandesOperacoesPainel() {
   const { cli: cliParam, proj: projParam } = useParams();
   const navigate = useNavigate();
-  const { dados, erro, recarregar } = useGoDados();
+  const { dados, erro, recarregar, podeEditar, atualizar } = useGoDados();
   const [visao, setVisao] = useState<Visao>(lerVisao);
   const [q, setQ] = useState("");
   const [resp, setResp] = useState("all");
   const [act, setAct] = useState<number | null>(null);
   const [etapa, setEtapa] = useState<number | null>(null);
-  const detalheRef = useRef<HTMLElement>(null);
   useEffect(() => { try { localStorage.setItem(VISAO_KEY, visao); } catch { /* ignore */ } }, [visao]);
   // trocou de cliente ou de projeto: a seleção recomeça
   useEffect(() => { setAct(null); setEtapa(null); window.scrollTo(0, 0); }, [cliParam, projParam]);
+  const fechar = useCallback(() => setAct(null), []);
+  // a previsão é calculada sobre todas as atividades, como no original
+  const previsao = useMemo(() => (dados ? calcularPrevisao(dados.atividades, dados.projetos, hojeTexto()) : {}), [dados]);
 
   const proj = projParam && dados ? dados.proj.get(Number(projParam)) : undefined;
   const cliId: number | "todos" = proj ? proj.cliente_id : !cliParam || cliParam === "todos" ? "todos" : Number(cliParam);
@@ -50,30 +57,31 @@ export default function GrandesOperacoesPainel() {
   useEffect(() => { if (naoAchou) toast.error(projParam ? `Projeto ${projParam} não encontrado` : `Cliente ${cliParam} não encontrado`); }, [naoAchou, projParam, cliParam]);
   if (naoAchou) return <Navigate to={GO_BASE} replace />;
 
-  const selecionar = (id: number | null) => {
-    setAct(cur => (cur === id ? null : id));
-    // detalhe fora da tela: rola até ele
-    setTimeout(() => {
-      const d = detalheRef.current;
-      if (id != null && d && d.getBoundingClientRect().top > window.innerHeight - 120) d.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 30);
-  };
-
   const pc = proj ? dados?.cli.get(proj.cliente_id) : undefined;
   const titulo = proj ? nomeCurto(proj) : cli ? cli.nome : "Todos os projetos";
-  const sub = proj ? `${pc ? `${pc.nome}${pc.local ? ` · ${pc.local}` : ""} · ` : ""}Painel de acompanhamento`
-    : cli ? `${cli.local ? `${cli.local} · ` : ""}Todos os projetos do cliente` : "Painel de acompanhamento";
-  const cabecalho = <GoCabecalho voltar={{ to: GO_BASE, label: "Hub de Grandes Operações" }} titulo={dados ? titulo : "Grandes Operações"} sub={dados ? sub : "Carregando…"} />;
+  const sub = proj ? [proj.nome !== titulo && proj.nome, pc?.nome, pc?.local].filter(Boolean).join(" · ")
+    : cli ? `${cli.local ? `${cli.local} · ` : ""}Todos os projetos do cliente` : "Painel de acompanhamento de todos os clientes";
+  const meta = dados && (
+    <>
+      {proj && <SituacaoPill situacao={proj.situacao} />}
+      {proj?.responsaveis.map(r => <span key={r} className="rounded-full border border-border/70 bg-card px-2 py-0.5 text-[11px] font-medium">{r}</span>)}
+      {podeEditar
+        ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300"><Pencil className="h-3 w-3" />Você pode mudar o status</span>
+        : <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground"><Eye className="h-3 w-3" />Somente leitura</span>}
+    </>
+  );
+  const cabecalho = <GoCabecalho voltar={{ to: GO_BASE, label: "Hub de Grandes Operações" }} titulo={dados ? titulo : "Grandes Operações"} sub={dados ? sub : "Carregando…"} meta={meta} />;
 
   if (!dados) {
     return (
       <div className="flex flex-col gap-5">
         {cabecalho}
-        {erro ? <GoErro erro={erro} onTentar={recarregar} /> : <>
-          <Skeleton className="h-24 rounded-xl" />
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">{[0, 1, 2, 3, 4].map(i => <Skeleton key={i} className="h-[88px] rounded-xl" />)}</div>
-          <Skeleton className="h-96 rounded-xl" />
-        </>}
+        {erro ? <GoErro erro={erro} onTentar={recarregar} /> : (
+          <div className="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
+            <div className="flex flex-col gap-2">{[0, 1, 2, 3].map(i => <Skeleton key={i} className="h-[76px] rounded-xl" />)}</div>
+            <div className="flex flex-col gap-4"><Skeleton className="h-80 rounded-2xl" /><Skeleton className="h-14 rounded-xl" /><Skeleton className="h-96 rounded-xl" /></div>
+          </div>
+        )}
       </div>
     );
   }
@@ -83,93 +91,91 @@ export default function GrandesOperacoesPainel() {
   const opcoesResp = respOptions(dados, proj ? [proj] : projsEscopo);
   const respSel = opcoesResp.includes(resp) ? resp : "all";
   const visiveis = escopo.filter(a => matchResp(a, respSel) && matchQ(dados, a, q.trim()));
-  const s = stats(visiveis);
   const rel = relDe(dados, act);
-  const nota = [(respSel !== "all" || q.trim()) && "Filtro ativo.", s.removed > 0 && `${s.removed} ${s.removed > 1 ? "atividades removidas não entram" : "atividade removida não entra"} na conta.`].filter(Boolean).join(" ");
+  const filtrando = respSel !== "all" || !!q.trim();
 
-  // cartões de cima: "Todos de <cliente>" + os projetos do cliente
-  const cartoes = [
-    { key: "todos", to: urlCliente(cliId), label: cliId === "todos" ? "Todos os projetos" : `Todos de ${cli?.nome ?? "cliente"}`, title: "", on: !proj, s: stats(atvsDe(dados, projsEscopo.map(p => p.id))), sit: null },
-    ...projsEscopo.map(p => ({ key: String(p.id), to: urlProjeto(p.id), label: nomeCurto(p), title: p.nome, on: proj?.id === p.id, s: stats(atvsDe(dados, [p.id])), sit: p.situacao })),
-  ];
+  /** Grava "de → para" (a tela já mostra o novo status); dá para desfazer pelo aviso. */
+  const trocar = (id: number, codigo: string, de: GoCamposStatus, para: GoCamposStatus, aviso?: { texto: string; atencao: boolean }, desfazivel = true) => {
+    atualizar(d => comAtividade(d, id, para));
+    gravarStatus(id, de, para).then(r => {
+      if (r.ok) {
+        atualizar(d => comAtividade(d, id, r.campos));
+        if (!desfazivel) { toast.success(`Desfeito: ${codigo} voltou para ${STATUS_NOME[para.status]}`); return; }
+        const opcoes = { description: aviso?.texto, action: { label: "Desfazer", onClick: () => trocar(id, codigo, { status: r.campos.status, data_realizada: r.campos.data_realizada }, de, undefined, false) } };
+        if (aviso?.atencao) toast.warning(`${codigo} · ${STATUS_NOME[para.status]}`, opcoes); else toast.success(`${codigo} · ${STATUS_NOME[para.status]}`, opcoes);
+        return;
+      }
+      // sem strictNullChecks o `ok` não separa os dois lados sozinho
+      const falha = r as Extract<ResultadoStatus, { ok: false }>;
+      atualizar(d => comAtividade(d, id, falha.atual ?? de));
+      if (falha.motivo === "conflito") {
+        toast.error("Outra pessoa mudou esta atividade antes. Sua alteração não foi gravada.", {
+          description: falha.atual ? `${codigo} está ${STATUS_NOME[falha.atual.status]} agora. Confira e refaça se ainda quiser.` : `${codigo} não existe mais.`,
+        });
+      } else toast.error("O banco não aceitou a mudança: seu acesso não permite editar o Hub.");
+    }).catch(err => {
+      atualizar(d => comAtividade(d, id, de));
+      toast.error(`Não foi possível mudar o status de ${codigo}.`, { description: errorMessage(err) });
+    });
+  };
+  const mudarStatus = (id: number, status: GoStatus) => {
+    const a = dados.act.get(id);
+    if (!a || a.status === status || !podeEditar) return;
+    const de: GoCamposStatus = { status: a.status, data_realizada: a.data_realizada }, para = camposParaStatus(de, status);
+    const abertas = status === "concluido" ? predsAbertas(dados, a) : [];
+    const aviso = abertas.length ? { texto: `Concluída antes de ${abertas.map(p => p.codigo).join(", ")}, que vem antes. Confira a ligação.`, atencao: true }
+      : status === "removido" ? { texto: "Ela sai da conta do progresso.", atencao: false }
+      : para.data_realizada !== de.data_realizada ? { texto: `Realizado em ${fmtD(para.data_realizada)}.`, atencao: false } : undefined;
+    trocar(id, a.codigo, de, para, aviso);
+  };
+  const selecionar = (id: number) => setAct(cur => (cur === id ? null : id));
 
   return (
     <div className="flex flex-col gap-5">
       {cabecalho}
 
-      {/* cliente e projetos */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2 text-[13px]">
-          <span className="text-muted-foreground">Cliente</span>
-          <Select value={String(cliId)} onValueChange={v => navigate(urlCliente(v === "todos" ? "todos" : Number(v)))}>
-            <SelectTrigger className="h-8 w-auto min-w-[200px]" aria-label="Cliente"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos os clientes</SelectItem>
-              {dados.clientes.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.nome}{c.local ? ` — ${c.local}` : ""}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          {proj && <><span className="text-muted-foreground">/</span><b className="font-semibold">{proj.nome}</b>{proj.situacao !== "ativo" && <SituacaoPill situacao={proj.situacao} />}</>}
-        </div>
-        <div className="flex gap-3 overflow-x-auto pb-1">
-          {cartoes.map(c => (
-            <Link key={c.key} to={c.to} title={c.title || c.label} aria-current={c.on ? "page" : undefined}
-              className={`flex w-[230px] shrink-0 flex-col gap-2 rounded-xl border p-3 transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${c.on ? "border-primary bg-primary/[0.06] ring-1 ring-primary" : "border-border/60 bg-card shadow-sm"}`}>
-              <span className="flex items-center gap-2">
-                <span className={`min-w-0 flex-1 truncate text-[13.5px] font-semibold ${c.on ? "text-primary" : ""}`}>{c.label}</span>
-                <span className="text-[15px] font-bold tabular-nums">{c.s.pct}%</span>
-              </span>
-              <Barra s={c.s} />
-              <span className="truncate text-[11.5px] text-muted-foreground">{resumo(c.s)}{c.sit && c.sit !== "ativo" ? ` · ${SITUACAO_NOME[c.sit]}` : ""}</span>
-            </Link>
-          ))}
+      <div className="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
+        <LateralGO dados={dados} cliId={cliId} projetos={projsEscopo} projAtual={proj} onCliente={v => navigate(urlCliente(v === "todos" ? "todos" : Number(v)))} />
+
+        <div className="flex min-w-0 flex-col gap-4">
+          <SaudeGO dados={dados} escopo={escopo} projetos={proj ? [proj] : projsEscopo} umProjeto={!!proj} onSelect={id => setAct(id)} etapa={etapa} onEtapa={setEtapa} />
+
+          {/* busca, responsável e visão */}
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-card p-3 shadow-sm">
+            <div className="relative min-w-0 flex-1 basis-56">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input className="h-9 pl-9" type="search" placeholder="Buscar atividade, código ou observação" aria-label="Buscar" value={q} onChange={ev => setQ(ev.target.value)} />
+            </div>
+            <Select value={respSel} onValueChange={setResp}>
+              <SelectTrigger className="h-9 w-full sm:w-56" aria-label="Responsável"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os responsáveis</SelectItem>
+                {opcoesResp.map(r => <SelectItem key={r} value={r}>Com {r}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <div role="group" aria-label="Visão" className="flex rounded-lg border p-0.5">
+              {VISOES.map(x => (
+                <button key={x.v} type="button" aria-pressed={visao === x.v} onClick={() => setVisao(x.v)}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${visao === x.v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                  <x.icon className="h-4 w-4" />{x.l}
+                </button>
+              ))}
+            </div>
+          </div>
+          {filtrando && (
+            <p className="-mt-2 text-[12px] text-muted-foreground">
+              Filtro ativo: mostrando {visiveis.length} de {escopo.length} atividades. <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setQ(""); setResp("all"); }}>Limpar</button>
+            </p>
+          )}
+
+          {visao === "quadro" && <QuadroGO dados={dados} visiveis={visiveis} act={act} onSelect={selecionar} etapa={etapa} onEtapa={setEtapa} mostrarProjeto={!proj} rel={rel}
+            podeEditar={podeEditar} onStatus={mudarStatus} previsao={previsao} />}
+          {visao === "etapas" && <EtapasGO dados={dados} visiveis={visiveis} act={act} onSelect={selecionar} umProjeto={!!proj} rel={rel} podeEditar={podeEditar} onStatus={mudarStatus} />}
+          {visao === "gantt" && <GanttGO dados={dados} visiveis={visiveis} act={act} onSelect={id => setAct(id)} rel={rel} />}
         </div>
       </div>
 
-      {/* busca, responsável e visão */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-card p-3">
-        <div className="relative min-w-0 flex-1 basis-56">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input className="h-9 pl-9" type="search" placeholder="Buscar atividade, código ou observação" aria-label="Buscar" value={q} onChange={ev => setQ(ev.target.value)} />
-        </div>
-        <Select value={respSel} onValueChange={setResp}>
-          <SelectTrigger className="h-9 w-full sm:w-56" aria-label="Responsável"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os responsáveis</SelectItem>
-            {opcoesResp.map(r => <SelectItem key={r} value={r}>Com {r}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <div role="group" aria-label="Visão" className="flex rounded-lg border p-0.5">
-          {VISOES.map(x => (
-            <button key={x.v} type="button" aria-pressed={visao === x.v} onClick={() => setVisao(x.v)}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${visao === x.v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-              <x.icon className="h-4 w-4" />{x.l}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* totais */}
-      <div className="flex flex-col gap-1.5">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <Kpi icon={ListChecks} label="Atividades" value={s.total} caption="no painel" tone="bg-primary/10 text-primary"
-            info="Atividades do cliente ou projeto aberto que passam na busca e no responsável. Removidas não entram na conta." />
-          <Kpi icon={CheckCircle2} label="Concluídas" value={s.done} caption={s.total ? `${Math.round((s.done / s.total) * 100)}% do total` : "—"} tone="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-            info="Atividades com status Concluído." />
-          <Kpi icon={Activity} label="Em andamento" value={s.doing} caption="sendo feitas agora" tone="bg-sky-500/15 text-sky-700 dark:text-sky-300"
-            info="Atividades com status Em andamento." />
-          <Kpi icon={Hourglass} label="Em espera" value={s.wait} caption="ainda não começaram" tone="bg-amber-500/15 text-amber-800 dark:text-amber-200"
-            info="Atividades com status Em espera." />
-          <Kpi icon={TrendingUp} label="Progresso" value={`${s.pct}%`} caption={s.total ? `${s.done} de ${s.total}` : "sem atividades"} tone="bg-primary/10 text-primary"
-            info="Concluídas sobre o total, sem contar as removidas." />
-        </div>
-        {nota && <p className="text-[12px] text-muted-foreground">{nota}</p>}
-      </div>
-
-      {visao === "quadro" && <QuadroGO dados={dados} visiveis={visiveis} act={act} onSelect={id => selecionar(id)} etapa={etapa} onEtapa={setEtapa} mostrarProjeto={!proj} rel={rel} />}
-      {visao === "etapas" && <EtapasGO dados={dados} visiveis={visiveis} act={act} onSelect={id => selecionar(id)} umProjeto={!!proj} rel={rel} />}
-      {visao === "gantt" && <GanttGO dados={dados} visiveis={visiveis} act={act} onSelect={id => setAct(id)} rel={rel} />}
-
-      <DetalheGO ref={detalheRef} dados={dados} act={act} onSelect={id => selecionar(id)} />
+      <DetalheGO dados={dados} act={act} onSelect={id => setAct(id)} onFechar={fechar} podeEditar={podeEditar} onStatus={mudarStatus} />
     </div>
   );
 }

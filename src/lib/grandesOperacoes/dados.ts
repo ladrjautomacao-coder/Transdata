@@ -27,6 +27,8 @@ export interface GoAtividade {
 }
 
 export const STATUS_NOME: Record<GoStatus, string> = { espera: "Em espera", andamento: "Em andamento", concluido: "Concluído", removido: "Removido" };
+/** Ordem dos status no seletor, a mesma do sistema original. */
+export const STATUS_ORDEM: GoStatus[] = ["espera", "andamento", "concluido", "removido"];
 export const SITUACAO_NOME: Record<GoSituacao, string> = { ativo: "Ativo", pausado: "Pausado", encerrado: "Encerrado" };
 
 /** Os dados do Hub, já ordenados e indexados. */
@@ -94,6 +96,48 @@ export async function fetchGoDados(): Promise<GoDados> {
   return indexar(c.data ?? [], projetos, e.data ?? [], atividades);
 }
 
+/** Quem pode gravar no Hub: a mesma função do banco que protege as tabelas (RLS). */
+export async function fetchPodeEditar(): Promise<boolean> {
+  const { data, error } = await db.rpc("go_pode", { _acao: "edit" });
+  return !error && data === true;
+}
+
+/* ─── Troca de status ─── */
+
+/** O que a troca de status muda na atividade. */
+export type GoCamposStatus = Pick<GoAtividade, "status" | "data_realizada">;
+
+/** Como no original: concluir sem "Realizado em" grava a data de hoje; os outros status mantêm a data. */
+export const camposParaStatus = (a: GoCamposStatus, status: GoStatus, hoje = hojeTexto()): GoCamposStatus =>
+  ({ status, data_realizada: status === "concluido" && !a.data_realizada ? hoje : a.data_realizada });
+
+/** Os dados com uma atividade alterada (a tela troca o status antes de o banco responder). */
+export const comAtividade = (d: GoDados, id: number, campos: Partial<GoAtividade>): GoDados =>
+  indexar(d.clientes, d.projetos, d.etapas, d.atividades.map(a => (a.id === id ? { ...a, ...campos } : a)));
+
+export type ResultadoStatus =
+  | { ok: true; campos: GoCamposStatus & { atualizado_em: string } }
+  /** conflito: outra pessoa mudou antes (`atual` é o que está gravado); sem-permissao: o banco recusou */
+  | { ok: false; motivo: "conflito" | "sem-permissao"; atual: GoCamposStatus | null };
+
+/**
+ * Troca o status "de → para", como no sistema original: só grava se no banco ainda estiver o que a
+ * tela mostrava (o status e, quando muda junto, o "Realizado em").
+ */
+export async function gravarStatus(id: number, de: GoCamposStatus, para: GoCamposStatus): Promise<ResultadoStatus> {
+  const mudaData = (para.data_realizada ?? null) !== (de.data_realizada ?? null);
+  let q = db.from("go_atividades").update(mudaData ? para : { status: para.status }).eq("id", id).eq("status", de.status);
+  if (mudaData) q = de.data_realizada ? q.eq("data_realizada", de.data_realizada) : q.is("data_realizada", null);
+  const { data, error } = await q.select("status, data_realizada, atualizado_em");
+  if (error) throw error;
+  if (data?.length) return { ok: true, campos: data[0] };
+  // nada gravado: ou mudou no banco, ou a pessoa não pode editar (o RLS só não acha a linha)
+  const { data: atual, error: e2 } = await db.from("go_atividades").select("status, data_realizada").eq("id", id).maybeSingle();
+  if (e2) throw e2;
+  const mudou = !atual || atual.status !== de.status || (mudaData && (atual.data_realizada ?? null) !== (de.data_realizada ?? null));
+  return { ok: false, motivo: mudou ? "conflito" : "sem-permissao", atual: atual ?? null };
+}
+
 /* ─── Consultas sobre os dados carregados ─── */
 
 /** Busca que ignora acento e maiúscula ("integracao" acha "Integração"). */
@@ -153,6 +197,11 @@ export function openUpstream(d: GoDados, a: GoAtividade): GoAtividade[] {
   walk(a);
   return out.sort(porCodigo);
 }
+
+/** Predecessoras diretas que ainda não foram concluídas (nem removidas). */
+export const predsAbertas = (d: GoDados, a: GoAtividade) => predOf(d, a).filter(p => p.status !== "concluido" && p.status !== "removido");
+/** Em espera e sem nada pendente antes dela: pode começar. */
+export const podeComecar = (d: GoDados, a: GoAtividade) => a.status === "espera" && !predsAbertas(d, a).length;
 
 /** O que vem antes (pred) e depois (succ) da atividade selecionada, e as etapas delas (para destacar). */
 export interface GoRel { pred: Set<number>; succ: Set<number>; etHl: Set<number> }
