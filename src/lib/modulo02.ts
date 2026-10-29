@@ -17,7 +17,7 @@ export const MODULO_02 = {
     { id: "custos", titulo: "Custos de deslocamento e hospedagem", descricao: "Levante na Onfly os custos de deslocamento e hospedagem da viagem.", responsavel: "gp" },
     { id: "aprovacao", titulo: "Aprovação dos custos pelo cliente", descricao: "Envie os custos ao cliente e aguarde a aprovação.", responsavel: "gp" },
     { id: "reservas", titulo: "Reservas de deslocamento e hospedagem", descricao: "Com os custos aprovados, faça as reservas da viagem.", responsavel: "gp" },
-    { id: "financeiro", titulo: "Comprovantes ao Financeiro", descricao: "Encaminhe os comprovantes das reservas ao Financeiro da Transdata.", responsavel: "gp" },
+    { id: "financeiro", titulo: "Comprovantes ao Financeiro", descricao: "Anexe os comprovantes de pagamento da viagem e encaminhe ao Financeiro da Transdata.", responsavel: "gp" },
     { id: "adiantamento", titulo: "Adiantamento de verba na Onfly", descricao: "Solicite o adiantamento de verba na Onfly, quando necessário.", responsavel: "gp" },
     { id: "cartoes", titulo: "Cartões-chave e senhas", descricao: "Prepare os cartões-chave e as respectivas senhas para levar na reunião de PE.", responsavel: "gp" },
     { id: "termo", titulo: "Termo de Recebimento dos Cartões", descricao: "Gere o Termo de Recebimento dos Cartões em PDF.", responsavel: "gp" },
@@ -42,8 +42,11 @@ export interface Modulo02Estado {
   aprovacao: { para: string; enviadoEm: string | null; aprovadoPor: string; aprovadoEm: string; registradoEm: string | null };
   /** Localizador / empresa do deslocamento e hotel da hospedagem (opcionais). */
   reservas: { deslocamento: string; hospedagem: string; registradoEm: string | null; por: string };
-  /** `para`: e-mail do Financeiro; `enviadoEm`: o e-mail com os comprovantes foi copiado (ou enviado por fora). */
-  financeiro: { para: string; enviadoEm: string | null; por: string };
+  /**
+   * `para`: e-mail do Financeiro; `enviadoEm`: o e-mail com os comprovantes foi copiado (ou enviado por fora).
+   * `comprovantes`: o que foi no e-mail (as imagens não ficam no portal; vão no PDF que o GP anexa).
+   */
+  financeiro: { para: string; enviadoEm: string | null; por: string; comprovantes: { tipo: string; descricao: string; arquivo: string }[] };
   /** `necessario` false: não precisa de adiantamento (a atividade sai da conta). */
   adiantamento: { necessario: boolean | null; valor: string; registradoEm: string | null; por: string };
   /**
@@ -63,7 +66,7 @@ export const modulo02Vazio = (): Modulo02Estado => ({
   custos: { registradoEm: null, por: "" },
   aprovacao: { para: "", enviadoEm: null, aprovadoPor: "", aprovadoEm: "", registradoEm: null },
   reservas: { deslocamento: "", hospedagem: "", registradoEm: null, por: "" },
-  financeiro: { para: "", enviadoEm: null, por: "" },
+  financeiro: { para: "", enviadoEm: null, por: "", comprovantes: [] },
   adiantamento: { necessario: null, valor: "", registradoEm: null, por: "" },
   cartoes: { registradoEm: null, por: "", ajustes: {}, extras: [] },
   termo: { local: "", data: "", recebedor: "", cargo: "", registradoEm: null, por: "" },

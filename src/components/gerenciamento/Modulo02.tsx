@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import {
-  AlertTriangle, CalendarCheck, CalendarClock, Check, CheckCircle2, Circle, ExternalLink, FileText, KeyRound, Laptop, Lock, Mail, Plane, ReceiptText, ScanLine, Send, Wallet,
+  AlertTriangle, CalendarCheck, CalendarClock, Check, CheckCircle2, Circle, ExternalLink, FileText, KeyRound, Laptop, Lock, Mail, Paperclip, Plane, ScanLine, Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,10 +11,12 @@ import {
   type AtividadeId02, type Modulo02Estado,
 } from "@/lib/modulo02";
 import {
-  aprovacaoTexto, assuntoCustos, assuntoFinanceiro, emailHtmlCustos, emailHtmlFinanceiro, emailTextoCustos, emailTextoFinanceiro, linhasVisita,
+  assuntoCustos, emailHtmlCustos, emailTextoCustos, linhasVisita,
 } from "@/lib/visitaPeEmail";
 import { cartoesDoTermo, qtdTermo } from "@/lib/termoCartoes";
+import type { Comprovante } from "@/lib/comprovantesFinanceiro";
 import { CartoesTermo } from "./CartoesTermo";
+import { ComprovantesFinanceiroDialog } from "./ComprovantesFinanceiroDialog";
 import { Etapa, Registro } from "./Etapa";
 import { TermoCartoesDialog } from "./TermoCartoesDialog";
 import { VisitaPeEmailDialog } from "./VisitaPeEmailDialog";
@@ -87,6 +89,8 @@ export function Modulo02({ project, estado, onChange, userName, emailCliente }: 
 }) {
   const [emailCustos, setEmailCustos] = useState(false);
   const [emailFinanceiro, setEmailFinanceiro] = useState(false);
+  // as imagens dos comprovantes ficam só na sessão (vão no PDF que o GP anexa no e-mail)
+  const [comprovantes, setComprovantes] = useState<Comprovante[]>([]);
   const [termoAberto, setTermoAberto] = useState(false);
   const set = <K extends keyof Modulo02Estado>(k: K, patch: Partial<Modulo02Estado[K]>) =>
     onChange(e => ({ ...e, [k]: { ...e[k], ...patch } }));
@@ -103,14 +107,14 @@ export function Modulo02({ project, estado, onChange, userName, emailCliente }: 
         </Registro>
       );
     }
-    const salvar = () => set("contato", { com: c.com.trim() || project.client_manager_name || "", registradoEm: agora(), por: userName });
+    const salvar = () => set("contato", { com: c.com.trim(), registradoEm: agora(), por: userName });
     return (
       <div className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_230px]">
           <div>
             <Label className="text-xs" htmlFor="pe-com">Contato no cliente</Label>
-            <Input id="pe-com" className="mt-1.5 h-9" placeholder={project.client_manager_name || "Com quem você falou"} value={c.com} onChange={ev => set("contato", { com: ev.target.value })} />
-            <p className="mt-1 text-[11px] text-muted-foreground">{project.client_manager_name ? "Em branco, vale o Gerente de Projetos no cliente do cadastro." : "Quem vai receber a equipe na reunião."}</p>
+            <Input id="pe-com" className="mt-1.5 h-9" placeholder="Com quem você falou" value={c.com} onChange={ev => set("contato", { com: ev.target.value })} />
+            <p className="mt-1 text-[11px] text-muted-foreground">Quem vai receber a equipe na reunião.</p>
           </div>
           <div>
             <Label className="text-xs" htmlFor="pe-data">Data e hora da reunião de PE *</Label>
@@ -164,8 +168,8 @@ export function Modulo02({ project, estado, onChange, userName, emailCliente }: 
       );
     }
     const data = a.aprovadoEm || hoje();
-    const registrar = () => set("aprovacao", { aprovadoPor: a.aprovadoPor.trim() || estado.contato.com.trim() || project.client_manager_name || "", aprovadoEm: data, registradoEm: agora() });
-    const quem = a.aprovadoPor.trim() || estado.contato.com.trim() || project.client_manager_name || "";
+    const quem = a.aprovadoPor.trim();
+    const registrar = () => set("aprovacao", { aprovadoPor: quem, aprovadoEm: data, registradoEm: agora() });
     return (
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -181,8 +185,8 @@ export function Modulo02({ project, estado, onChange, userName, emailCliente }: 
           <p className="text-[12px] text-muted-foreground">Registre quando o cliente aprovar os custos (por e-mail, telefone ou WhatsApp).</p>
           <div className="mt-2.5 flex flex-wrap items-end gap-2">
             <div className="min-w-0 flex-1 basis-56">
-              <Label className="text-xs" htmlFor="pe-aprov-quem">Aprovado por</Label>
-              <Input id="pe-aprov-quem" className="mt-1.5 h-9" placeholder={estado.contato.com || project.client_manager_name || "Nome de quem aprovou"} value={a.aprovadoPor} onChange={ev => set("aprovacao", { aprovadoPor: ev.target.value })} />
+              <Label className="text-xs" htmlFor="pe-aprov-quem">Aprovado por *</Label>
+              <Input id="pe-aprov-quem" className="mt-1.5 h-9" placeholder="Nome de quem aprovou" value={a.aprovadoPor} onChange={ev => set("aprovacao", { aprovadoPor: ev.target.value })} />
             </div>
             <div className="w-full sm:w-44">
               <Label className="text-xs" htmlFor="pe-aprov-data">Data da aprovação</Label>
@@ -220,15 +224,21 @@ export function Modulo02({ project, estado, onChange, userName, emailCliente }: 
     const f = estado.financeiro;
     // copiar o e-mail (ou avisar que enviou por fora) conclui; copiar de novo mantém a 1ª data
     const concluir = () => onChange(e => ({ ...e, financeiro: { ...e.financeiro, enviadoEm: e.financeiro.enviadoEm ?? agora(), por: e.financeiro.por || userName } }));
+    const n = f.comprovantes.length;
     return f.enviadoEm ? (
-      <Registro texto={`Comprovantes enviados ao Financeiro em ${quando(f.enviadoEm)} por ${f.por || userName} · `} onDesfazer={() => set("financeiro", { enviadoEm: null })}>
+      <Registro texto={`Comprovantes enviados ao Financeiro em ${quando(f.enviadoEm)} por ${f.por || userName}${n ? ` · ${n} ${n === 1 ? "comprovante" : "comprovantes"}` : ""} · `}
+        onDesfazer={() => set("financeiro", { enviadoEm: null })}>
         {verEmail(() => setEmailFinanceiro(true))}
       </Registro>
     ) : (
       <div className="flex flex-wrap items-center gap-2">
-        <Button className="h-9" onClick={() => setEmailFinanceiro(true)}><ReceiptText className="mr-1.5 h-4 w-4" />Montar e-mail ao Financeiro</Button>
-        <Button className="h-9" onClick={concluir}><Check className="mr-1.5 h-4 w-4" />Marcar como feito</Button>
-        <span className="text-[12px] text-muted-foreground">se os comprovantes foram enviados por fora do portal</span>
+        <Button className="h-9" onClick={() => setEmailFinanceiro(true)}><Paperclip className="mr-1.5 h-4 w-4" />Anexar comprovantes e montar e-mail</Button>
+        {comprovantes.length > 0
+          ? <span className="text-[12px] text-amber-800 dark:text-amber-200">{comprovantes.length} {comprovantes.length === 1 ? "comprovante anexado" : "comprovantes anexados"} · falta enviar</span>
+          : <>
+              <Button variant="outline" className="h-9" onClick={concluir}><Check className="mr-1.5 h-4 w-4" />Marcar como feito</Button>
+              <span className="text-[12px] text-muted-foreground">se os comprovantes foram enviados por fora do portal</span>
+            </>}
       </div>
     );
   };
@@ -386,15 +396,13 @@ export function Modulo02({ project, estado, onChange, userName, emailCliente }: 
         assunto={assuntoCustos(project)} html={emailHtmlCustos(project, estado, userName)} texto={emailTextoCustos(project, estado, userName)}
         anexos="Anexe a simulação dos custos feita na Onfly (PDF ou print) no Outlook antes de enviar."
         onCopiado={() => onChange(e => ({ ...e, aprovacao: { ...e.aprovacao, enviadoEm: e.aprovacao.enviadoEm ?? agora() } }))} />
-      <VisitaPeEmailDialog open={emailFinanceiro} onOpenChange={setEmailFinanceiro}
-        icone={<Send className="h-5 w-5 text-primary" />} titulo="E-mail ao Financeiro: comprovantes da viagem"
-        descricao="Encaminhe ao Financeiro da Transdata os comprovantes das reservas da viagem, com a aprovação do cliente."
-        paraLabel="E-mail do Financeiro" paraPlaceholder="financeiro@itstransdata.com" para={estado.financeiro.para} onPara={para("financeiro")}
-        linhas={[{ label: "Reserva do deslocamento", valor: estado.reservas.deslocamento.trim() || "—" }, { label: "Reserva da hospedagem", valor: estado.reservas.hospedagem.trim() || "—" },
-          { label: "Aprovação dos custos", valor: aprovacaoTexto(estado) }]}
-        assunto={assuntoFinanceiro(project)} html={emailHtmlFinanceiro(project, estado, userName)} texto={emailTextoFinanceiro(project, estado, userName)}
-        anexos="Anexe os comprovantes das reservas (passagens e hotel) no Outlook antes de enviar."
-        onCopiado={() => onChange(e => ({ ...e, financeiro: { ...e.financeiro, enviadoEm: e.financeiro.enviadoEm ?? agora(), por: e.financeiro.por || userName } }))} />
+      {/* copiar o e-mail registra o envio e os comprovantes que foram nele; copiar de novo mantém a 1ª data */}
+      <ComprovantesFinanceiroDialog open={emailFinanceiro} onOpenChange={setEmailFinanceiro} project={project} estado={estado} userName={userName}
+        comprovantes={comprovantes} onComprovantes={setComprovantes} onPara={para("financeiro")}
+        onEnviado={resumo => onChange(e => ({
+          ...e,
+          financeiro: { ...e.financeiro, enviadoEm: e.financeiro.enviadoEm ?? agora(), por: e.financeiro.por || userName, comprovantes: resumo.length ? resumo : e.financeiro.comprovantes },
+        }))} />
       {/* baixar o PDF registra o termo; baixar de novo mantém a 1ª data */}
       <TermoCartoesDialog open={termoAberto} onOpenChange={setTermoAberto} project={project} estado={estado}
         onCartoes={patch => set("cartoes", patch)} onTermo={patch => set("termo", patch)}

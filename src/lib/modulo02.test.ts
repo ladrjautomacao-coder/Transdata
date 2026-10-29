@@ -94,7 +94,9 @@ describe("normalizarModulo02", () => {
 describe("e-mails da visita de PE", () => {
   const project = {
     id: "p1", company_name: "Viação <Teste> & Cia", project_code: "CACSCASNEW0008-VIACAO", city: "Caçador", state: "SC", country_code: "BR",
-    manager: { full_name: "Luiz Alves" }, client_manager_name: "Carla Souza", operation_cities: [],
+    manager: { full_name: "Luiz Alves" }, executive: { full_name: "Marina Prado" }, client_manager_name: "Carla Souza", operation_cities: [],
+    cnpj: "11.111.111/0001-11", fleet_size: 40, contract_date: "2026-09-15", contractual_deadline_days: 365, d_zero_date: "2026-12-01",
+    project_type: { name: "Implantação" }, project_segment: null, project_solutions: [{ solution: { name: "Bilhetagem" } }, { solution: { name: "ITS" } }],
   } as unknown as GerProject;
   const e = modulo02Vazio();
   e.contato = { com: "", reuniaoPe: "2026-11-10T09:00", local: "Garagem central", registradoEm: "2026-10-28T10:00:00Z", por: "Luiz" };
@@ -102,20 +104,31 @@ describe("e-mails da visita de PE", () => {
   e.aprovacao = { para: "carla@cliente.com", enviadoEm: null, aprovadoPor: "Carla Souza", aprovadoEm: "2026-10-30", registradoEm: "2026-10-30T12:00:00Z" };
   e.reservas = { deslocamento: "LATAM XKQ7PL", hospedagem: "Hotel Central", registradoEm: "2026-10-31T09:00:00Z", por: "Luiz" };
 
-  it("custos ao cliente: saudação ao GP no cliente, visita e a simulação da Onfly em anexo", () => {
+  it("custos ao cliente: saudação ao contato digitado (sem nome do cadastro), visita e a simulação da Onfly em anexo", () => {
     const t = emailTextoCustos(project, e, "Luiz Alves");
-    expect(t).toContain("Olá, Carla,");
+    expect(t.startsWith("Olá,\n")).toBe(true);
+    expect(t).not.toContain("Carla");
+    expect(emailTextoCustos(project, { ...e, contato: { ...e.contato, com: "Carla Souza" } }, "Luiz Alves")).toContain("Olá, Carla,");
     expect(t).toContain("seguem em anexo os custos estimados");
     expect(t).toContain("Reunião de Projeto Executivo: 10/11/2026 às 09:00, Garagem central");
     expect(t).not.toContain("TOTAL");
   });
-  it("comprovantes ao Financeiro: reservas e aprovação do cliente", () => {
-    const t = emailTextoFinanceiro(project, e, "Luiz Alves");
+  const comprovantes = [{ tipo: "Passagem aérea", descricao: "LATAM ida e volta", arquivo: "latam.jpg" }, { tipo: "Hospedagem", descricao: "", arquivo: "hotel.png" }];
+  it("comprovantes ao Financeiro: dados do cadastro, da visita e os comprovantes no PDF", () => {
+    const t = emailTextoFinanceiro(project, e, "Luiz Alves", comprovantes);
+    expect(t).toContain("2 comprovantes no PDF Comprovantes-Visita-PE-CACSCASNEW0008.pdf");
+    expect(t).toContain("CNPJ: 11.111.111/0001-11");
+    expect(t).toContain("Soluções contratadas: Bilhetagem, ITS");
+    expect(t).toContain("Fim do contrato: 15/09/2027");
     expect(t).toContain("Reserva do deslocamento: LATAM XKQ7PL");
     expect(t).toContain("Aprovação dos custos: Aprovados por Carla Souza em 30/10/2026");
+    expect(t).toContain("1. Passagem aérea: LATAM ida e volta · página 2 do PDF");
+    expect(t).toContain("2. Hospedagem: página 3 do PDF");
+    // o adiantamento só entra depois de registrado
+    expect(t).not.toContain("Adiantamento");
   });
   it("o HTML escapa o que vem do cadastro", () => {
     expect(emailHtmlCustos(project, e, "Luiz")).toContain("VIAÇÃO &lt;TESTE&gt; &amp; CIA");
-    expect(emailHtmlFinanceiro(project, e, "Luiz")).not.toContain("<TESTE>");
+    expect(emailHtmlFinanceiro(project, e, "Luiz", comprovantes)).not.toContain("<TESTE>");
   });
 });

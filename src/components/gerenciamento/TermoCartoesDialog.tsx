@@ -78,8 +78,7 @@ export function TermoCartoesDialog({ open, onOpenChange, project, estado, onCart
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <Label className="text-xs" htmlFor="termo-recebedor">Recebido por *</Label>
-                  <Input id="termo-recebedor" className="mt-1.5 h-9" placeholder={f.recebedor || "Nome de quem recebe"} value={t.recebedor} onChange={ev => onTermo({ recebedor: ev.target.value })} />
-                  {!t.recebedor.trim() && f.recebedor && <p className="mt-1 text-[11px] text-muted-foreground">Em branco, vale o Gerente de Projetos no cliente.</p>}
+                  <Input id="termo-recebedor" className="mt-1.5 h-9" placeholder="Nome de quem recebe" value={t.recebedor} onChange={ev => onTermo({ recebedor: ev.target.value })} />
                 </div>
                 <div>
                   <Label className="text-xs" htmlFor="termo-cargo">Cargo</Label>

@@ -1,15 +1,19 @@
 // E-mails da preparação da visita de PE (módulo 02): os custos ao cliente, para aprovação, e os
-// comprovantes das reservas ao Financeiro da Transdata. O HTML segue o modelo que o Outlook
+// comprovantes de pagamento ao Financeiro da Transdata. O HTML segue o modelo que o Outlook
 // mantém ao colar (src/lib/emailOutlook.ts).
-import { dataBr, dataHoraBr, type GerProject } from "@/lib/gerenciamento";
+import { dataBr, dataHoraBr, fimDoContrato, solutionsOf, type GerProject } from "@/lib/gerenciamento";
 import { cidadeUf, razaoSocial } from "@/lib/dataCenterEmail";
-import { codigoProjetoBd } from "@/lib/codigoBd";
+import { codigoBase, codigoProjetoBd } from "@/lib/codigoBd";
 import { cidadesOperacaoTexto, lerCidadesOperacao } from "@/lib/cidadesOperacao";
 import { escHtml, estiloTexto } from "@/lib/emailOutlook";
-import type { Modulo02Estado } from "@/lib/modulo02";
+import { moeda, valorBr, type Modulo02Estado } from "@/lib/modulo02";
+import { projectSegmentLabel } from "@/lib/projectSegments";
+import { teamRoleLabels } from "@/lib/teamRoleLabels";
+import type { ComprovanteResumo } from "@/lib/comprovantesFinanceiro";
 
 const txt = estiloTexto;
 const primeiroNome = (nome: string | null | undefined) => (nome ?? "").trim().split(/\s+/)[0] || "";
+const ou = (v: string | null | undefined) => (v && v.trim() ? v.trim() : "—");
 /** Cidades da operação; sem elas, a cidade do contrato. */
 const destino = (p: GerProject) => cidadesOperacaoTexto(lerCidadesOperacao(p.operation_cities)) || cidadeUf(p) || "—";
 
@@ -48,7 +52,7 @@ const INTRO_CUSTOS = "Conforme conversamos, seguem em anexo os custos estimados 
 const PEDIDO_APROVACAO = "Os valores são estimados nesta data e podem mudar até a emissão das reservas. Pedimos, por gentileza, a aprovação para seguirmos com as reservas.";
 
 export function emailHtmlCustos(p: GerProject, e: Modulo02Estado, remetente: string): string {
-  const nome = primeiroNome(e.contato.com || p.client_manager_name);
+  const nome = primeiroNome(e.contato.com);
   return p0(`Olá${nome ? `, ${escHtml(nome)}` : ""},`)
     + p0(INTRO_CUSTOS, "margin-bottom:14px;")
     + topo("CUSTOS DA VISITA DE PROJETO EXECUTIVO", razaoSocial(p))
@@ -60,7 +64,7 @@ export function emailHtmlCustos(p: GerProject, e: Modulo02Estado, remetente: str
 }
 
 export function emailTextoCustos(p: GerProject, e: Modulo02Estado, remetente: string): string {
-  const nome = primeiroNome(e.contato.com || p.client_manager_name);
+  const nome = primeiroNome(e.contato.com);
   return [
     `Olá${nome ? `, ${nome}` : ""},`, "", INTRO_CUSTOS, "",
     ...linhasVisita(p, e).map(l => `${l.label}: ${l.valor}`), "",
@@ -73,39 +77,80 @@ export function emailTextoCustos(p: GerProject, e: Modulo02Estado, remetente: st
 
 export const assuntoFinanceiro = (p: GerProject) => `COMPROVANTES DE VIAGEM | VISITA DE PE | ${codigoProjetoBd(p)}`;
 
-/** Dados do projeto e da viagem no e-mail ao Financeiro. */
-export const linhasFinanceiro = (p: GerProject, e: Modulo02Estado) => [
-  { label: "Cliente", valor: razaoSocial(p) },
-  { label: "Código do Projeto", valor: codigoProjetoBd(p) },
-  { label: "Gerente de Projetos", valor: p.manager?.full_name ?? "—" },
-  { label: "Destino", valor: destino(p) },
-  { label: "Reserva do deslocamento", valor: e.reservas.deslocamento.trim() || "—" },
-  { label: "Reserva da hospedagem", valor: e.reservas.hospedagem.trim() || "—" },
-  { label: "Aprovação dos custos", valor: aprovacaoTexto(e) },
-];
+/** Nome do PDF com os comprovantes, sem a extensão. */
+export const arquivoComprovantes = (p: GerProject) => `Comprovantes-Visita-PE-${codigoBase(p) || "projeto"}`;
 
 /** "Aprovados por Carla Souza em 30/10/2026" */
 export const aprovacaoTexto = (e: Modulo02Estado) =>
   `Aprovados por ${e.aprovacao.aprovadoPor.trim() || "—"} em ${dataBr(e.aprovacao.aprovadoEm || e.aprovacao.registradoEm)}`;
 
-const INTRO_FINANCEIRO = "Seguem em anexo os comprovantes das reservas da visita de Projeto Executivo do projeto abaixo. Os custos foram aprovados pelo cliente.";
+export interface GrupoFinanceiro { titulo: string; linhas: { label: string; valor: string }[] }
 
-export function emailHtmlFinanceiro(p: GerProject, e: Modulo02Estado, remetente: string): string {
+/** O projeto (do cadastro) e a visita (do módulo), para o Financeiro: o e-mail e o PDF usam os mesmos. */
+export function gruposFinanceiro(p: GerProject, e: Modulo02Estado): GrupoFinanceiro[] {
+  const solucoes = solutionsOf(p);
+  const frota = p.fleet_size ?? 0;
+  const ad = e.adiantamento;
+  const projeto = [
+    { label: "Cliente (razão social)", valor: razaoSocial(p) },
+    { label: "CNPJ", valor: ou(p.cnpj) },
+    { label: "Código do Projeto", valor: codigoProjetoBd(p) },
+    { label: "Tipo do projeto", valor: ou(p.project_type?.name) },
+    { label: "Segmento", valor: projectSegmentLabel(p.project_segment) || "—" },
+    { label: "Soluções contratadas", valor: solucoes.join(", ") || "—" },
+    { label: "Frota contratada", valor: frota ? `${frota} veículo${frota === 1 ? "" : "s"}` : "—" },
+    { label: "Cidade/UF", valor: cidadeUf(p) || "—" },
+    { label: "Data de contratação", valor: dataBr(p.contract_date) },
+    { label: "D-zero", valor: dataBr(p.d_zero_date) },
+    { label: "Fim do contrato", valor: dataBr(fimDoContrato(p)) },
+    { label: teamRoleLabels.manager ?? "Gerente de Projetos", valor: p.manager?.full_name ?? "—" },
+    { label: teamRoleLabels.executive ?? "Executivo de Vendas", valor: p.executive?.full_name ?? "—" },
+    ...(p.client_manager_name?.trim() ? [{ label: "Gerente de Projetos no cliente", valor: p.client_manager_name.trim() }] : []),
+  ];
+  const visita = [
+    { label: "Reunião de Projeto Executivo", valor: reuniaoTexto(e) },
+    { label: "Destino", valor: destino(p) },
+    ...(e.contato.com.trim() ? [{ label: "Contato no cliente", valor: e.contato.com.trim() }] : []),
+    { label: "Custos simulados na Onfly", valor: e.custos.registradoEm ? `Em ${dataBr(e.custos.registradoEm)}` : "—" },
+    { label: "Aprovação dos custos", valor: e.aprovacao.registradoEm ? aprovacaoTexto(e) : "—" },
+    { label: "Reserva do deslocamento", valor: e.reservas.deslocamento.trim() || "—" },
+    { label: "Reserva da hospedagem", valor: e.reservas.hospedagem.trim() || "—" },
+    // o adiantamento vem depois na lista: só entra se já foi registrado
+    ...(ad.registradoEm ? [{
+      label: "Adiantamento de verba",
+      valor: ad.necessario ? `Solicitado na Onfly${valorBr(ad.valor) ? `: ${moeda(valorBr(ad.valor)!)}` : ""}` : "Não necessário",
+    }] : []),
+  ];
+  return [{ titulo: "PROJETO", linhas: projeto }, { titulo: "VISITA DE PROJETO EXECUTIVO", linhas: visita }];
+}
+
+/** Os comprovantes na ordem do PDF (a página 1 é o resumo). */
+export const linhasComprovantes = (cs: ComprovanteResumo[]) =>
+  cs.map((c, i) => ({ label: `${i + 1}. ${c.tipo || "Comprovante"}`, valor: [c.descricao.trim(), `página ${i + 2} do PDF`].filter(Boolean).join(" · ") }));
+
+const introFinanceiro = (n: number, arquivo: string) =>
+  `Seguem em anexo os comprovantes de pagamento referentes à visita de Projeto Executivo do projeto abaixo${n ? `: ${n} ${n === 1 ? "comprovante" : "comprovantes"} no PDF ${arquivo}.pdf` : ""}. Os custos foram aprovados pelo cliente.`;
+const FECHO_FINANCEIRO = "Fico à disposição para qualquer dúvida.";
+
+export function emailHtmlFinanceiro(p: GerProject, e: Modulo02Estado, remetente: string, cs: ComprovanteResumo[], arquivo = arquivoComprovantes(p)): string {
+  const tabela = (g: GrupoFinanceiro) => grupo(g.titulo) + g.linhas.map(l => par(escHtml(l.label), escHtml(l.valor))).join("");
   return p0("Olá, equipe do Financeiro,")
-    + p0(INTRO_FINANCEIRO, "margin-bottom:14px;")
-    + topo("COMPROVANTES DE VIAGEM &nbsp;|&nbsp; VISITA DE PROJETO EXECUTIVO", codigoProjetoBd(p))
-    + grupo("PROJETO E VIAGEM")
-    + linhasFinanceiro(p, e).map(l => par(escHtml(l.label), escHtml(l.valor))).join("")
+    + p0(escHtml(introFinanceiro(cs.length, arquivo)), "margin-bottom:14px;")
+    + topo("COMPROVANTES DE PAGAMENTO &nbsp;|&nbsp; VISITA DE PROJETO EXECUTIVO", codigoProjetoBd(p))
+    + gruposFinanceiro(p, e).map(tabela).join("")
+    + tabela({ titulo: `COMPROVANTES ANEXADOS (${cs.length})`, linhas: cs.length ? linhasComprovantes(cs) : [{ label: "Comprovantes", valor: "—" }] })
     + `</table>`
-    + p0("Os comprovantes seguem em anexo.", "margin-top:14px;")
+    + p0(FECHO_FINANCEIRO, "margin-top:14px;")
     + assinatura(remetente);
 }
 
-export function emailTextoFinanceiro(p: GerProject, e: Modulo02Estado, remetente: string): string {
+export function emailTextoFinanceiro(p: GerProject, e: Modulo02Estado, remetente: string, cs: ComprovanteResumo[], arquivo = arquivoComprovantes(p)): string {
+  const bloco = (g: GrupoFinanceiro) => [g.titulo, ...g.linhas.map(l => `${l.label}: ${l.valor}`), ""];
   return [
-    "Olá, equipe do Financeiro,", "", INTRO_FINANCEIRO, "",
-    ...linhasFinanceiro(p, e).map(l => `${l.label}: ${l.valor}`), "",
-    "Os comprovantes seguem em anexo.", "",
+    "Olá, equipe do Financeiro,", "", introFinanceiro(cs.length, arquivo), "",
+    ...gruposFinanceiro(p, e).flatMap(bloco),
+    ...bloco({ titulo: `COMPROVANTES ANEXADOS (${cs.length})`, linhas: linhasComprovantes(cs) }),
+    FECHO_FINANCEIRO, "",
     "Atenciosamente,", remetente, "Gerente de Projetos | Transdata",
   ].join("\n");
 }

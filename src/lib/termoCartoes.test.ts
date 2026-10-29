@@ -31,7 +31,7 @@ describe("cartões do termo", () => {
 });
 
 describe("montarTermo", () => {
-  it("usa o cadastro e os padrões: Campinas, data da reunião de PE, GP no cliente e Gerente do Projeto", () => {
+  it("usa o cadastro e os padrões: Campinas, data da reunião de PE e Gerente do Projeto; quem recebe fica em branco", () => {
     const e = modulo02Vazio();
     e.contato.reuniaoPe = "2026-05-10T09:00";
     const d = montarTermo(project, e);
@@ -39,7 +39,7 @@ describe("montarTermo", () => {
     expect(d.cliente).toBe("Transportadora Abreu & Souza Ltda");
     expect(d.clienteAssinatura).toBe("TRANSPORTADORA ABREU & SOUZA LTDA");
     expect(d.cartoes[2]).toEqual({ quantidade: "13", descricao: "Cartões Destacáveis", tipo: "Acesso" });
-    expect([d.local, d.data, d.recebedor, d.cargo]).toEqual(["Campinas", "10/05/2026", "Diogo Abreu", "Gerente do Projeto"]);
+    expect([d.local, d.data, d.recebedor, d.cargo]).toEqual(["Campinas", "10/05/2026", "—", "Gerente do Projeto"]);
     expect(d.arquivo).toBe("Termo-Recebimento-Cartoes-FORMGSANEW0280");
   });
   it("cartão zerado sai da tabela; o que o GP preencheu vale sobre o padrão", () => {
@@ -52,10 +52,10 @@ describe("montarTermo", () => {
   });
   it("diz o que falta", () => {
     const e = modulo02Vazio();
-    const semNada = { ...project, client_manager_name: null } as GerProject;
-    expect(faltandoTermo(semNada, e)).toEqual(["data", "quem recebe os cartões"]);
+    expect(faltandoTermo(project, e)).toEqual(["data", "quem recebe os cartões"]);
     e.cartoes.extras = [{ id: "x1", tipo: " ", destacavel: false, quantidade: 1 }];
     e.termo.data = "2026-05-10";
+    e.termo.recebedor = "Diogo Abreu";
     expect(faltandoTermo(project, e)).toEqual(["o tipo do cartão acrescentado"]);
   });
 });

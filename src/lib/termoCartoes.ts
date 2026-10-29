@@ -69,7 +69,8 @@ export function camposTermo(p: GerProject, e: Modulo02Estado) {
     local: t.local.trim() || LOCAL_PADRAO_TERMO,
     // os cartões são entregues na reunião de PE: sem data escolhida, vale a da reunião
     data: t.data || e.contato.reuniaoPe.slice(0, 10),
-    recebedor: t.recebedor.trim() || e.contato.com.trim() || p.client_manager_name?.trim() || "",
+    // quem recebe os cartões o GP digita: o termo não sugere nome
+    recebedor: t.recebedor.trim(),
     cargo: t.cargo.trim() || CARGO_PADRAO_TERMO,
   };
 }
