@@ -15,7 +15,7 @@ import {
 } from "@/lib/gerenciamento";
 import { MODULO_02, fetchModulo02, modulo02Vazio, salvarModulo02, situacao02, type Modulo02Estado } from "@/lib/modulo02";
 import { montarTap, type DadosTap } from "@/lib/tap";
-import { MedidorModulo } from "./MedidorModulo";
+import { CartaoModulo, CartaoSaude, SaudeProjeto, type ModuloSaude } from "./SaudeProjeto";
 import { TapDialog } from "./TapDialog";
 import { Modulo01 } from "./Modulo01";
 import { Modulo02, ReuniaoPe } from "./Modulo02";
@@ -79,32 +79,12 @@ function SituacaoGravacao({ g, onTentar }: { g: Gravacao; onTentar: () => void }
   );
 }
 
-type ModuloNum = "01" | "02";
-
-/** Um módulo na lista de módulos do projeto, com o andamento. */
-function CartaoModulo({ numero, nome, feitas, total, ativo, aberto, onClick }: {
-  numero: string; nome: string; feitas: number; total: number; ativo: boolean; aberto: boolean; onClick: () => void;
-}) {
-  const completo = total > 0 && feitas === total;
-  return (
-    <button type="button" aria-current={ativo ? "page" : undefined} aria-expanded={ativo ? aberto : undefined} onClick={onClick}
-      title={!ativo ? `Abrir o módulo ${numero}` : aberto ? "Voltar ao medidor do módulo" : "Abrir as atividades do módulo"}
-      className={`flex flex-col gap-2 rounded-xl border p-3 text-left transition-colors ${ativo
-        ? "border-primary bg-primary/[0.06] ring-1 ring-primary hover:bg-primary/[0.1]"
-        : "border-border/60 bg-card hover:border-primary/40 hover:bg-primary/[0.03]"}`}>
-      <span className="flex items-center gap-2">
-        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[13px] font-bold ${ativo ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"}`}>{numero}</span>
-        <span className="min-w-0 flex-1 text-sm font-semibold leading-tight">{nome}</span>
-        {completo
-          ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-label="Módulo concluído" />
-          : <span className="text-xs font-semibold tabular-nums text-primary">{feitas}/{total}</span>}
-      </span>
-      <span className="h-1.5 overflow-hidden rounded-full bg-primary/15">
-        <span className={`block h-full rounded-full transition-[width] duration-500 ${completo ? "bg-emerald-500" : "bg-primary"}`} style={{ width: `${total ? (feitas / total) * 100 : 0}%` }} />
-      </span>
-    </button>
-  );
-}
+/**
+ * Módulos prontos, na ordem do projeto. Módulo novo: entra aqui, na lista da saúde do projeto
+ * (`modulos`, abaixo) e no conteúdo do módulo aberto.
+ */
+const MODULOS = ["01", "02"] as const;
+type ModuloNum = (typeof MODULOS)[number];
 
 /** Destaque do módulo aberto: nome, próximo passo e o anel de progresso. */
 function DestaqueModulo({ numero, nome, resumo, proxima, feitas, total, children }: {
@@ -138,11 +118,15 @@ function andamento<Id extends string>(lista: { a: Atividade<Id>; sit: SituacaoAt
   };
 }
 
-/** O projeto escolhido: cabeçalho, módulos e o módulo aberto (?modulo=02; sem ele, o 01). */
+/**
+ * O projeto escolhido: cabeçalho, módulos ao lado e a saúde do projeto (um medidor com todos os
+ * módulos); com ?modulo=01 ou 02, as atividades daquele módulo.
+ */
 export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => void }) {
   const { profile } = useAuth();
   const [params, setParams] = useSearchParams();
-  const modulo: ModuloNum = params.get("modulo") === "02" ? "02" : "01";
+  const qual = params.get("modulo");
+  const modulo: ModuloNum | null = MODULOS.find(m => m === qual) ?? null;
   const [project, setProject] = useState<GerProject | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   // cada módulo é gravado sozinho no banco a cada mudança
@@ -178,27 +162,27 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
       .catch(err => { setError(errorMessage(err)); setProject(null); });
   }, [id, carregar1, descarregar1, carregar2, descarregar2]);
   useEffect(load, [load]);
-  // ao abrir o projeto, o módulo aparece no medidor; a lista de atividades só abre quando o GP pede
-  const [aberto, setAberto] = useState(false);
-  const [foco, setFoco] = useState<string | null>(null);
+  // ao abrir o projeto, a saúde do projeto; as atividades de um módulo só abrem quando o GP pede.
+  // foco: até onde rolar depois de abrir (a atividade ou o início do módulo), um objeto novo a cada pedido
+  const [foco, setFoco] = useState<{ atividade: string | null } | null>(null);
   // TAP: foto do módulo no clique em "Gerar documento TAP" (o diálogo gera o PDF)
   const [tap, setTap] = useState<DadosTap | null>(null);
-  const abrir = (atividadeId?: string) => { setFoco(atividadeId ?? null); setAberto(true); };
   useEffect(() => {
-    if (!aberto) return;
+    if (!foco) return;
     const t = setTimeout(() => {
-      const alvo = foco ? document.getElementById(`ger-atv-${foco}`) : document.getElementById("ger-mod-titulo");
+      const alvo = foco.atividade ? document.getElementById(`ger-atv-${foco.atividade}`) : document.getElementById("ger-mod-titulo");
       alvo?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 60);
     return () => clearTimeout(t);
-  }, [aberto, foco]);
-  // o módulo de cada vez: clicar no aberto alterna medidor e atividades; outro módulo abre no medidor
-  const escolherModulo = (m: ModuloNum) => {
-    if (m === modulo) { if (aberto) setAberto(false); else abrir(); return; }
-    const n = new URLSearchParams(params);
-    if (m === "01") n.delete("modulo"); else n.set("modulo", m);
-    setParams(n);
-    setAberto(false);
+  }, [foco]);
+  /** Abre as atividades do módulo (com a atividade, rola até ela); sem módulo, volta à saúde do projeto. */
+  const irPara = (m: ModuloNum | null, atividade?: string) => {
+    if (m !== modulo) {
+      const n = new URLSearchParams(params);
+      if (m) n.set("modulo", m); else n.delete("modulo");
+      setParams(n);
+    }
+    setFoco(m ? { atividade: atividade ?? null } : null);
   };
   // sem esqueleto: a tela e o que o GP preencheu continuam onde estão
   const reler = () => fetchGerProject(id).then(p => { if (p) setProject(p); });
@@ -242,18 +226,30 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
     }));
   };
   const gerarTap = () => { void gerarTapCom(estado); };
-  const DOC_TAP = {
-    botao: "Gerar documento TAP",
-    bloqueado: "O documento TAP (Termo de Abertura do Projeto) é liberado quando o módulo chegar a 100%.",
-    concluido: "Gere o documento TAP para assinatura.",
-  };
+  const BOTAO_TAP = "Gerar documento TAP";
   const userName = profile?.full_name ?? "Você";
-  const voltarAoMedidor = (
-    <Button variant="ghost" size="sm" className="-mb-1 -ml-2 h-8 w-fit text-muted-foreground" onClick={() => setAberto(false)}>
-      <Gauge className="mr-1.5 h-4 w-4" />Voltar ao medidor do módulo
+  const voltarASaude = (
+    <Button variant="ghost" size="sm" className="-mb-1 -ml-2 h-8 w-fit text-muted-foreground" onClick={() => irPara(null)}>
+      <Gauge className="mr-1.5 h-4 w-4" />Voltar à saúde do projeto
     </Button>
   );
   const reuniaoPe = m2.estado.contato.registradoEm ? m2.estado.contato.reuniaoPe : null;
+  // a saúde do projeto soma as atividades de todos os módulos (a lateral sai desta lista)
+  const modulos: (ModuloSaude & { numero: ModuloNum })[] = [
+    {
+      numero: "01", nome: MODULO_01.nome, atividades: lista01, rotuloBloqueado: "Esperando o checklist",
+      extra: and01.proxima ? (
+        <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground" title="O documento TAP (Termo de Abertura do Projeto) é liberado quando o módulo 01 chegar a 100%.">
+          <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />TAP liberado com o módulo a 100%
+        </span>
+      ) : (
+        <Button size="sm" className="h-8 bg-emerald-600 text-xs text-white hover:bg-emerald-500" onClick={gerarTap}>
+          <FileText className="mr-1.5 h-3.5 w-3.5" />{BOTAO_TAP}
+        </Button>
+      ),
+    },
+    { numero: "02", nome: MODULO_02.nome, atividades: lista02, extra: <ReuniaoPe reuniaoPe={reuniaoPe} /> },
+  ];
 
   return (
     <div className="flex flex-col gap-5">
@@ -284,28 +280,25 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
-        {/* Módulos do projeto */}
-        <nav aria-label="Módulos do projeto" className="flex flex-col gap-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">Módulos do projeto</p>
-          <CartaoModulo numero={MODULO_01.numero} nome={MODULO_01.nome} feitas={and01.feitas} total={and01.total}
-            ativo={modulo === "01"} aberto={aberto} onClick={() => escolherModulo("01")} />
-          <CartaoModulo numero={MODULO_02.numero} nome={MODULO_02.nome} feitas={and02.feitas} total={and02.total}
-            ativo={modulo === "02"} aberto={aberto} onClick={() => escolherModulo("02")} />
+        {/* Saúde do projeto e módulos */}
+        <nav aria-label="Saúde do projeto e módulos" className="flex flex-col gap-2">
+          <CartaoSaude modulos={modulos} ativo={modulo === null} onClick={() => irPara(null)} />
+          <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">Módulos do projeto</p>
+          {modulos.map(m => <CartaoModulo key={m.numero} m={m} ativo={modulo === m.numero} onClick={() => irPara(m.numero)} />)}
           <div className="flex items-center gap-2 rounded-xl border border-dashed border-border p-3 text-[13px] text-muted-foreground">
             <Layers className="h-4 w-4 shrink-0" />Próximos módulos: em definição
           </div>
         </nav>
 
-        {modulo === "01" ? (!aberto ? (
-          <MedidorModulo numero={MODULO_01.numero} nome={MODULO_01.nome} resumo={MODULO_01.resumo}
-            atividades={lista01} onAbrir={abrir} documento={DOC_TAP} onGerarDocumento={gerarTap} />
-        ) : (
+        {modulo === null ? (
+          <SaudeProjeto modulos={modulos} onAbrir={(m, atividade) => irPara(m as ModuloNum, atividade)} />
+        ) : modulo === "01" ? (
           <div className="flex min-w-0 flex-col gap-4">
-            {voltarAoMedidor}
+            {voltarASaude}
             <DestaqueModulo numero={MODULO_01.numero} nome={MODULO_01.nome} resumo={MODULO_01.resumo} proxima={and01.proxima?.titulo} feitas={and01.feitas} total={and01.total}>
               {!and01.proxima && (
                 <Button size="sm" className="h-8 bg-primary-foreground text-primary hover:bg-primary-foreground/90" onClick={gerarTap}>
-                  <FileText className="mr-1.5 h-4 w-4" />{DOC_TAP.botao}
+                  <FileText className="mr-1.5 h-4 w-4" />{BOTAO_TAP}
                 </Button>
               )}
             </DestaqueModulo>
@@ -329,19 +322,15 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
             <Modulo01 project={project} estado={estado} onChange={u => m1.setEstado(u)} userName={userName}
               ordem={ordem} travada={travada} onMover={mover} onAtualizarProjeto={reler} onGerarTap={e => void gerarTapCom(e)} />
           </div>
-        )) : (!aberto ? (
-          <MedidorModulo numero={MODULO_02.numero} nome={MODULO_02.nome} resumo={MODULO_02.resumo}
-            atividades={lista02} onAbrir={abrir} rotuloBloqueado="Esperando outra etapa"
-            destaque={<ReuniaoPe reuniaoPe={reuniaoPe} />} />
         ) : (
           <div className="flex min-w-0 flex-col gap-4">
-            {voltarAoMedidor}
+            {voltarASaude}
             <DestaqueModulo numero={MODULO_02.numero} nome={MODULO_02.nome} resumo={MODULO_02.resumo} proxima={and02.proxima?.titulo} feitas={and02.feitas} total={and02.total}>
               <ReuniaoPe reuniaoPe={reuniaoPe} sobreMarca />
             </DestaqueModulo>
             <Modulo02 project={project} estado={m2.estado} onChange={u => m2.setEstado(u)} userName={userName} emailCliente={estado.carrier.para} />
           </div>
-        ))}
+        )}
       </div>
       <TapDialog dados={tap} onOpenChange={o => { if (!o) setTap(null); }} />
     </div>
