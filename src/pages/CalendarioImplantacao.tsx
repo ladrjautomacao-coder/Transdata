@@ -18,7 +18,7 @@ import {
   type EligibleProject, type ImplantationRequest, type Technician,
 } from "@/lib/implantationScheduling";
 import {
-  MONTH_LONG, WEEK_OPTIONS, VISIT_KIND, VISIT_KIND_ORDER, VISIT_STATE, VISIT_STATE_FILTER, computeAlerts, coversDay, fmtWeekRange,
+  MONTH_LONG, WEEK_OPTIONS, VISIT_KIND, VISIT_KIND_ORDER, VISIT_STATE, VISIT_STATE_FILTER, computeAlerts, coversDay, dayDiff, fmtWeekRange,
   lastWorkdayUntil, mondayOf, placeLabel, placeOf, plusDays, startOfDay, techLoad, visitDays, visitKindOf, visitState,
   type AgendaAlert, type VisitKind, type VisitState,
 } from "@/lib/agendaTecnica";
@@ -38,7 +38,10 @@ const VIEW_KEY = "transdata:implantacao-calendario-view";
 const WEEKS_KEY = "transdata:implantacao-calendario-semanas";
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const firstOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
-/** Calendário no computador: 31 dias a partir do dia escolhido (hoje fica na 1ª coluna). No celular segue o mês. */
+/**
+ * Calendário no computador: abre no dia escolhido (hoje) encostado nos técnicos, com 31 dias à frente; a semana
+ * dele fica inteira, com os dias anteriores na rolagem à esquerda. No celular segue o mês.
+ */
 const SPAN_DAYS = 31;
 
 /** Filtro em forma de botão (mostra o nome do filtro ou o valor escolhido). */
@@ -159,9 +162,10 @@ export default function CalendarioImplantacao() {
   /* ─── período, feriados e filtros ─── */
   const today = useMemo(() => startOfDay(new Date()), [requests]); // eslint-disable-line react-hooks/exhaustive-deps
   const now = useMemo(() => new Date(), [requests]); // eslint-disable-line react-hooks/exhaustive-deps
-  const rangeStart = view === "mes" && !rolling ? firstOfMonth(anchor) : startOfDay(anchor);
+  // janela corrida em semanas inteiras: da segunda da semana do dia escolhido ao domingo depois dos 31 dias
+  const rangeStart = view !== "mes" ? startOfDay(anchor) : rolling ? mondayOf(anchor) : firstOfMonth(anchor);
   const rangeEnd = view !== "mes" ? plusDays(anchor, weeks * 7 - 1)
-    : rolling ? plusDays(anchor, SPAN_DAYS - 1) : new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
+    : rolling ? plusDays(mondayOf(plusDays(anchor, SPAN_DAYS - 1)), 6) : new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
   const holidayMap = useMemo(() => {
     const y = rangeStart.getFullYear();
     return holidaysByDay([y - 1, y, y + 1], customHolidays);
@@ -335,7 +339,7 @@ export default function CalendarioImplantacao() {
         <DayVisits list={filtered} selected={selectedDay} holidays={holidayMap} onOpen={setDetail} onAssign={canApprove ? r => openAssign(r) : undefined} />
       </div>
     ) : (
-      <MonthGantt month={anchor} start={rangeStart} length={SPAN_DAYS} techs={rowTechs} approved={approvedF}
+      <MonthGantt month={anchor} start={rangeStart} length={dayDiff(rangeStart, rangeEnd) + 1} focus={anchor} techs={rowTechs} approved={approvedF}
         loads={loads} loadUntil={loadUntil} holidays={holidayMap}
         alertsByRequest={alertsByRequest} highlightId={highlightId} onOpen={setDetail} />
     );

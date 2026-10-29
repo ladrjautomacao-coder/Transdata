@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from "react";
+import { useLayoutEffect, useMemo, useRef, type CSSProperties } from "react";
 import { AlertTriangle, CalendarCheck, Check, Palmtree, UserRoundCog } from "lucide-react";
 import { dateOfYmd, fmtVacation, periodOf, techniciansOf, type ImplantationRequest, type Technician } from "@/lib/implantationScheduling";
 import { dateKey, type Holiday } from "@/lib/holidays";
@@ -29,14 +29,16 @@ function pack<T extends { a: number; b: number }>(items: T[]) {
 /**
  * Mês inteiro na horizontal: técnicos nas linhas, dias nas colunas, visitas como
  * barras que atravessam os dias que ocupam. Faz par com `TechnicianTimeline`.
- * Com `start`, mostra `length` dias a partir dele no lugar do mês (ex.: hoje na 1ª coluna).
+ * Com `start`, mostra `length` dias a partir dele no lugar do mês. Com `focus`, esse dia abre encostado na
+ * coluna dos técnicos (ex.: hoje) e os dias antes dele ficam na rolagem, à esquerda.
  */
 export function MonthGantt({
-  month, start, length, techs, approved, loads, loadUntil, holidays, alertsByRequest, highlightId, onOpen,
+  month, start, length, focus, techs, approved, loads, loadUntil, holidays, alertsByRequest, highlightId, onOpen,
 }: {
   month: Date;
   start?: Date;
   length?: number;
+  focus?: Date;
   techs: Technician[];
   approved: ImplantationRequest[];
   loads: Map<string, TechLoad>;
@@ -56,6 +58,14 @@ export function MonthGantt({
 
   const template = `${NAME}px repeat(${daysInMonth}, minmax(${DAY_MIN}px, 1fr))`;
   const minWidth = NAME + daysInMonth * DAY_MIN;
+  // com `focus`, a parte visível cabe os dias a partir dele; os anteriores ficam na rolagem
+  const focusIdx = focus ? Math.min(Math.max(0, dayDiff(m0, focus)), daysInMonth - 1) : 0;
+  const width = focusIdx > 0 ? `calc(${NAME}px + (100% - ${NAME}px) * ${daysInMonth / (daysInMonth - focusIdx)})` : undefined;
+  const scroller = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (el) el.scrollLeft = ((el.scrollWidth - NAME) / daysInMonth) * focusIdx;
+  }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // posição da visita (índice do primeiro e do último dia do mês que ela ocupa)
   const span = (r: ImplantationRequest) => {
@@ -210,7 +220,7 @@ export function MonthGantt({
         {placed.map(p => bar(p.r, p.a, p.b, p.lane, p.contL, p.contR))}
         {placed.length === 0 && vacs.length === 0 && load && loadUntil && (
           <p className="pointer-events-none self-center px-3 text-[11px] italic text-muted-foreground"
-            style={{ gridColumn: "2 / -1", gridRow: 1 }}>
+            style={{ gridColumn: `${focusIdx + 2} / -1`, gridRow: 1 }}>
             {freeAll
               ? <span className="inline-flex items-center gap-1.5"><CalendarCheck className="h-3.5 w-3.5" />{windowed ? "Período inteiro livre" : "Mês inteiro livre"}</span>
               : "Livre no período exibido"}
@@ -223,8 +233,8 @@ export function MonthGantt({
   return (
     <section aria-label={windowed ? `Calendário de ${fmtDM(days[0])} a ${fmtDM(days[days.length - 1])}` : `Mês inteiro, ${month.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}`}
       className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
-      <div className="overflow-x-auto">
-        <div style={{ minWidth }}>
+      <div ref={scroller} className="overflow-x-auto [scrollbar-color:hsl(var(--primary)/0.45)_hsl(var(--muted))]">
+        <div style={{ minWidth, width }}>
           {header}
           {techRows}
           {techs.length === 0 && (
