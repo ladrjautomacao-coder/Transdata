@@ -27,7 +27,7 @@ import {
   VISIT_FORMAT_LABEL, REMOTE_PERIODS, formatAddress, visitFormatText, type RemotePeriod, type VisitFormat,
   type EligibleProject, type HistoryEntry, type ImplantationRequest, type Technician, type TechnicianVacation,
 } from "@/lib/implantationScheduling";
-import { MeetingLink, ProjectBox, StatusPill, TechAvatar, VisitDestination } from "./AgendaShared";
+import { MeetingLink, PendingAge, ProjectBox, StatusPill, TechAvatar, VisitDestination } from "./AgendaShared";
 import { VacationChip, VacationPanel } from "./VacationPanel";
 import { HolidayWarning } from "./HolidaysDialog";
 import { useCustomHolidays } from "@/hooks/useCustomHolidays";
@@ -533,7 +533,8 @@ export function RequestDetailSheet({ request, open, onOpenChange, mode, onApprov
           <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">{request.status === "aprovada" ? "Agendamento aprovado" : "Solicitação de agenda"}</p>
           <SheetTitle>{request.visit_purpose}</SheetTitle>
           <SheetDescription asChild>
-            <div className="flex items-center gap-2"><StatusPill status={request.status} />
+            <div className="flex flex-wrap items-center gap-2"><StatusPill status={request.status} />
+              {request.status === "pendente" && <PendingAge since={request.created_at} className="text-[12px]" />}
               {request.visit_purpose_is_custom && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">objetivo personalizado</span>}</div>
           </SheetDescription>
         </SheetHeader>

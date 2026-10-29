@@ -38,6 +38,8 @@ const VIEW_KEY = "transdata:implantacao-calendario-view";
 const WEEKS_KEY = "transdata:implantacao-calendario-semanas";
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const firstOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
+/** Calendário no computador: 31 dias a partir do dia escolhido (hoje fica na 1ª coluna). No celular segue o mês. */
+const SPAN_DAYS = 31;
 
 /** Filtro em forma de botão (mostra o nome do filtro ou o valor escolhido). */
 function FilterSelect({ label, value, onChange, options }: {
@@ -90,7 +92,7 @@ export default function CalendarioImplantacao() {
   })();
   const [anchor, setAnchor] = useState(() => {
     const t = linkDate ?? new Date();
-    return view === "mes" ? firstOfMonth(t) : mondayOf(t);
+    return view === "mes" ? startOfDay(t) : mondayOf(t);
   });
   const [highlightId, setHighlightId] = useState<string | null>(() => params.get("destaque"));
 
@@ -138,22 +140,28 @@ export default function CalendarioImplantacao() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, highlightId, view]);
 
+  // calendário em janela corrida (computador) ou em mês fechado (celular)
+  const rolling = view === "mes" && !isMobile;
   const setView = (v: View) => {
     setViewState(v);
     try { localStorage.setItem(VIEW_KEY, v); } catch { /* ignora */ }
-    const today = new Date();
-    if (v === "mes") setAnchor(a => (view === "mes" ? a : firstOfMonth(a)));
-    else if (view === "mes") setAnchor(a => (a.getFullYear() === today.getFullYear() && a.getMonth() === today.getMonth() ? mondayOf(today) : mondayOf(a)));
+    const today = startOfDay(new Date());
+    // período que inclui hoje: o calendário começa em hoje e a semana volta para a de hoje
+    if (v === "mes") setAnchor(a => (view === "mes" ? a : +a <= +today && +today < +plusDays(a, 7 * weeks) ? today : a));
+    else if (view === "mes") setAnchor(a => (+a <= +today && +today < +plusDays(a, SPAN_DAYS) ? mondayOf(today) : mondayOf(a)));
   };
   const setWeeks = (n: number) => { setWeeksState(n); try { localStorage.setItem(WEEKS_KEY, String(n)); } catch { /* ignora */ } };
-  const nav = (n: number) => setAnchor(a => (view === "mes" ? new Date(a.getFullYear(), a.getMonth() + n, 1) : plusDays(a, 7 * weeks * n)));
-  const goToday = () => { const t = new Date(); setAnchor(view === "mes" ? firstOfMonth(t) : mondayOf(t)); };
+  const nav = (n: number) => setAnchor(a => (
+    view !== "mes" ? plusDays(a, 7 * weeks * n) : rolling ? plusDays(a, SPAN_DAYS * n) : new Date(a.getFullYear(), a.getMonth() + n, 1)
+  ));
+  const goToday = () => { const t = new Date(); setAnchor(view === "mes" ? startOfDay(t) : mondayOf(t)); };
 
   /* ─── período, feriados e filtros ─── */
   const today = useMemo(() => startOfDay(new Date()), [requests]); // eslint-disable-line react-hooks/exhaustive-deps
   const now = useMemo(() => new Date(), [requests]); // eslint-disable-line react-hooks/exhaustive-deps
-  const rangeStart = view === "mes" ? firstOfMonth(anchor) : startOfDay(anchor);
-  const rangeEnd = view === "mes" ? new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0) : plusDays(anchor, weeks * 7 - 1);
+  const rangeStart = view === "mes" && !rolling ? firstOfMonth(anchor) : startOfDay(anchor);
+  const rangeEnd = view !== "mes" ? plusDays(anchor, weeks * 7 - 1)
+    : rolling ? plusDays(anchor, SPAN_DAYS - 1) : new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
   const holidayMap = useMemo(() => {
     const y = rangeStart.getFullYear();
     return holidaysByDay([y - 1, y, y + 1], customHolidays);
@@ -225,7 +233,7 @@ export default function CalendarioImplantacao() {
     setTimeout(() => setHighlightId(a.requestIds[0] ?? null), 0);
   };
 
-  const spanLabel = view === "mes"
+  const spanLabel = view === "mes" && !rolling
     ? `${MONTH_LONG[anchor.getMonth()].replace(/^./, c => c.toUpperCase())} ${anchor.getFullYear()}`
     : `${fmtWeekRange(rangeStart, rangeEnd)} ${rangeEnd.getFullYear()}`;
 
@@ -327,7 +335,7 @@ export default function CalendarioImplantacao() {
         <DayVisits list={filtered} selected={selectedDay} holidays={holidayMap} onOpen={setDetail} onAssign={canApprove ? r => openAssign(r) : undefined} />
       </div>
     ) : (
-      <MonthGantt month={anchor} techs={rowTechs} approved={approvedF}
+      <MonthGantt month={anchor} start={rangeStart} length={SPAN_DAYS} techs={rowTechs} approved={approvedF}
         loads={loads} loadUntil={loadUntil} holidays={holidayMap}
         alertsByRequest={alertsByRequest} highlightId={highlightId} onOpen={setDetail} />
     );

@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatLocation } from "@/lib/location";
 import { statusLabels, subPhasesByStatus } from "@/pages/ProjectManagement";
 import {
-  HIDDEN_BY_DEFAULT_STATUSES, REQUEST_STATUS, calendarLinkFor, errorMessage, fetchRequests, fetchTechnicians, formatPeriod, periodOf,
+  HIDDEN_BY_DEFAULT_STATUSES, REQUEST_STATUS, calendarLinkFor, errorMessage, fetchRequests, fetchTechnicians, formatPeriod, pendingAge, periodOf,
   type EligibleProject, type ImplantationRequest, type RequestStatus, type Technician,
 } from "@/lib/implantationScheduling";
 import { EmptyBlock, Kpi, RequestRow } from "@/components/agendamento/AgendaShared";
@@ -301,6 +301,7 @@ export default function SolicitacaoAgenda({ view = "gp" }: { view?: Mode }) {
       (!q || `${r.project?.company_name ?? ""} ${r.project?.project_code ?? ""} ${r.requester_name ?? ""} ${r.visit_purpose}`.toLowerCase().includes(q)) &&
       (!apRequester || r.requester_name === apRequester));
     const n = (s: RequestStatus) => requests.filter(r => r.status === s).length;
+    const oldestPending = requests.filter(r => r.status === "pendente").sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at))[0];
     const now = new Date(), dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()), dayEnd = new Date(dayStart.getTime() + 864e5);
     const inField = new Set(requests.filter(r => r.status === "aprovada" && periodOf(r).start < dayEnd && dayStart < periodOf(r).end).flatMap(r => r.members.map(m => m.technician?.id))).size;
     const groups: [RequestStatus, string, string][] = [
@@ -312,8 +313,8 @@ export default function SolicitacaoAgenda({ view = "gp" }: { view?: Mode }) {
     return (
       <>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Kpi icon={Inbox} label="Pendentes" value={n("pendente")} caption="para avaliar" tone="bg-amber-500/15 text-amber-600 dark:text-amber-300"
-            info="Solicitações aguardando sua aprovação ou reprovação." />
+          <Kpi icon={Inbox} label="Pendentes" value={n("pendente")} caption={oldestPending ? `a mais antiga há ${pendingAge(oldestPending.created_at).text}` : "para avaliar"} tone="bg-amber-500/15 text-amber-600 dark:text-amber-300"
+            info="Solicitações aguardando sua aprovação ou reprovação. A legenda mostra há quanto tempo espera a mais antiga; em cada solicitação, o tempo fica âmbar a partir de 3 dias e vermelho a partir de 7." />
           <Kpi icon={CheckCircle2} label="Aprovadas" value={n("aprovada")} caption="no calendário" tone="bg-emerald-500/15 text-emerald-600 dark:text-emerald-300"
             info="Agendamentos aprovados e publicados no Calendário. Clique para abrir o Calendário." onClick={() => navigate("/implantacao/calendario")} />
           <Kpi icon={XCircle} label="Reprovadas" value={n("reprovada")} caption="com justificativa" tone="bg-red-500/15 text-red-600 dark:text-red-300"

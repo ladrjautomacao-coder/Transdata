@@ -229,6 +229,17 @@ export const periodOf = (r: ImplantationRequest) => ({
   end: new Date(r.approved_end ?? r.requested_end),
 });
 
+/**
+ * Há quanto tempo a solicitação espera avaliação (desde o envio pelo GP): "40 min", "5 h", "3 dias".
+ * Nível de atenção: âmbar a partir de 3 dias, vermelho a partir de 7.
+ */
+export function pendingAge(createdAt: string, now = new Date()) {
+  const min = Math.max(0, Math.floor((+now - +new Date(createdAt)) / 60000));
+  const days = Math.floor(min / 1440);
+  const text = min < 60 ? `${Math.max(1, min)} min` : min < 1440 ? `${Math.floor(min / 60)} h` : `${days} dia${days === 1 ? "" : "s"}`;
+  return { text, days, level: days >= 7 ? "alto" as const : days >= 3 ? "medio" as const : "baixo" as const };
+}
+
 /** Link do Calendário já posicionado na data da visita e com ela destacada. */
 export function calendarLinkFor(r: ImplantationRequest) {
   const d = periodOf(r).start;

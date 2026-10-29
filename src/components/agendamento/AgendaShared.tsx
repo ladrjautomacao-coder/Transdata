@@ -1,11 +1,11 @@
 import { useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Bus, CalendarClock, ChevronRight, Info, MapPin, MessageSquareWarning, Navigation, Video } from "lucide-react";
+import { Bus, CalendarClock, ChevronRight, Hourglass, Info, MapPin, MessageSquareWarning, Navigation, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatLocation } from "@/lib/location";
 import {
-  REQUEST_STATUS, colorFor, destinationOf, formatPeriod, initials, periodOf, techniciansOf,
+  REQUEST_STATUS, colorFor, destinationOf, formatPeriod, initials, pendingAge, periodOf, techniciansOf,
   type DestinationParts, type ImplantationRequest, type RequestStatus, type Technician,
 } from "@/lib/implantationScheduling";
 
@@ -15,6 +15,18 @@ export function StatusPill({ status }: { status: RequestStatus }) {
     <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${s.pill}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
       {s.label}
+    </span>
+  );
+}
+
+/** Há quanto tempo a solicitação espera avaliação ("há 3 dias"): âmbar a partir de 3 dias, vermelho a partir de 7. */
+export function PendingAge({ since, className = "" }: { since: string; className?: string }) {
+  const { text, level } = pendingAge(since);
+  const tone = level === "alto" ? "font-semibold text-red-600 dark:text-red-400" : level === "medio" ? "font-semibold text-amber-700 dark:text-amber-300" : "text-muted-foreground";
+  const sent = new Date(since).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return (
+    <span title={`Pendente desde ${sent}`} className={`inline-flex items-center gap-1 whitespace-nowrap text-[11px] ${tone} ${className}`}>
+      <Hourglass aria-hidden className="h-3 w-3" />há {text}
     </span>
   );
 }
@@ -177,7 +189,10 @@ export function RequestRow({ request: r, showRequester, actions, onOpen }: {
         )}
       </div>
       {techs.length > 0 && <div className="hidden -space-x-1.5 sm:flex">{techs.map(t => <TechAvatar key={t.id} tech={t} />)}</div>}
-      <StatusPill status={r.status} />
+      <div className="flex shrink-0 flex-col items-end gap-0.5">
+        <StatusPill status={r.status} />
+        {r.status === "pendente" && <PendingAge since={r.created_at} />}
+      </div>
       {r.attendance && <span className="hidden rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 sm:inline">{r.attendance === "presencial" ? "Presencial" : "Remoto"}</span>}
       {actions && <div className="flex shrink-0 gap-1.5" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>{actions}</div>}
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />

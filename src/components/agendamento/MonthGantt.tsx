@@ -29,11 +29,14 @@ function pack<T extends { a: number; b: number }>(items: T[]) {
 /**
  * Mês inteiro na horizontal: técnicos nas linhas, dias nas colunas, visitas como
  * barras que atravessam os dias que ocupam. Faz par com `TechnicianTimeline`.
+ * Com `start`, mostra `length` dias a partir dele no lugar do mês (ex.: hoje na 1ª coluna).
  */
 export function MonthGantt({
-  month, techs, approved, loads, loadUntil, holidays, alertsByRequest, highlightId, onOpen,
+  month, start, length, techs, approved, loads, loadUntil, holidays, alertsByRequest, highlightId, onOpen,
 }: {
   month: Date;
+  start?: Date;
+  length?: number;
   techs: Technician[];
   approved: ImplantationRequest[];
   loads: Map<string, TechLoad>;
@@ -43,8 +46,10 @@ export function MonthGantt({
   highlightId: string | null;
   onOpen: (r: ImplantationRequest) => void;
 }) {
-  const m0 = startOfDay(new Date(month.getFullYear(), month.getMonth(), 1));
-  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+  const windowed = !!start;
+  const m0 = startOfDay(start ?? new Date(month.getFullYear(), month.getMonth(), 1));
+  const daysInMonth = windowed ? length ?? 31 : new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+  const periodo = windowed ? "período" : "mês";
   const days = useMemo(() => Array.from({ length: daysInMonth }, (_, i) => plusDays(m0, i)), [+m0, daysInMonth]); // eslint-disable-line react-hooks/exhaustive-deps
   const today = startOfDay(new Date());
   const todayIdx = dayDiff(m0, today);
@@ -178,7 +183,7 @@ export function MonthGantt({
                 <div className="mt-1 flex items-center gap-2">
                   <span className={`text-[11.5px] leading-4 ${freeAll ? "text-emerald-700 dark:text-emerald-300 font-medium" : tone?.text ?? "text-muted-foreground"}`}
                     title={`${load.busy} de ${load.workdays} dias úteis em campo até ${fmtDM(loadUntil)} · ${load.free} livre${load.free === 1 ? "" : "s"}`}>
-                    {freeAll ? "Livre no mês" : load.workdays === 0 && load.off > 0 ? "Sem dias disponíveis" : `${load.busy} de ${load.workdays} dias`}
+                    {freeAll ? `Livre no ${periodo}` : load.workdays === 0 && load.off > 0 ? "Sem dias disponíveis" : `${load.busy} de ${load.workdays} dias`}
                   </span>
                   {tone && load.workdays > 0 && !freeAll && (
                     <span aria-hidden className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
@@ -187,7 +192,7 @@ export function MonthGantt({
                   )}
                 </div>
               )
-              : <p className="text-[11.5px] leading-4 text-muted-foreground">Sem visitas no mês</p>}
+              : <p className="text-[11.5px] leading-4 text-muted-foreground">Sem visitas no {periodo}</p>}
             {vacs.length > 0 && (
               <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium leading-4 text-sky-800 dark:text-sky-200">
                 <Palmtree aria-hidden className="h-3 w-3 shrink-0" /><span className="truncate">Férias {vacs.map(x => fmtVacation(x.v)).join(", ")}</span>
@@ -207,7 +212,7 @@ export function MonthGantt({
           <p className="pointer-events-none self-center px-3 text-[11px] italic text-muted-foreground"
             style={{ gridColumn: "2 / -1", gridRow: 1 }}>
             {freeAll
-              ? <span className="inline-flex items-center gap-1.5"><CalendarCheck className="h-3.5 w-3.5" />Mês inteiro livre</span>
+              ? <span className="inline-flex items-center gap-1.5"><CalendarCheck className="h-3.5 w-3.5" />{windowed ? "Período inteiro livre" : "Mês inteiro livre"}</span>
               : "Livre no período exibido"}
           </p>
         )}
@@ -216,7 +221,7 @@ export function MonthGantt({
   });
 
   return (
-    <section aria-label={`Mês inteiro, ${month.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}`}
+    <section aria-label={windowed ? `Calendário de ${fmtDM(days[0])} a ${fmtDM(days[days.length - 1])}` : `Mês inteiro, ${month.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}`}
       className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
       <div className="overflow-x-auto">
         <div style={{ minWidth }}>
