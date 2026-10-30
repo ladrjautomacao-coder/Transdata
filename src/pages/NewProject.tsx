@@ -1,6 +1,6 @@
 import { PROJECT_SEGMENTS } from "@/lib/projectSegments";
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -80,7 +80,9 @@ export default function NewProject() {
   const [handoverDate, setHandoverDate] = useState<Date>();
   const [executiveProjectDate, setExecutiveProjectDate] = useState<Date>();
   const [executiveId, setExecutiveId] = useState("");
-  const [managerId, setManagerId] = useState("");
+  const location = useLocation();
+  // "Atribuir projeto" no Dashboard: o cadastro já abre com o gerente escolhido
+  const [managerId, setManagerId] = useState(() => (location.state as { gerenteId?: string } | null)?.gerenteId ?? "");
   const [status, setStatus] = useState<ProjectStatus>("planejamento");
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
 
