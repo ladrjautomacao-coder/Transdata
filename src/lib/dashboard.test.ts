@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  FILTROS_PADRAO, cargaPorGerente, contarStatus, csvProjetos, descartado, evolucaoFrota, evolucaoSolucoes, filtrar, frotaPorStatus, porSolucao,
+  FILTROS_PADRAO, cargaPorGerente, contarStatus, csvProjetos, descartado, evolucaoFrota, evolucaoSolucoes, filtrar, frotaPorStatus, porSolucao, semGerenteInativo,
   type DashProject,
 } from "@/lib/dashboard";
 import { DEFAULT_STATUS_LABELS } from "@/lib/statusLabels";
@@ -78,5 +78,14 @@ describe("exportar", () => {
     const [cab, linha] = csv.slice(1).split("\r\n");
     expect(cab.split(";")[0]).toBe("Projeto");
     expect(linha).toBe('"Viação ""Azul""; Ltda";COD1;Joinville;SC;Implantação;Ana Lima;10;Bilhetagem;10/01/2026;01/02/2026');
+  });
+});
+
+describe("gerente inativo", () => {
+  it("some do Dashboard: o projeto conta como sem gerente", () => {
+    const p = semGerenteInativo(proj({ id: "1", manager_id: "g9", manager: { full_name: "Fulano Antigo", active: false } }));
+    expect([p.manager, p.manager_id]).toEqual([null, null]);
+    expect(cargaPorGerente([p]).map(g => g.nome)).toEqual(["Sem gerente"]);
+    expect(semGerenteInativo(proj({ id: "2", manager: { full_name: "Ana Lima", active: true } })).manager?.full_name).toBe("Ana Lima");
   });
 });

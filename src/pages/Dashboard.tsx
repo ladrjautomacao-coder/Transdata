@@ -18,14 +18,14 @@ import { numero } from "@/components/dashboard/cores";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   FILTROS_PADRAO, SEM_GERENTE, cargaPorGerente, contarStatus, csvProjetos, descartado, evolucaoFrota, evolucaoSolucoes, filtrar, frotaDe, porEstado,
-  porSolucao, solucoesDe, temFiltro, type ChaveFiltro, type DashProject, type FiltrosDash,
+  porSolucao, semGerenteInativo, solucoesDe, temFiltro, type ChaveFiltro, type DashProject, type FiltrosDash,
 } from "@/lib/dashboard";
 import { errorMessage } from "@/lib/implantationScheduling";
 import { statusLabels } from "@/lib/statusLabels";
 
 const SELECT = `id, company_name, project_code, city, state, contract_date, d_zero_date, status, sub_phase, fleet_size, is_pilot,
   complementary_sale, complementary_fleet, implemented_fleet, reached_implemented, manager_id,
-  manager:team_members!projects_manager_id_fkey(full_name), project_solutions(solution:solutions(name))`;
+  manager:team_members!projects_manager_id_fkey(full_name, active), project_solutions(solution:solutions(name))`;
 
 const hojeIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const ordenar = (xs: Iterable<string>) => Array.from(new Set(xs)).filter(Boolean).sort((a, b) => a.localeCompare(b, "pt-BR"));
@@ -48,7 +48,7 @@ export default function Dashboard() {
   const carregar = useCallback(async () => {
     const { data, error } = await supabase.from("projects").select(SELECT).order("company_name");
     if (error) throw error;
-    setProjetos(((data ?? []) as unknown as DashProject[]).filter(p => !descartado(p)));
+    setProjetos(((data ?? []) as unknown as DashProject[]).filter(p => !descartado(p)).map(semGerenteInativo));
     setAtualizadoEm(new Date());
     setErro(null);
   }, []);

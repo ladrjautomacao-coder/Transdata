@@ -23,7 +23,8 @@ export interface DashProject {
   implemented_fleet: number;
   reached_implemented: boolean;
   manager_id: string | null;
-  manager: { full_name: string } | null;
+  /** `active`: se a pessoa ainda está ativa na Equipe. */
+  manager: { full_name: string; active?: boolean } | null;
   project_solutions: { solution: { name: string } | null }[];
 }
 
@@ -47,6 +48,12 @@ export const descartado = (p: Pick<DashProject, "status" | "sub_phase">) =>
 export const emAndamento = (p: DashProject) => p.status !== "encerrado";
 
 export const SEM_GERENTE = "Sem gerente";
+/**
+ * Gerente desativado na Equipe não aparece no Dashboard (nem na carga, nem no filtro, nem na
+ * lista), como nas outras telas do portal: o projeto dele conta como sem gerente.
+ */
+export const semGerenteInativo = (p: DashProject): DashProject =>
+  (p.manager && p.manager.active === false ? { ...p, manager: null, manager_id: null } : p);
 export const gerenteDe = (p: DashProject) => p.manager?.full_name || SEM_GERENTE;
 export const solucoesDe = (p: DashProject) => p.project_solutions.map(ps => ps.solution?.name).filter((n): n is string => !!n);
 
