@@ -1,4 +1,4 @@
-// Faixas dos medidores de saúde (Gerenciamento e Grandes Operações): até 40% atenção, até 70% em
+// Faixas dos medidores de progresso (Gerenciamento e Grandes Operações): até 40% atenção, até 70% em
 // andamento, depois quase lá; 100% tudo feito.
 import { AlertTriangle, PartyPopper, TrendingUp } from "lucide-react";
 

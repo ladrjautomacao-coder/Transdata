@@ -12,7 +12,7 @@ const arco = (de: number, ate: number) => {
   return `M${x0.toFixed(2)},${y0.toFixed(2)} A${R},${R} 0 0 1 ${x1.toFixed(2)},${y1.toFixed(2)}`;
 };
 
-/** Velocímetro de saúde (Gerenciamento e Grandes Operações), com as faixas de `nivelMedidor`. */
+/** Velocímetro do progresso (Gerenciamento e Grandes Operações), com as faixas de `nivelMedidor`. */
 export function Velocimetro({ pct, nivel, rotulo }: { pct: number; nivel: Nivel; /** Leitura para leitor de tela. */ rotulo: string }) {
   // o ponteiro sobe do zero ao abrir (sem animação para quem prefere menos movimento)
   const [mostrado, setMostrado] = useState(0);

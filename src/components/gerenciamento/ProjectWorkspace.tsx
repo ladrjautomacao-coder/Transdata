@@ -15,7 +15,7 @@ import {
 } from "@/lib/gerenciamento";
 import { MODULO_02, fetchModulo02, modulo02Vazio, salvarModulo02, situacao02, type Modulo02Estado } from "@/lib/modulo02";
 import { montarTap, type DadosTap } from "@/lib/tap";
-import { CartaoModulo, CartaoSaude, SaudeProjeto, type ModuloSaude } from "./SaudeProjeto";
+import { CartaoModulo, CartaoProgresso, ProgressoProjeto, type ModuloProgresso } from "./ProgressoProjeto";
 import { TapDialog } from "./TapDialog";
 import { Modulo01 } from "./Modulo01";
 import { Modulo02, ReuniaoPe } from "./Modulo02";
@@ -80,7 +80,7 @@ function SituacaoGravacao({ g, onTentar }: { g: Gravacao; onTentar: () => void }
 }
 
 /**
- * Módulos prontos, na ordem do projeto. Módulo novo: entra aqui, na lista da saúde do projeto
+ * Módulos prontos, na ordem do projeto. Módulo novo: entra aqui, na lista do progresso do projeto
  * (`modulos`, abaixo) e no conteúdo do módulo aberto.
  */
 const MODULOS = ["01", "02"] as const;
@@ -119,7 +119,7 @@ function andamento<Id extends string>(lista: { a: Atividade<Id>; sit: SituacaoAt
 }
 
 /**
- * O projeto escolhido: cabeçalho, módulos ao lado e a saúde do projeto (um medidor com todos os
+ * O projeto escolhido: cabeçalho, módulos ao lado e o progresso do projeto (um medidor com todos os
  * módulos); com ?modulo=01 ou 02, as atividades daquele módulo.
  */
 export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => void }) {
@@ -162,7 +162,7 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
       .catch(err => { setError(errorMessage(err)); setProject(null); });
   }, [id, carregar1, descarregar1, carregar2, descarregar2]);
   useEffect(load, [load]);
-  // ao abrir o projeto, a saúde do projeto; as atividades de um módulo só abrem quando o GP pede.
+  // ao abrir o projeto, o progresso do projeto; as atividades de um módulo só abrem quando o GP pede.
   // foco: até onde rolar depois de abrir (a atividade ou o início do módulo), um objeto novo a cada pedido
   const [foco, setFoco] = useState<{ atividade: string | null } | null>(null);
   // TAP: foto do módulo no clique em "Gerar documento TAP" (o diálogo gera o PDF)
@@ -175,7 +175,7 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
     }, 60);
     return () => clearTimeout(t);
   }, [foco]);
-  /** Abre as atividades do módulo (com a atividade, rola até ela); sem módulo, volta à saúde do projeto. */
+  /** Abre as atividades do módulo (com a atividade, rola até ela); sem módulo, volta ao progresso do projeto. */
   const irPara = (m: ModuloNum | null, atividade?: string) => {
     if (m !== modulo) {
       const n = new URLSearchParams(params);
@@ -228,14 +228,14 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   const gerarTap = () => { void gerarTapCom(estado); };
   const BOTAO_TAP = "Gerar documento TAP";
   const userName = profile?.full_name ?? "Você";
-  const voltarASaude = (
+  const voltarAoProgresso = (
     <Button variant="ghost" size="sm" className="-mb-1 -ml-2 h-8 w-fit text-muted-foreground" onClick={() => irPara(null)}>
-      <Gauge className="mr-1.5 h-4 w-4" />Voltar à saúde do projeto
+      <Gauge className="mr-1.5 h-4 w-4" />Voltar ao progresso do projeto
     </Button>
   );
   const reuniaoPe = m2.estado.contato.registradoEm ? m2.estado.contato.reuniaoPe : null;
-  // a saúde do projeto soma as atividades de todos os módulos (a lateral sai desta lista)
-  const modulos: (ModuloSaude & { numero: ModuloNum })[] = [
+  // o progresso do projeto soma as atividades de todos os módulos (a lateral sai desta lista)
+  const modulos: (ModuloProgresso &{ numero: ModuloNum })[] = [
     {
       numero: "01", nome: MODULO_01.nome, atividades: lista01, rotuloBloqueado: "Esperando o checklist",
       extra: and01.proxima ? (
@@ -280,9 +280,9 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
-        {/* Saúde do projeto e módulos */}
-        <nav aria-label="Saúde do projeto e módulos" className="flex flex-col gap-2">
-          <CartaoSaude modulos={modulos} ativo={modulo === null} onClick={() => irPara(null)} />
+        {/* Progresso do projeto e módulos */}
+        <nav aria-label="Progresso do projeto e módulos" className="flex flex-col gap-2">
+          <CartaoProgresso modulos={modulos} ativo={modulo === null} onClick={() => irPara(null)} />
           <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">Módulos do projeto</p>
           {modulos.map(m => <CartaoModulo key={m.numero} m={m} ativo={modulo === m.numero} onClick={() => irPara(m.numero)} />)}
           <div className="flex items-center gap-2 rounded-xl border border-dashed border-border p-3 text-[13px] text-muted-foreground">
@@ -291,10 +291,10 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
         </nav>
 
         {modulo === null ? (
-          <SaudeProjeto modulos={modulos} onAbrir={(m, atividade) => irPara(m as ModuloNum, atividade)} />
+          <ProgressoProjeto modulos={modulos} onAbrir={(m, atividade) => irPara(m as ModuloNum, atividade)} />
         ) : modulo === "01" ? (
           <div className="flex min-w-0 flex-col gap-4">
-            {voltarASaude}
+            {voltarAoProgresso}
             <DestaqueModulo numero={MODULO_01.numero} nome={MODULO_01.nome} resumo={MODULO_01.resumo} proxima={and01.proxima?.titulo} feitas={and01.feitas} total={and01.total}>
               {!and01.proxima && (
                 <Button size="sm" className="h-8 bg-primary-foreground text-primary hover:bg-primary-foreground/90" onClick={gerarTap}>
@@ -324,7 +324,7 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
           </div>
         ) : (
           <div className="flex min-w-0 flex-col gap-4">
-            {voltarASaude}
+            {voltarAoProgresso}
             <DestaqueModulo numero={MODULO_02.numero} nome={MODULO_02.nome} resumo={MODULO_02.resumo} proxima={and02.proxima?.titulo} feitas={and02.feitas} total={and02.total}>
               <ReuniaoPe reuniaoPe={reuniaoPe} sobreMarca />
             </DestaqueModulo>

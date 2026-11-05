@@ -22,8 +22,8 @@ const SIT: Record<SituacaoAtividade, { rotulo: string; bolinha: string; icone: t
     anel: "ring-muted-foreground/45", caixa: "border-muted-foreground/60 bg-muted ring-muted-foreground/25" },
 };
 
-/** Um módulo na saúde do projeto, com as atividades na ordem atual e a situação de cada uma. */
-export interface ModuloSaude {
+/** Um módulo no progresso do projeto, com as atividades na ordem atual e a situação de cada uma. */
+export interface ModuloProgresso {
   numero: string;
   nome: string;
   atividades: { a: Atividade<string>; sit: SituacaoAtividade }[];
@@ -34,7 +34,7 @@ export interface ModuloSaude {
 }
 
 /** Feitas e aplicáveis de todos os módulos juntos: as que não se aplicam ficam fora da conta. */
-function conta(modulos: ModuloSaude[]) {
+function conta(modulos: ModuloProgresso[]) {
   const aplicaveis = modulos.flatMap(m => m.atividades).filter(x => x.sit !== "naoaplica");
   const feitas = aplicaveis.filter(x => x.sit === "feito").length;
   const total = aplicaveis.length;
@@ -42,21 +42,21 @@ function conta(modulos: ModuloSaude[]) {
   return { feitas, total, pct, nivel: nivelDe(pct) };
 }
 /** A próxima atividade do módulo: a primeira que se aplica e ainda não está feita. */
-const proximaDe = (m: ModuloSaude) => m.atividades.find(x => x.sit !== "naoaplica" && x.sit !== "feito");
+const proximaDe = (m: ModuloProgresso) => m.atividades.find(x => x.sit !== "naoaplica" && x.sit !== "feito");
 
 const cartao = (ativo: boolean) => `flex flex-col gap-2 rounded-xl border p-3 text-left transition-colors ${ativo
   ? "border-primary bg-primary/[0.06] ring-1 ring-primary hover:bg-primary/[0.1]"
   : "border-border/60 bg-card hover:border-primary/40 hover:bg-primary/[0.03]"}`;
 
-/** A saúde do projeto na lista ao lado dos módulos: o percentual de tudo e a volta ao medidor. */
-export function CartaoSaude({ modulos, ativo, onClick }: { modulos: ModuloSaude[]; ativo: boolean; onClick: () => void }) {
+/** O progresso do projeto na lista ao lado dos módulos: o percentual de tudo e a volta ao medidor. */
+export function CartaoProgresso({ modulos, ativo, onClick }: { modulos: ModuloProgresso[]; ativo: boolean; onClick: () => void }) {
   const { feitas, total, pct, nivel } = conta(modulos);
   return (
-    <button type="button" aria-current={ativo ? "page" : undefined} onClick={onClick} title="Ver a saúde do projeto" className={cartao(ativo)}>
+    <button type="button" aria-current={ativo ? "page" : undefined} onClick={onClick} title="Ver o progresso do projeto" className={cartao(ativo)}>
       <span className="flex items-center gap-2">
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${ativo ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"}`}><Gauge className="h-4 w-4" /></span>
         <span className="min-w-0 flex-1 leading-tight">
-          <span className="block text-sm font-semibold">Saúde do projeto</span>
+          <span className="block text-sm font-semibold">Progresso do projeto</span>
           <span className="block text-[11.5px] text-muted-foreground">{feitas} de {total} atividades feitas</span>
         </span>
         <span className="text-lg font-bold tabular-nums">{pct}<span className="text-xs">%</span></span>
@@ -69,7 +69,7 @@ export function CartaoSaude({ modulos, ativo, onClick }: { modulos: ModuloSaude[
 }
 
 /** Um módulo na lista ao lado, com o andamento: abre as atividades do módulo. */
-export function CartaoModulo({ m, ativo, onClick }: { m: ModuloSaude; ativo: boolean; onClick: () => void }) {
+export function CartaoModulo({ m, ativo, onClick }: { m: ModuloProgresso; ativo: boolean; onClick: () => void }) {
   const aplicaveis = m.atividades.filter(x => x.sit !== "naoaplica");
   const feitas = aplicaveis.filter(x => x.sit === "feito").length;
   const total = aplicaveis.length;
@@ -96,7 +96,7 @@ export function CartaoModulo({ m, ativo, onClick }: { m: ModuloSaude; ativo: boo
  * as bolinhas daquela situação acendem e as outras apagam.
  */
 function TrilhaModulo({ m, destaque, onAbrir }: {
-  m: ModuloSaude; destaque: SituacaoAtividade | null; onAbrir: (numero: string, atividadeId?: string) => void;
+  m: ModuloProgresso; destaque: SituacaoAtividade | null; onAbrir: (numero: string, atividadeId?: string) => void;
 }) {
   const aplicaveis = m.atividades.filter(x => x.sit !== "naoaplica");
   const feitas = aplicaveis.filter(x => x.sit === "feito").length;
@@ -165,11 +165,11 @@ function TrilhaModulo({ m, destaque, onAbrir }: {
 }
 
 /**
- * Saúde do projeto ao abrir: um medidor só, com as atividades de todos os módulos, os próximos
+ * Progresso do projeto ao abrir: um medidor só, com as atividades de todos os módulos, os próximos
  * passos de cada módulo e as trilhas. As atividades de um módulo abrem pela lista ao lado ou numa etapa.
  */
-export function SaudeProjeto({ modulos, onAbrir }: {
-  modulos: ModuloSaude[];
+export function ProgressoProjeto({ modulos, onAbrir }: {
+  modulos: ModuloProgresso[];
   /** Abre as atividades do módulo; com id, rola até a atividade. */
   onAbrir: (numero: string, atividadeId?: string) => void;
 }) {
@@ -192,13 +192,13 @@ export function SaudeProjeto({ modulos, onAbrir }: {
   };
 
   return (
-    <section aria-labelledby="ger-saude-titulo" className="relative overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+    <section aria-labelledby="ger-progresso-titulo" className="relative overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
       <span aria-hidden className={`absolute inset-x-0 top-0 h-1.5 ${N.faixa}`} />
       <div className="flex flex-wrap items-start gap-3 border-b px-5 pb-4 pt-6">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Gauge className="h-5 w-5" /></span>
         <div className="min-w-0 flex-1 basis-56">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Projeto · {modulos.length} módulos</p>
-          <h2 id="ger-saude-titulo" className="text-xl font-bold leading-tight">Saúde do projeto</h2>
+          <h2 id="ger-progresso-titulo" className="text-xl font-bold leading-tight">Progresso do projeto</h2>
           <p className="mt-0.5 text-[13px] text-muted-foreground">Todas as atividades de todos os módulos numa conta só. As que não se aplicam a este projeto ficam de fora.</p>
         </div>
       </div>
@@ -206,7 +206,7 @@ export function SaudeProjeto({ modulos, onAbrir }: {
       <div className="grid gap-6 p-5 md:grid-cols-[minmax(0,320px)_minmax(0,1fr)] md:items-center">
         {/* Medidor */}
         <div className="flex flex-col items-center">
-          <Velocimetro pct={pct} nivel={nivel} rotulo={`Saúde do projeto: ${pct}% das atividades feitas`} />
+          <Velocimetro pct={pct} nivel={nivel} rotulo={`Progresso do projeto: ${pct}% das atividades feitas`} />
           <p className="-mt-3 text-5xl font-bold leading-none tabular-nums">{pct}<span className="text-2xl">%</span></p>
           <p className="mt-1.5 text-sm text-muted-foreground"><b className="text-foreground">{feitas}</b> de <b className="text-foreground">{total}</b> atividades feitas</p>
         </div>

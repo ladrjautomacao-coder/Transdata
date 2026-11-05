@@ -11,7 +11,7 @@ import { GanttGO } from "@/components/grandes-operacoes/GanttGO";
 import { GoCabecalho, GoErro, SituacaoPill } from "@/components/grandes-operacoes/GoShared";
 import { LateralGO } from "@/components/grandes-operacoes/LateralGO";
 import { QuadroGO } from "@/components/grandes-operacoes/QuadroGO";
-import { SaudeGO } from "@/components/grandes-operacoes/SaudeGO";
+import { ProgressoGO } from "@/components/grandes-operacoes/ProgressoGO";
 import { useGoDados } from "@/components/grandes-operacoes/useGoDados";
 import { errorMessage } from "@/lib/implantationScheduling";
 import {
@@ -31,7 +31,7 @@ const lerVisao = (): Visao => { try { const v = localStorage.getItem(VISAO_KEY);
 /**
  * Painel de acompanhamento do Hub de Grandes Operações: um projeto (…/projeto/<id>) ou todos os
  * projetos de um cliente (…/cliente/<id>, "todos" = todos os clientes). No desenho do
- * Gerenciamento: projetos na lateral, a saúde com o medidor e as trilhas das etapas, e as visões
+ * Gerenciamento: projetos na lateral, o progresso com o medidor e as trilhas das etapas, e as visões
  * Quadro, Etapas e Gantt. Quem pode editar troca o status (arrastando no quadro ou no selo).
  */
 export default function GrandesOperacoesPainel() {
@@ -138,7 +138,7 @@ export default function GrandesOperacoesPainel() {
         <LateralGO dados={dados} cliId={cliId} projetos={projsEscopo} projAtual={proj} onCliente={v => navigate(urlCliente(v === "todos" ? "todos" : Number(v)))} />
 
         <div className="flex min-w-0 flex-col gap-4">
-          <SaudeGO dados={dados} escopo={escopo} projetos={proj ? [proj] : projsEscopo} umProjeto={!!proj} onSelect={id => setAct(id)} etapa={etapa} onEtapa={setEtapa} />
+          <ProgressoGO dados={dados} escopo={escopo} projetos={proj ? [proj] : projsEscopo} umProjeto={!!proj} onSelect={id => setAct(id)} etapa={etapa} onEtapa={setEtapa} />
 
           {/* busca, responsável e visão */}
           <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-card p-3 shadow-sm">

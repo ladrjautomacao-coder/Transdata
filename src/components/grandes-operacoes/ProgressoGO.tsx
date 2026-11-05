@@ -10,7 +10,7 @@ import { NIVEL, nivelDe } from "@/lib/nivelMedidor";
 import { cn } from "@/lib/utils";
 import { Barra, SituacaoPill } from "./GoShared";
 
-/** Quadrantes da saúde: a contagem por status e o destaque nas trilhas. */
+/** Quadrantes do progresso: a contagem por status e o destaque nas trilhas. */
 const QUADRANTE: Record<GoStatus, { rotulo: string; icone: typeof Check; bolinha: string; cor: string; caixa: string }> = {
   concluido: { rotulo: "Concluídas", icone: Check, bolinha: "bg-emerald-600 text-white", cor: "text-emerald-700 dark:text-emerald-300", caixa: "border-emerald-500 bg-emerald-500/10 ring-emerald-500/30" },
   andamento: { rotulo: "Em andamento", icone: Activity, bolinha: "bg-sky-500 text-white", cor: "text-sky-700 dark:text-sky-300", caixa: "border-sky-500 bg-sky-500/10 ring-sky-500/30" },
@@ -71,10 +71,10 @@ function TrilhaEtapas({ dados, p, lista, mostrarProjeto, etapa, onEtapa, destaqu
 }
 
 /**
- * Saúde do projeto (ou dos projetos do cliente): o medidor das concluídas, o que está em andamento e
+ * Progresso do projeto (ou dos projetos do cliente): o medidor das concluídas, o que está em andamento e
  * o que já pode começar, a contagem por status e a trilha das etapas de cada projeto.
  */
-export function SaudeGO({ dados, escopo, projetos, umProjeto, onSelect, etapa, onEtapa }: {
+export function ProgressoGO({ dados, escopo, projetos, umProjeto, onSelect, etapa, onEtapa }: {
   dados: GoDados;
   /** Atividades do projeto ou do cliente, sem os filtros de busca. */
   escopo: GoAtividade[];
@@ -101,7 +101,7 @@ export function SaudeGO({ dados, escopo, projetos, umProjeto, onSelect, etapa, o
   const nEtapas = etapasOf(dados, escopo).length;
 
   return (
-    <section aria-labelledby="go-saude-titulo" className="relative overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+    <section aria-labelledby="go-progresso-titulo" className="relative overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
       <span aria-hidden className={`absolute inset-x-0 top-0 h-1.5 ${N.faixa}`} />
       <div className="flex flex-wrap items-start gap-3 border-b px-5 pb-4 pt-6">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Gauge className="h-5 w-5" /></span>
@@ -109,14 +109,14 @@ export function SaudeGO({ dados, escopo, projetos, umProjeto, onSelect, etapa, o
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
             {umProjeto ? `Projeto · ${nEtapas} ${nEtapas === 1 ? "etapa" : "etapas"}` : `${comAtividades.length} ${comAtividades.length === 1 ? "projeto" : "projetos"} · ${nEtapas} etapas`}
           </p>
-          <h2 id="go-saude-titulo" className="text-xl font-bold leading-tight">{umProjeto ? "Saúde do projeto" : "Saúde dos projetos"}</h2>
+          <h2 id="go-progresso-titulo" className="text-xl font-bold leading-tight">{umProjeto ? "Progresso do projeto" : "Progresso dos projetos"}</h2>
           <p className="mt-0.5 text-[13px] text-muted-foreground">Concluídas sobre o total de atividades. As removidas ficam de fora da conta.</p>
         </div>
       </div>
 
       <div className="grid gap-6 p-5 md:grid-cols-[minmax(0,300px)_minmax(0,1fr)] md:items-center">
         <div className="flex flex-col items-center">
-          <Velocimetro pct={pct} nivel={nivel} rotulo={`${umProjeto ? "Saúde do projeto" : "Saúde dos projetos"}: ${pct}% das atividades concluídas`} />
+          <Velocimetro pct={pct} nivel={nivel} rotulo={`${umProjeto ? "Progresso do projeto" : "Progresso dos projetos"}: ${pct}% das atividades concluídas`} />
           <p className="-mt-3 text-5xl font-bold leading-none tabular-nums">{pct}<span className="text-2xl">%</span></p>
           <p className="mt-1.5 text-sm text-muted-foreground"><b className="text-foreground">{s.done}</b> de <b className="text-foreground">{s.total}</b> atividades concluídas</p>
         </div>

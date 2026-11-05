@@ -11,7 +11,7 @@ const cartao = (ativo: boolean) => cn("flex flex-col gap-2 rounded-xl border p-3
   ativo ? "border-primary bg-primary/[0.06] ring-1 ring-primary hover:bg-primary/[0.1]" : "border-border/60 bg-card hover:border-primary/40 hover:bg-primary/[0.03]");
 
 /**
- * A lateral do painel, como a dos módulos no Gerenciamento: o cliente, a saúde de todos os projetos
+ * A lateral do painel, como a dos módulos no Gerenciamento: o cliente, o progresso de todos os projetos
  * dele e um cartão por projeto, com o andamento.
  */
 export function LateralGO({ dados, cliId, projetos, projAtual, onCliente }: {
