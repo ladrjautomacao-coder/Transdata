@@ -20,7 +20,7 @@ import { ProgressoGO } from "@/components/grandes-operacoes/ProgressoGO";
 import { useGoDados } from "@/components/grandes-operacoes/useGoDados";
 import { errorMessage } from "@/lib/implantationScheduling";
 import {
-  STATUS_NOME, atvsDe, camposParaStatus, comAtividade, comObsEtapa, fmtD, gravarStatus, hojeTexto, matchQ, matchResp, nomeCurto, predsAbertas,
+  STATUS_NOME, atvsDe, camposParaStatus, comAtividade, comObsEtapa, comObservacao, fmtD, gravarStatus, hojeTexto, matchQ, matchResp, nomeCurto, predsAbertas,
   projsDoCliente, relDe, respOptions, type GoCamposStatus, type GoStatus, type ResultadoStatus,
 } from "@/lib/grandesOperacoes/dados";
 import { calcularPrevisao } from "@/lib/grandesOperacoes/previsao";
@@ -205,7 +205,7 @@ export default function GrandesOperacoesPainel() {
       </div>
 
       <DetalheGO dados={dados} act={act} onSelect={id => setAct(id)} onFechar={fechar} podeEditar={podeEditar} onStatus={mudarStatus}
-        onEditar={id => setForm({ id })} onAcompanhamento={setAcomp} />
+        onEditar={id => setForm({ id })} onAcompanhamento={setAcomp} onObservacao={(id, o) => atualizar(d => comObservacao(d, id, o))} />
 
       {/* atividade de outro projeto (painel do cliente) abre a edição no projeto dela */}
       {form && (() => {

@@ -20,7 +20,8 @@ export interface GoProjeto {
   stakeholders: GoStakeholder[];
 }
 export interface GoEtapa { id: number; projeto_id: number; nome: string; ordem: number }
-export interface GoObservacao { id: number; data: string | null; texto: string; ordem: number }
+/** Observação da atividade; as da planilha antiga não têm hora nem autor (`criado_em` null). */
+export interface GoObservacao { id: number; data: string | null; texto: string; ordem: number; criado_em: string | null; autor_nome: string }
 /** Registro do acompanhamento de uma etapa (histórico: não muda depois de gravado). */
 export interface GoObsEtapa { id: number; etapa_id: number; texto: string; criado_em: string; autor_nome: string }
 export interface GoAtividade {
@@ -98,7 +99,7 @@ export async function fetchGoDados(): Promise<GoDados> {
     db.from("go_etapas").select("id, projeto_id, nome, ordem"),
     db.from("go_atividades").select(
       "id, projeto_id, etapa_id, codigo, titulo, responsavel, objetivo, duracao, data_prevista, data_realizada, status, ordem, atualizado_em, "
-      + "go_predecessoras!atividade_id(predecessora_id), go_observacoes(id, data, texto, ordem), go_atividade_stakeholders(stakeholder_id)"),
+      + "go_predecessoras!atividade_id(predecessora_id), go_observacoes(id, data, texto, ordem, criado_em, autor_nome), go_atividade_stakeholders(stakeholder_id)"),
     db.from("go_etapa_observacoes").select("id, etapa_id, texto, criado_em, autor_nome").order("criado_em", { ascending: false }).order("id", { ascending: false }),
     db.from("go_config").select("gerente_id").maybeSingle(),
   ]);
@@ -196,6 +197,23 @@ export async function registrarAcompanhamento(etapaId: number, texto: string): P
 /** Os dados com um registro novo no acompanhamento da etapa (no topo). */
 export const comObsEtapa = (d: GoDados, o: GoObsEtapa): GoDados =>
   ({ ...d, obsEtapa: new Map(d.obsEtapa).set(o.etapa_id, [o, ...(d.obsEtapa.get(o.etapa_id) ?? [])]) });
+
+export async function registrarObservacao(atividadeId: number, texto: string): Promise<GoObservacao> {
+  // data, hora, autor e posição o banco preenche
+  const { data, error } = await db.from("go_observacoes").insert({ atividade_id: atividadeId, texto: texto.trim() })
+    .select("id, data, texto, ordem, criado_em, autor_nome").single();
+  if (error) throw error;
+  return data as GoObservacao;
+}
+/** Os dados com uma observação nova na atividade (no fim, como a ordem do banco). */
+export const comObservacao = (d: GoDados, atividadeId: number, o: GoObservacao): GoDados =>
+  comAtividade(d, atividadeId, { observacoes: [...(d.act.get(atividadeId)?.observacoes ?? []), o] });
+
+/** "06/11/2026 às 15:20" no horário de quem está vendo. */
+export const quandoGo = (iso: string) => {
+  const d = new Date(iso);
+  return `${d.toLocaleDateString("pt-BR")} às ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+};
 
 export async function salvarStakeholder(projetoId: number, s: { id?: number; nome: string; empresa: string; ordem: number }): Promise<void> {
   const campos = { nome: s.nome.trim(), empresa: s.empresa.trim(), ordem: s.ordem };

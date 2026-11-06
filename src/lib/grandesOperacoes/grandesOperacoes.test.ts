@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  CODIGO_VALIDO, camposParaStatus, comAtividade, comObsEtapa, etapaStatus, hubGrupos, indexar, matchResp, openUpstream, podeComecar, relDe, respOptions,
+  CODIGO_VALIDO, camposParaStatus, comAtividade, comObsEtapa, comObservacao, etapaStatus, hubGrupos, indexar, matchQ, matchResp, openUpstream, podeComecar, relDe, respOptions,
   responsaveisDe, stats, sugerirCodigo, FILTROS_HUB_PADRAO,
   type GoAtividade, type GoCliente, type GoProjeto,
 } from "@/lib/grandesOperacoes/dados";
@@ -154,5 +154,11 @@ describe("cadastros pela tela", () => {
     expect(n.obsEtapa.get(1)!.map(o => o.texto)).toEqual(["novo", "antigo"]);
     expect(d.obsEtapa.get(1)!.length).toBe(1);
     expect(comAtividade(n, 1, { status: "concluido" }).obsEtapa.get(1)!.length).toBe(2);
+  });
+  it("observação nova da atividade entra no fim (a tela mostra a mais recente em cima) e a busca acha", () => {
+    const n = comObservacao(d, 2, { id: 9, data: "2026-11-06", texto: "Combinado com a ENBI", ordem: 1, criado_em: "2026-11-06T15:20:00Z", autor_nome: "Luiz" });
+    expect(n.act.get(2)!.observacoes.map(o => o.texto)).toEqual(["Combinado com a ENBI"]);
+    expect(d.act.get(2)!.observacoes).toEqual([]);
+    expect(matchQ(n, n.act.get(2)!, "combinado")).toBe(true);
   });
 });

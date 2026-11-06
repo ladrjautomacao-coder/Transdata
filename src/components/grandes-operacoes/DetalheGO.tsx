@@ -1,8 +1,11 @@
-import { useEffect } from "react";
-import { AlertTriangle, Lock, MessageSquareText, Pencil, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertTriangle, Loader2, Lock, MessageSquareText, Pencil, Send, X } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  etapaNome, etapaNum, fmtD, nomeCurto, openUpstream, predOf, responsaveisDe, succOf, type GoAtividade, type GoDados, type GoStatus,
+  etapaNome, etapaNum, fmtD, mensagemGo, nomeCurto, openUpstream, predOf, quandoGo, registrarObservacao, responsaveisDe, succOf,
+  type GoAtividade, type GoDados, type GoObservacao, type GoStatus,
 } from "@/lib/grandesOperacoes/dados";
 import { COR_STATUS } from "@/lib/grandesOperacoes/ui";
 import { Dot, StatusPill, StatusSelect } from "./GoShared";
@@ -36,7 +39,7 @@ function Cadeia({ itens, vazio, onSelect }: { itens: GoAtividade[]; vazio: strin
  * Detalhes da atividade selecionada, num painel à direita que não tampa o quadro inteiro (o que
  * vem antes e depois continua destacado nele). Quem pode editar troca o status e abre a edição aqui.
  */
-export function DetalheGO({ dados, act, onSelect, onFechar, podeEditar, onStatus, onEditar, onAcompanhamento }: {
+export function DetalheGO({ dados, act, onSelect, onFechar, podeEditar, onStatus, onEditar, onAcompanhamento, onObservacao }: {
   dados: GoDados;
   act: number | null;
   onSelect: (id: number) => void;
@@ -46,8 +49,13 @@ export function DetalheGO({ dados, act, onSelect, onFechar, podeEditar, onStatus
   onEditar: (id: number) => void;
   /** Abre o acompanhamento da etapa da atividade. */
   onAcompanhamento: (etapaId: number) => void;
+  /** Observação nova gravada na atividade. */
+  onObservacao: (atividadeId: number, o: GoObservacao) => void;
 }) {
   const a = act != null ? dados.act.get(act) : undefined;
+  const [texto, setTexto] = useState("");
+  const [gravando, setGravando] = useState(false);
+  useEffect(() => { setTexto(""); }, [act]);
   useEffect(() => {
     if (!a) return;
     // Escape de uma lista ou de uma janela aberta por cima (Editar, Acompanhamento) fecha só ela
@@ -65,6 +73,19 @@ export function DetalheGO({ dados, act, onSelect, onFechar, podeEditar, onStatus
   const atualizado = a.atualizado_em ? new Date(a.atualizado_em) : null;
   const resps = responsaveisDe(dados, a);
   const nAcomp = dados.obsEtapa.get(a.etapa_id)?.length ?? 0;
+  const registrar = async () => {
+    if (!texto.trim() || gravando) return;
+    setGravando(true);
+    try {
+      onObservacao(a.id, await registrarObservacao(a.id, texto));
+      setTexto("");
+      toast.success(`Observação registrada em ${a.codigo}`);
+    } catch (err) {
+      toast.error("Não foi possível registrar a observação.", { description: mensagemGo(err) });
+    } finally {
+      setGravando(false);
+    }
+  };
 
   return (
     <aside role="dialog" aria-modal="false" aria-labelledby="go-det-titulo"
@@ -138,17 +159,32 @@ export function DetalheGO({ dados, act, onSelect, onFechar, podeEditar, onStatus
           <p className="mb-2 flex items-center gap-2 text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
             Observações <span className="rounded-full bg-muted px-1.5 text-[11px] tabular-nums text-foreground">{a.observacoes.length}</span>
           </p>
+          {podeEditar && (
+            <div className="mb-3">
+              <Textarea aria-label={`Nova observação em ${a.codigo}`} rows={2} value={texto} onChange={e => setTexto(e.target.value)}
+                placeholder="O que aconteceu, o que foi combinado, o que falta…"
+                onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void registrar(); }} />
+              <div className="mt-1.5 flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground">Fica no histórico com data, hora e o seu nome.</span>
+                <Button size="sm" className="ml-auto h-8 text-xs" onClick={() => void registrar()} disabled={gravando || !texto.trim()}>
+                  {gravando ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Send className="mr-1.5 h-3.5 w-3.5" />}Registrar
+                </Button>
+              </div>
+            </div>
+          )}
           {obs.length ? (
             <ol className="relative flex flex-col gap-3 border-l-2 border-border pl-4">
               {obs.map(o => (
                 <li key={o.id} className="relative">
                   <span aria-hidden className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-card bg-primary/70" />
-                  <p className="text-[11.5px] font-semibold text-muted-foreground">{o.data ? fmtD(o.data) : "Da planilha original"}</p>
+                  <p className="text-[11.5px] font-semibold text-muted-foreground">
+                    {o.criado_em ? `${quandoGo(o.criado_em)}${o.autor_nome ? ` · ${o.autor_nome}` : ""}` : o.data ? fmtD(o.data) : "Da planilha original"}
+                  </p>
                   <p className="whitespace-pre-line text-[13px]">{o.texto}</p>
                 </li>
               ))}
             </ol>
-          ) : <p className="text-[12.5px] text-muted-foreground">Nenhuma observação ainda.</p>}
+          ) : <p className="text-[12.5px] text-muted-foreground">{podeEditar ? "Nenhuma observação ainda. Escreva acima a primeira." : "Nenhuma observação ainda."}</p>}
         </div>
       </div>
 

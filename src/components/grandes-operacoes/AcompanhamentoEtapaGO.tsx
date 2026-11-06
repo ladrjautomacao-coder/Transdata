@@ -5,12 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { atvsDe, etapaNum, mensagemGo, nomeCurto, registrarAcompanhamento, type GoDados, type GoObsEtapa } from "@/lib/grandesOperacoes/dados";
-
-const quando = (iso: string) => {
-  const d = new Date(iso);
-  return `${d.toLocaleDateString("pt-BR")} às ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
-};
+import { atvsDe, etapaNum, mensagemGo, nomeCurto, quandoGo, registrarAcompanhamento, type GoDados, type GoObsEtapa } from "@/lib/grandesOperacoes/dados";
 
 /**
  * Acompanhamento de uma etapa: o histórico de observações (data, hora e quem escreveu), o mais
@@ -79,7 +74,7 @@ export function AcompanhamentoEtapaGO({ dados, etapaId, podeEditar, onFechar, on
               {lista.map(o => (
                 <li key={o.id} className="relative">
                   <span aria-hidden className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary/70" />
-                  <p className="text-[11.5px] font-semibold text-muted-foreground">{quando(o.criado_em)}{o.autor_nome ? ` · ${o.autor_nome}` : ""}</p>
+                  <p className="text-[11.5px] font-semibold text-muted-foreground">{quandoGo(o.criado_em)}{o.autor_nome ? ` · ${o.autor_nome}` : ""}</p>
                   <p className="whitespace-pre-line text-[13px]">{o.texto}</p>
                 </li>
               ))}
