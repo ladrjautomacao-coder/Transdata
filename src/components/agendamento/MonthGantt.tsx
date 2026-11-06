@@ -14,6 +14,14 @@ import { VisitHover } from "./VisitHoverCard";
 const HIGHLIGHT = "z-30 ring-2 ring-amber-400 ring-offset-1 ring-offset-background";
 const DAY_MIN = 36;
 const NAME = 196;
+/** Cor leve de cada mês na faixa acima dos dias (`faixa`) e no cabeçalho dos dias dele (`dia`): meses seguidos nunca repetem. */
+const COR_MES = [
+  { faixa: "bg-primary/10 text-primary", dia: "bg-primary/[0.04]" },
+  { faixa: "bg-sky-500/15 text-sky-800 dark:text-sky-200", dia: "bg-sky-500/[0.05]" },
+  { faixa: "bg-emerald-500/15 text-emerald-800 dark:text-emerald-200", dia: "bg-emerald-500/[0.05]" },
+  { faixa: "bg-amber-500/15 text-amber-800 dark:text-amber-200", dia: "bg-amber-500/[0.05]" },
+];
+const corDoMes = (d: Date) => COR_MES[(d.getFullYear() * 12 + d.getMonth()) % COR_MES.length];
 
 /** Distribui barras em "pistas" para não se sobreporem na mesma linha. */
 function pack<T extends { a: number; b: number }>(items: T[]) {
@@ -75,6 +83,19 @@ export function MonthGantt({
     return { a: Math.max(0, a), b: Math.min(daysInMonth - 1, b), contL: a < 0, contR: b > daysInMonth - 1 };
   };
 
+  // trechos de cada mês no período (a faixa acima dos dias), para os meses parciais
+  const months = useMemo(() => {
+    const out: { key: string; a: number; b: number; d: Date }[] = [];
+    days.forEach((d, i) => {
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      if (out.length && out[out.length - 1].key === key) out[out.length - 1].b = i;
+      else out.push({ key, a: i, b: i, d });
+    });
+    return out;
+  }, [days]);
+  // dia 1 de um mês que não abre o período: linha mais forte separando os meses
+  const virada = (d: Date, i: number) => i > 0 && d.getDate() === 1;
+
   /* ─── fundo das colunas (fim de semana, feriado, hoje) ─── */
   const background = days.map((d, i) => {
     const hol = holidays.get(dateKey(d));
@@ -82,23 +103,36 @@ export function MonthGantt({
     return (
       <div key={`bg${i}`} aria-hidden
         style={{ gridColumn: i + 2, gridRow: "1 / -1" }}
-        className={`border-l border-border/40 ${isToday ? "border-x border-primary/25 bg-primary/[0.05]" : hol ? "bg-rose-500/[0.05]" : isWeekend(d) ? "bg-muted/40" : ""}`} />
+        className={`border-l ${virada(d, i) ? "border-l-border" : "border-border/40"} ${isToday ? "border-x border-primary/25 bg-primary/[0.05]" : hol ? "bg-rose-500/[0.05]" : isWeekend(d) ? "bg-muted/40" : ""}`} />
     );
   });
 
-  /* ─── cabeçalho: dia da semana + número do dia ─── */
+  /* ─── cabeçalho: faixa do mês, dia da semana + número do dia ─── */
   const header = (
-    <div className="grid border-b border-border bg-card" style={{ gridTemplateColumns: template, gridTemplateRows: "56px" }}>
+    <div className="grid border-b border-border bg-card" style={{ gridTemplateColumns: template, gridTemplateRows: "26px 50px" }}>
       <div className="sticky left-0 z-20 flex items-end justify-start border-r border-border bg-card px-4 pb-2.5"
-        style={{ gridColumn: 1, gridRow: 1 }}>
+        style={{ gridColumn: 1, gridRow: "1 / 3" }}>
         <span className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">Técnico</span>
       </div>
+      {months.map((m, k) => {
+        const dias = m.b - m.a + 1;
+        const nome = m.d.toLocaleDateString("pt-BR", { month: "long" });
+        const completo = `${nome.charAt(0).toUpperCase()}${nome.slice(1)} ${m.d.getFullYear()}`;
+        return (
+          <div key={m.key} title={completo} style={{ gridColumn: `${m.a + 2} / ${m.b + 3}`, gridRow: 1 }}
+            className={`flex min-w-0 items-center justify-center overflow-hidden border-b border-border/60 ${corDoMes(m.d).faixa} ${k > 0 ? "border-l border-l-border" : ""}`}>
+            <span className="truncate px-2 text-[11px] font-bold uppercase tracking-[0.14em]">
+              {dias >= 5 ? completo : dias >= 2 ? nome.slice(0, 3) : ""}
+            </span>
+          </div>
+        );
+      })}
       {days.map((d, i) => {
         const hol = holidays.get(dateKey(d));
         const isToday = i === todayIdx;
         const cell = (
-          <div key={+d} style={{ gridColumn: i + 2, gridRow: 1 }}
-            className={`flex min-w-0 flex-col items-center justify-center gap-0.5 border-l border-border/40 ${isToday ? "bg-primary/[0.05]" : hol ? "bg-rose-500/[0.05]" : isWeekend(d) ? "bg-muted/40" : ""} ${hol ? "cursor-help" : ""}`}>
+          <div key={+d} style={{ gridColumn: i + 2, gridRow: 2 }}
+            className={`flex min-w-0 flex-col items-center justify-center gap-0.5 border-l ${virada(d, i) ? "border-l-border" : "border-border/40"} ${isToday ? "bg-primary/[0.05]" : hol ? "bg-rose-500/[0.05]" : isWeekend(d) ? "bg-muted/40" : corDoMes(d).dia} ${hol ? "cursor-help" : ""}`}>
             <span className={`text-[10px] leading-[12px] font-medium uppercase ${isToday ? "text-primary" : hol ? "text-rose-700 dark:text-rose-300" : "text-muted-foreground"}`}>
               {hol ? "Fer" : WD_SHORT[d.getDay()].slice(0, 3)}
             </span>
