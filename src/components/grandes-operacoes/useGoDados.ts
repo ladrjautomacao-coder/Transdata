@@ -16,11 +16,11 @@ export function useGoDados() {
   const [erro, setErro] = useState<string | null>(null);
   const recarregar = useCallback(() => {
     setErro(null);
-    Promise.all([fetchGoDados(), fetchPodeEditar().catch(() => false)])
+    return Promise.all([fetchGoDados(), fetchPodeEditar().catch(() => false)])
       .then(([d, pode]) => { cache = d; cachePode = pode; setDados(d); setPodeEditar(pode); })
       .catch(e => setErro(errorMessage(e)));
   }, []);
-  useEffect(recarregar, [recarregar]);
+  useEffect(() => { void recarregar(); }, [recarregar]);
   const atualizar = useCallback((f: (d: GoDados) => GoDados) => setDados(d => {
     if (!d) return d;
     cache = f(d);

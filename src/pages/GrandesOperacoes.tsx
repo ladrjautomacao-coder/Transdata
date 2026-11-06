@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Activity, Building2, FolderKanban, MapPin, Search, TrendingUp } from "lucide-react";
+import { Activity, Building2, FolderKanban, Link2, MapPin, Search, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyBlock, Kpi } from "@/components/agendamento/AgendaShared";
 import { Barra, GoCabecalho, GoErro, SituacaoPill } from "@/components/grandes-operacoes/GoShared";
+import { PortalGO } from "@/components/grandes-operacoes/PortalGO";
 import { useGoDados } from "@/components/grandes-operacoes/useGoDados";
 import {
   FILTROS_HUB_PADRAO, atvsDe, hubGrupos, nomeCurto, projsDoCliente, resumo, stats, type FiltroSituacao, type FiltrosHub,
@@ -34,7 +35,7 @@ function lerFiltros(): FiltrosHub {
  * com filtros, totais e um cartão por projeto. Tradução da tela "Hub" do sistema original.
  */
 export default function GrandesOperacoes() {
-  const { dados, erro, recarregar } = useGoDados();
+  const { dados, erro, recarregar, podeEditar } = useGoDados();
   const [f, setF] = useState<FiltrosHub>(lerFiltros);
   useEffect(() => { try { localStorage.setItem(FILTROS_KEY, JSON.stringify(f)); } catch { /* ignore */ } }, [f]);
   const set = (patch: Partial<FiltrosHub>) => setF(x => ({ ...x, ...patch }));
@@ -52,7 +53,8 @@ export default function GrandesOperacoes() {
   return (
     <div className="flex flex-col gap-5">
       <GoCabecalho voltar={{ to: URL_GESTAO_OPERACIONAL, label: "Gestão Operacional" }} titulo="Grandes Operações"
-        sub="Hub de projetos: o acompanhamento dos clientes e projetos do departamento." />
+        sub="Hub de projetos: o acompanhamento dos clientes e projetos do departamento."
+        acoes={dados && <PortalGO dados={dados} podeEditar={podeEditar} onMudou={recarregar} />} />
 
       {/* KPIs */}
       {!dados || !s ? (
@@ -131,6 +133,7 @@ export default function GrandesOperacoes() {
                           <span aria-hidden className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-primary/80 to-primary/40" />
                           <span className="flex items-start gap-3">
                             <span className="min-w-0 flex-1 truncate text-[15px] font-semibold group-hover:text-primary" title={p.nome}>{nomeCurto(p)}</span>
+                            {p.project_id && <Link2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-label="Do cadastro de projetos do portal" />}
                             <span className="text-xl font-bold leading-none tabular-nums">{st.pct}%</span>
                           </span>
                           <Barra s={st} className="h-2" />

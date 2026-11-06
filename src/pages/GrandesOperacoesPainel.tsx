@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { CalendarRange, Columns3, Eye, ListTree, Pencil, Search } from "lucide-react";
+import { CalendarRange, Columns3, Eye, ListPlus, ListTree, Pencil, Plus, Search, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyBlock } from "@/components/agendamento/AgendaShared";
+import { AcompanhamentoEtapaGO } from "@/components/grandes-operacoes/AcompanhamentoEtapaGO";
+import { AtividadeFormGO } from "@/components/grandes-operacoes/AtividadeFormGO";
 import { DetalheGO } from "@/components/grandes-operacoes/DetalheGO";
+import { ProjetoDetalhesGO } from "@/components/grandes-operacoes/ProjetoDetalhesGO";
 import { EtapasGO } from "@/components/grandes-operacoes/EtapasGO";
 import { GanttGO } from "@/components/grandes-operacoes/GanttGO";
 import { GoCabecalho, GoErro, SituacaoPill } from "@/components/grandes-operacoes/GoShared";
@@ -15,7 +20,7 @@ import { ProgressoGO } from "@/components/grandes-operacoes/ProgressoGO";
 import { useGoDados } from "@/components/grandes-operacoes/useGoDados";
 import { errorMessage } from "@/lib/implantationScheduling";
 import {
-  STATUS_NOME, atvsDe, camposParaStatus, comAtividade, fmtD, gravarStatus, hojeTexto, matchQ, matchResp, nomeCurto, predsAbertas,
+  STATUS_NOME, atvsDe, camposParaStatus, comAtividade, comObsEtapa, fmtD, gravarStatus, hojeTexto, matchQ, matchResp, nomeCurto, predsAbertas,
   projsDoCliente, relDe, respOptions, type GoCamposStatus, type GoStatus, type ResultadoStatus,
 } from "@/lib/grandesOperacoes/dados";
 import { calcularPrevisao } from "@/lib/grandesOperacoes/previsao";
@@ -43,9 +48,13 @@ export default function GrandesOperacoesPainel() {
   const [resp, setResp] = useState("all");
   const [act, setAct] = useState<number | null>(null);
   const [etapa, setEtapa] = useState<number | null>(null);
+  // janelas: atividade nova (id null) ou em edição, detalhes do projeto, acompanhamento de uma etapa
+  const [form, setForm] = useState<{ id: number | null } | null>(null);
+  const [detalhes, setDetalhes] = useState(false);
+  const [acomp, setAcomp] = useState<number | null>(null);
   useEffect(() => { try { localStorage.setItem(VISAO_KEY, visao); } catch { /* ignore */ } }, [visao]);
   // trocou de cliente ou de projeto: a seleção recomeça
-  useEffect(() => { setAct(null); setEtapa(null); window.scrollTo(0, 0); }, [cliParam, projParam]);
+  useEffect(() => { setAct(null); setEtapa(null); setForm(null); setDetalhes(false); setAcomp(null); window.scrollTo(0, 0); }, [cliParam, projParam]);
   const fechar = useCallback(() => setAct(null), []);
   // a previsão é calculada sobre todas as atividades, como no original
   const previsao = useMemo(() => (dados ? calcularPrevisao(dados.atividades, dados.projetos, hojeTexto()) : {}), [dados]);
@@ -66,11 +75,21 @@ export default function GrandesOperacoesPainel() {
       {proj && <SituacaoPill situacao={proj.situacao} />}
       {proj?.responsaveis.map(r => <span key={r} className="rounded-full border border-border/70 bg-card px-2 py-0.5 text-[11px] font-medium">{r}</span>)}
       {podeEditar
-        ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300"><Pencil className="h-3 w-3" />Você pode mudar o status</span>
+        ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300"><Pencil className="h-3 w-3" />Você pode editar</span>
         : <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground"><Eye className="h-3 w-3" />Somente leitura</span>}
     </>
   );
-  const cabecalho = <GoCabecalho voltar={{ to: GO_BASE, label: "Hub de Grandes Operações" }} titulo={dados ? titulo : "Grandes Operações"} sub={dados ? sub : "Carregando…"} meta={meta} />;
+  // projeto encerrado não recebe atividade nova (o banco também barra)
+  const podeCriar = podeEditar && !!proj && proj.situacao !== "encerrado";
+  const acoes = dados && proj && (
+    <>
+      <Button variant="outline" size="sm" className="h-9" onClick={() => setDetalhes(true)}>
+        <Users className="mr-1.5 h-4 w-4" />Detalhes do projeto{proj.stakeholders.length ? <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[11px] tabular-nums">{proj.stakeholders.length}</span> : null}
+      </Button>
+      {podeCriar && <Button size="sm" className="h-9" onClick={() => setForm({ id: null })}><Plus className="mr-1.5 h-4 w-4" />Nova atividade</Button>}
+    </>
+  );
+  const cabecalho = <GoCabecalho voltar={{ to: GO_BASE, label: "Hub de Grandes Operações" }} titulo={dados ? titulo : "Grandes Operações"} sub={dados ? sub : "Carregando…"} meta={meta} acoes={acoes} />;
 
   if (!dados) {
     return (
@@ -138,7 +157,16 @@ export default function GrandesOperacoesPainel() {
         <LateralGO dados={dados} cliId={cliId} projetos={projsEscopo} projAtual={proj} onCliente={v => navigate(urlCliente(v === "todos" ? "todos" : Number(v)))} />
 
         <div className="flex min-w-0 flex-col gap-4">
-          <ProgressoGO dados={dados} escopo={escopo} projetos={proj ? [proj] : projsEscopo} umProjeto={!!proj} onSelect={id => setAct(id)} etapa={etapa} onEtapa={setEtapa} />
+          {proj && !escopo.length && (
+            <div className="rounded-xl border border-border/60 bg-card shadow-sm">
+              <EmptyBlock icon={ListPlus} title="Nenhuma atividade neste projeto ainda"
+                text={podeCriar ? "Cadastre as pessoas do projeto em Detalhes do projeto e crie a primeira atividade (com a etapa dela)." : "As atividades aparecem aqui assim que forem cadastradas."}
+                action={podeCriar ? <Button size="sm" onClick={() => setForm({ id: null })}><Plus className="mr-1.5 h-4 w-4" />Nova atividade</Button> : undefined} />
+            </div>
+          )}
+          {escopo.length > 0 && (
+            <ProgressoGO dados={dados} escopo={escopo} projetos={proj ? [proj] : projsEscopo} umProjeto={!!proj} onSelect={id => setAct(id)} etapa={etapa} onEtapa={setEtapa} />
+          )}
 
           {/* busca, responsável e visão */}
           <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-card p-3 shadow-sm">
@@ -170,12 +198,26 @@ export default function GrandesOperacoesPainel() {
 
           {visao === "quadro" && <QuadroGO dados={dados} visiveis={visiveis} act={act} onSelect={selecionar} etapa={etapa} onEtapa={setEtapa} mostrarProjeto={!proj} rel={rel}
             podeEditar={podeEditar} onStatus={mudarStatus} previsao={previsao} />}
-          {visao === "etapas" && <EtapasGO dados={dados} visiveis={visiveis} act={act} onSelect={selecionar} umProjeto={!!proj} rel={rel} podeEditar={podeEditar} onStatus={mudarStatus} />}
+          {visao === "etapas" && <EtapasGO dados={dados} visiveis={visiveis} act={act} onSelect={selecionar} umProjeto={!!proj} rel={rel} podeEditar={podeEditar} onStatus={mudarStatus}
+            onAcompanhamento={setAcomp} />}
           {visao === "gantt" && <GanttGO dados={dados} visiveis={visiveis} act={act} onSelect={id => setAct(id)} rel={rel} />}
         </div>
       </div>
 
-      <DetalheGO dados={dados} act={act} onSelect={id => setAct(id)} onFechar={fechar} podeEditar={podeEditar} onStatus={mudarStatus} />
+      <DetalheGO dados={dados} act={act} onSelect={id => setAct(id)} onFechar={fechar} podeEditar={podeEditar} onStatus={mudarStatus}
+        onEditar={id => setForm({ id })} onAcompanhamento={setAcomp} />
+
+      {/* atividade de outro projeto (painel do cliente) abre a edição no projeto dela */}
+      {form && (() => {
+        const p = form.id != null ? dados.proj.get(dados.act.get(form.id)?.projeto_id ?? -1) : proj;
+        return p ? (
+          <AtividadeFormGO dados={dados} projeto={p} atividadeId={form.id} aberto onFechar={() => setForm(null)}
+            onSalvo={async id => { await recarregar(); setAct(id); }} />
+        ) : null;
+      })()}
+      {proj && <ProjetoDetalhesGO dados={dados} projeto={proj} aberto={detalhes} podeEditar={podeEditar} onFechar={() => setDetalhes(false)} onMudou={recarregar} />}
+      <AcompanhamentoEtapaGO dados={dados} etapaId={acomp} podeEditar={podeEditar} onFechar={() => setAcomp(null)}
+        onRegistrado={o => atualizar(d => comObsEtapa(d, o))} />
     </div>
   );
 }

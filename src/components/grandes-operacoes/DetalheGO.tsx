@@ -1,7 +1,9 @@
 import { useEffect } from "react";
-import { AlertTriangle, Lock, X } from "lucide-react";
+import { AlertTriangle, Lock, MessageSquareText, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { etapaNome, etapaNum, fmtD, nomeCurto, openUpstream, predOf, succOf, type GoAtividade, type GoDados, type GoStatus } from "@/lib/grandesOperacoes/dados";
+import {
+  etapaNome, etapaNum, fmtD, nomeCurto, openUpstream, predOf, responsaveisDe, succOf, type GoAtividade, type GoDados, type GoStatus,
+} from "@/lib/grandesOperacoes/dados";
 import { COR_STATUS } from "@/lib/grandesOperacoes/ui";
 import { Dot, StatusPill, StatusSelect } from "./GoShared";
 
@@ -32,20 +34,24 @@ function Cadeia({ itens, vazio, onSelect }: { itens: GoAtividade[]; vazio: strin
 
 /**
  * Detalhes da atividade selecionada, num painel à direita que não tampa o quadro inteiro (o que
- * vem antes e depois continua destacado nele). Quem pode editar troca o status aqui.
+ * vem antes e depois continua destacado nele). Quem pode editar troca o status e abre a edição aqui.
  */
-export function DetalheGO({ dados, act, onSelect, onFechar, podeEditar, onStatus }: {
+export function DetalheGO({ dados, act, onSelect, onFechar, podeEditar, onStatus, onEditar, onAcompanhamento }: {
   dados: GoDados;
   act: number | null;
   onSelect: (id: number) => void;
   onFechar: () => void;
   podeEditar: boolean;
   onStatus: (id: number, status: GoStatus) => void;
+  onEditar: (id: number) => void;
+  /** Abre o acompanhamento da etapa da atividade. */
+  onAcompanhamento: (etapaId: number) => void;
 }) {
   const a = act != null ? dados.act.get(act) : undefined;
   useEffect(() => {
     if (!a) return;
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector("[role=listbox]")) onFechar(); };
+    // Escape de uma lista ou de uma janela aberta por cima (Editar, Acompanhamento) fecha só ela
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector("[role=listbox], [role=dialog][data-state=open]")) onFechar(); };
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
   }, [a, onFechar]);
@@ -57,6 +63,8 @@ export function DetalheGO({ dados, act, onSelect, onFechar, podeEditar, onStatus
   // mais recente em cima, como no original
   const obs = a.observacoes.slice().reverse();
   const atualizado = a.atualizado_em ? new Date(a.atualizado_em) : null;
+  const resps = responsaveisDe(dados, a);
+  const nAcomp = dados.obsEtapa.get(a.etapa_id)?.length ?? 0;
 
   return (
     <aside role="dialog" aria-modal="false" aria-labelledby="go-det-titulo"
@@ -67,7 +75,14 @@ export function DetalheGO({ dados, act, onSelect, onFechar, podeEditar, onStatus
           <p className="truncate text-[12px] text-muted-foreground">{nomeCurto(p)} · {etapaNum(a.codigo)} {etapaNome(dados, a)}</p>
           <p className="mt-1 font-mono text-[12px] font-semibold text-primary">{a.codigo}</p>
           <h2 id="go-det-titulo" className="text-lg font-bold leading-snug">{a.titulo}</h2>
+          <button type="button" onClick={() => onAcompanhamento(a.etapa_id)}
+            className="mt-1.5 inline-flex items-center gap-1.5 text-[12px] font-medium text-primary hover:underline">
+            <MessageSquareText className="h-3.5 w-3.5" />Acompanhamento da etapa{nAcomp ? ` (${nAcomp})` : ""}
+          </button>
         </div>
+        {podeEditar && (
+          <Button variant="outline" size="sm" className="-mt-1 h-8 shrink-0 text-xs" onClick={() => onEditar(a.id)}><Pencil className="mr-1.5 h-3.5 w-3.5" />Editar</Button>
+        )}
         <Button variant="ghost" size="icon" className="-mr-2 -mt-1 h-8 w-8 shrink-0" onClick={onFechar} aria-label="Fechar os detalhes"><X className="h-4 w-4" /></Button>
       </div>
 
@@ -90,7 +105,18 @@ export function DetalheGO({ dados, act, onSelect, onFechar, podeEditar, onStatus
         )}
 
         <dl className="grid grid-cols-2 gap-x-5 gap-y-3">
-          <Campo label="Responsável" valor={a.responsavel} />
+          {resps.length ? (
+            <div className="col-span-2">
+              <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{resps.length === 1 ? "Responsável" : "Responsáveis"}</dt>
+              <dd className="mt-1 flex flex-wrap gap-1.5">
+                {resps.map(s => (
+                  <span key={s.id} className="rounded-full border border-border/70 bg-background px-2 py-0.5 text-[12.5px]">
+                    {s.nome}{s.empresa && <span className="text-muted-foreground"> · {s.empresa}</span>}
+                  </span>
+                ))}
+              </dd>
+            </div>
+          ) : <Campo label="Responsável" valor={a.responsavel} />}
           <Campo label="Tempo estimado" valor={a.duracao} />
           <Campo label="Início previsto" valor={fmtD(a.data_prevista)} />
           <Campo label="Realizado em" valor={fmtD(a.data_realizada)} />
@@ -128,7 +154,7 @@ export function DetalheGO({ dados, act, onSelect, onFechar, podeEditar, onStatus
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 bg-muted/30 px-5 py-2.5 text-[12px] text-muted-foreground">
         <span>{atualizado ? `Atualizado em ${atualizado.toLocaleDateString("pt-BR")} às ${atualizado.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : ""}</span>
-        <span>{podeEditar ? "Status: aqui ou arrastando no quadro" : "Somente leitura"}</span>
+        <span>{podeEditar ? "Status: aqui ou arrastando no quadro · resto em Editar" : "Somente leitura"}</span>
       </div>
     </aside>
   );

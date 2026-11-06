@@ -1,14 +1,14 @@
 import { useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, MessageSquareText } from "lucide-react";
 import { etapaStatus, etapasOf, stats, subLevel, type GoAtividade, type GoDados, type GoRel, type GoStatus } from "@/lib/grandesOperacoes/dados";
 import { Barra, RelTag, StatusPill, StatusSelect } from "./GoShared";
 
 /**
  * Visão Etapas: projeto → etapa → atividades, que abrem e fecham. Subatividades (1.4.6.1) vêm
  * logo após a mãe, com recuo; cada linha mostra a última observação. Quem pode editar troca o
- * status no selo de cada linha.
+ * status no selo de cada linha. Cada etapa abre o seu acompanhamento.
  */
-export function EtapasGO({ dados, visiveis, act, onSelect, umProjeto, rel, podeEditar, onStatus }: {
+export function EtapasGO({ dados, visiveis, act, onSelect, umProjeto, rel, podeEditar, onStatus, onAcompanhamento }: {
   dados: GoDados;
   visiveis: GoAtividade[];
   act: number | null;
@@ -18,6 +18,7 @@ export function EtapasGO({ dados, visiveis, act, onSelect, umProjeto, rel, podeE
   rel: GoRel;
   podeEditar: boolean;
   onStatus: (id: number, status: GoStatus) => void;
+  onAcompanhamento: (etapaId: number) => void;
 }) {
   // o que o GP abriu ou fechou fica como está ao trocar de filtro
   const [abertoProj, setAbertoProj] = useState<Record<number, boolean>>({});
@@ -47,18 +48,27 @@ export function EtapasGO({ dados, visiveis, act, onSelect, umProjeto, rel, podeE
                   const es = stats(e.acts), st = etapaStatus(e.acts);
                   const resps = Array.from(new Set(e.acts.map(a => a.responsavel).filter(Boolean))).join(", ");
                   const aberta = abertaEt[e.key] ?? e.acts.some(a => a.id === act);
+                  const acomp = dados.obsEtapa.get(e.key) ?? [];
                   return (
                     <div key={e.key} className={`overflow-hidden rounded-lg border bg-card ${rel.etHl.has(e.key) ? "border-orange-500/50" : "border-border/60"}`}>
-                      <button type="button" aria-expanded={aberta} onClick={() => setAbertaEt(o => ({ ...o, [e.key]: !aberta }))}
-                        className="grid w-full grid-cols-[16px_44px_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1 px-3 py-2.5 text-left hover:bg-muted/40 md:grid-cols-[16px_44px_minmax(0,1fr)_auto_120px_48px_minmax(0,180px)]">
-                        <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${aberta ? "rotate-90" : ""}`} />
-                        <span className="font-mono text-[11.5px] text-muted-foreground">{e.num}</span>
-                        <span className="min-w-0 truncate text-[13.5px] font-semibold">{e.nome}</span>
-                        <StatusPill status={st} />
-                        <span className="hidden md:block"><span className="block h-1.5 overflow-hidden rounded-full bg-muted"><i className="block h-full bg-emerald-500" style={{ width: `${es.pct}%` }} /></span></span>
-                        <span className="hidden text-[12px] tabular-nums text-muted-foreground md:block">{es.done}/{es.total}</span>
-                        <span className="hidden truncate text-[12px] text-muted-foreground md:block" title={resps}>{resps}</span>
-                      </button>
+                      <div className="flex items-stretch">
+                        <button type="button" aria-expanded={aberta} onClick={() => setAbertaEt(o => ({ ...o, [e.key]: !aberta }))}
+                          className="grid min-w-0 flex-1 grid-cols-[16px_44px_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1 px-3 py-2.5 text-left hover:bg-muted/40 md:grid-cols-[16px_44px_minmax(0,1fr)_auto_120px_48px_minmax(0,180px)]">
+                          <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${aberta ? "rotate-90" : ""}`} />
+                          <span className="font-mono text-[11.5px] text-muted-foreground">{e.num}</span>
+                          <span className="min-w-0 truncate text-[13.5px] font-semibold">{e.nome}</span>
+                          <StatusPill status={st} />
+                          <span className="hidden md:block"><span className="block h-1.5 overflow-hidden rounded-full bg-muted"><i className="block h-full bg-emerald-500" style={{ width: `${es.pct}%` }} /></span></span>
+                          <span className="hidden text-[12px] tabular-nums text-muted-foreground md:block">{es.done}/{es.total}</span>
+                          <span className="hidden truncate text-[12px] text-muted-foreground md:block" title={resps}>{resps}</span>
+                        </button>
+                        <button type="button" onClick={() => onAcompanhamento(e.key)}
+                          title={acomp.length ? `Acompanhamento: ${acomp.length} ${acomp.length === 1 ? "registro" : "registros"}. Último: ${acomp[0].texto}` : "Acompanhamento da etapa"}
+                          aria-label={`Acompanhamento da etapa ${e.num} ${e.nome}${acomp.length ? `, ${acomp.length} registros` : ""}`}
+                          className={`flex shrink-0 items-center gap-1 border-l border-border/60 px-3 text-[12px] font-semibold tabular-nums hover:bg-muted/40 ${acomp.length ? "text-primary" : "text-muted-foreground"}`}>
+                          <MessageSquareText className="h-4 w-4" />{acomp.length || ""}
+                        </button>
+                      </div>
                       {aberta && (
                         <ul className="divide-y divide-border/50 border-t border-border/60">
                           {e.acts.map(a => {

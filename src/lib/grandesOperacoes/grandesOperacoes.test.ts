@@ -1,16 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
-  camposParaStatus, comAtividade, etapaStatus, hubGrupos, indexar, matchResp, openUpstream, podeComecar, relDe, respOptions, stats, FILTROS_HUB_PADRAO,
+  CODIGO_VALIDO, camposParaStatus, comAtividade, comObsEtapa, etapaStatus, hubGrupos, indexar, matchResp, openUpstream, podeComecar, relDe, respOptions,
+  responsaveisDe, stats, sugerirCodigo, FILTROS_HUB_PADRAO,
   type GoAtividade, type GoCliente, type GoProjeto,
 } from "@/lib/grandesOperacoes/dados";
 import { calcularPrevisao, chaveCodigo, lerDuracao, paraTexto, somarUteis, temBarra, voltarUteis, lerData, type ResultadoPrevisao } from "@/lib/grandesOperacoes/previsao";
 
 const atv = (x: Partial<GoAtividade> & Pick<GoAtividade, "id" | "codigo">): GoAtividade => ({
   projeto_id: 1, etapa_id: 1, titulo: `Atividade ${x.codigo}`, responsavel: "", objetivo: "", duracao: "", data_prevista: null, data_realizada: null,
-  status: "espera", ordem: 0, atualizado_em: "2026-10-28T10:00:00Z", predecessoras: [], observacoes: [], ...x,
+  status: "espera", ordem: 0, atualizado_em: "2026-10-28T10:00:00Z", predecessoras: [], observacoes: [], stakeholders: [], ...x,
 });
 const datas = (r: ResultadoPrevisao) => (temBarra(r) ? `${r.tipo} ${paraTexto(r.inicio)} → ${paraTexto(r.fim)}` : r.tipo === "planejar" ? `planejar ${paraTexto(r.inicio)}` : r.tipo);
-const proj = (x: Partial<GoProjeto> & Pick<GoProjeto, "id">): GoProjeto => ({ cliente_id: 1, nome: `Projeto ${x.id}`, curto: "", situacao: "ativo", sequenciar_automatico: true, ordem: x.id, responsaveis: [], ...x });
+const proj = (x: Partial<GoProjeto> & Pick<GoProjeto, "id">): GoProjeto => ({ cliente_id: 1, nome: `Projeto ${x.id}`, curto: "", situacao: "ativo", sequenciar_automatico: true, ordem: x.id, project_id: null, responsaveis: [], stakeholders: [], ...x });
 
 describe("dias úteis e leitura dos campos", () => {
   it("sábado e domingo não contam; 1 dia termina no mesmo dia", () => {
@@ -120,5 +121,38 @@ describe("troca de status", () => {
     expect(n.act.get(1)!.status).toBe("concluido");
     expect(podeComecar(n, n.act.get(2)!)).toBe(true);
     expect(d.act.get(1)!.status).toBe("andamento");
+  });
+});
+
+describe("cadastros pela tela", () => {
+  const etapas = [{ id: 1, projeto_id: 1, nome: "Infra", ordem: 1 }, { id: 2, projeto_id: 1, nome: "Integração", ordem: 2 }, { id: 3, projeto_id: 1, nome: "Nova", ordem: 3 }];
+  const stk = [{ id: 7, nome: "Ana Lima", empresa: "ENBI", ordem: 1 }, { id: 8, nome: "João Reis", empresa: "Transdata", ordem: 2 }];
+  const d = indexar([], [proj({ id: 1, responsaveis: ["Transdata", "ENBI"], stakeholders: stk }), proj({ id: 2 })], etapas, [
+    atv({ id: 1, codigo: "1.1.1", etapa_id: 1, responsavel: "Transdata + ENBI" }),
+    atv({ id: 2, codigo: "1.1.2", etapa_id: 1, responsavel: "Ana Lima (ENBI)", stakeholders: [7] }),
+    atv({ id: 3, codigo: "1.2.1", etapa_id: 2, responsavel: "Ana Lima (ENBI) + João Reis (Transdata)", stakeholders: [7, 8] }),
+    atv({ id: 4, codigo: "1.2.4.1", etapa_id: 2 }),
+  ], { obsEtapa: new Map([[1, [{ id: 5, etapa_id: 1, texto: "antigo", criado_em: "2026-11-01T10:00:00Z", autor_nome: "Luiz" }]]]) });
+
+  it("código sugerido: o próximo da etapa; etapa vazia ou nova começa uma etapa do projeto", () => {
+    expect(sugerirCodigo(d, 1, 1)).toBe("1.1.3");
+    // subatividade (1.2.4.1) conta pelo terceiro número
+    expect(sugerirCodigo(d, 1, 2)).toBe("1.2.5");
+    expect(sugerirCodigo(d, 1, 3)).toBe("1.3.1");
+    expect(sugerirCodigo(d, 1, null)).toBe("1.3.1");
+    expect(sugerirCodigo(d, 2, null)).toBe("1.1.1");
+    expect(["1.2.3", "1", "1.2."].map(c => CODIGO_VALIDO.test(c))).toEqual([true, true, false]);
+  });
+  it("filtro de responsável: empresas e nomes dos stakeholders e só o texto das atividades antigas", () => {
+    expect(respOptions(d, [d.proj.get(1)!])).toEqual(["Transdata", "ENBI", "Ana Lima", "João Reis", "Transdata + ENBI"]);
+    expect(d.atividades.filter(a => matchResp(a, "Ana Lima")).map(a => a.id)).toEqual([2, 3]);
+    expect(d.atividades.filter(a => matchResp(a, "ENBI")).map(a => a.id)).toEqual([1, 2, 3]);
+    expect(responsaveisDe(d, d.act.get(3)!).map(s => s.nome)).toEqual(["Ana Lima", "João Reis"]);
+  });
+  it("acompanhamento novo entra no topo da etapa e a troca de status não perde o acompanhamento", () => {
+    const n = comObsEtapa(d, { id: 6, etapa_id: 1, texto: "novo", criado_em: "2026-11-06T10:00:00Z", autor_nome: "Luiz" });
+    expect(n.obsEtapa.get(1)!.map(o => o.texto)).toEqual(["novo", "antigo"]);
+    expect(d.obsEtapa.get(1)!.length).toBe(1);
+    expect(comAtividade(n, 1, { status: "concluido" }).obsEtapa.get(1)!.length).toBe(2);
   });
 });
