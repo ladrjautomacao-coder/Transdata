@@ -11,6 +11,8 @@ interface AuthContextType {
   loading: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  /** Id na Equipe de quem está ativo como Gerente de Projetos (get_my_manager_id); null se não for GP. */
+  managerId: string | null;
   /** Autocadastro aguardando liberação de um administrador. */
   accessPending: boolean;
   signOut: () => Promise<void>;
@@ -27,6 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [managerId, setManagerId] = useState<string | null>(null);
   const [accessPending, setAccessPending] = useState(false);
   const requestIdRef = useRef(0);
 
@@ -34,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
     setIsAdmin(false);
     setIsSuperAdmin(false);
+    setManagerId(null);
     setAccessPending(false);
   };
 
@@ -41,10 +45,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const requestId = ++requestIdRef.current;
     resetUserData();
 
-    const [{ data: profileData }, { data: rolesData }, { data: accessStatus }] = await Promise.all([
+    const [{ data: profileData }, { data: rolesData }, { data: accessStatus }, { data: gpId }] = await Promise.all([
       supabase.from("profiles").select("full_name, avatar_url, tenant_id").eq("user_id", userId).maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
       getMyAccessStatus(),
+      supabase.rpc("get_my_manager_id"),
     ]);
 
     if (requestId !== requestIdRef.current) return;
@@ -53,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile((profileData as unknown as { full_name: string; avatar_url: string | null; tenant_id: string } | null) ?? null);
     setIsAdmin(roles.includes("admin") || roles.includes("super_admin"));
     setIsSuperAdmin(roles.includes("super_admin"));
+    setManagerId((gpId as string | null) ?? null);
     setAccessPending(accessStatus === "pendente");
   };
 
@@ -102,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, isAdmin, isSuperAdmin, accessPending, signOut }}>
+    <AuthContext.Provider value={{ session, user, profile, loading, isAdmin, isSuperAdmin, managerId, accessPending, signOut }}>
       {children}
     </AuthContext.Provider>
   );

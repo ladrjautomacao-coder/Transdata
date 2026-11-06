@@ -12,6 +12,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 import { PermissionRoute } from "@/components/PermissionRoute";
 import { SuperAdminRoute } from "@/components/SuperAdminRoute";
+import { GerenteProjetosRoute } from "@/components/GerenteProjetosRoute";
 import { AppLayout } from "@/components/AppLayout";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -75,7 +76,7 @@ function AppRoutes() {
 
           <Route path="/projetos/gestao" element={<ProjectManagement />} />
           <Route path="/projetos/cronograma" element={<Cronograma />} />
-          <Route path="/projetos/gerenciamento" element={<SuperAdminRoute><Gerenciamento /></SuperAdminRoute>} />
+          <Route path="/projetos/gerenciamento" element={<GerenteProjetosRoute><Gerenciamento /></GerenteProjetosRoute>} />
           <Route path="/projetos/:id" element={<ProjectDetail />} />
           <Route path="/comercial" element={<VisaoComercial />} />
           {/* Portal PSM antigo foi desativado; links salvos caem no Report IMP */}

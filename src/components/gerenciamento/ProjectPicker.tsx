@@ -4,6 +4,7 @@ import {
   PauseCircle, RefreshCw, Search, UserRound, Wrench, X, type LucideIcon,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -90,14 +91,15 @@ function FaseCard({ fase, total, unidade, etapas, ativo, onClick }: {
 /**
  * Primeiro passo do Gerenciamento: os projetos do GP por coluna do Kanban (mesmos nomes, ordem
  * e cores) e, ao clicar numa coluna, a lista para escolher o projeto. Acompanha o Kanban ao vivo.
+ * O GP vê só os projetos dele; o Super Admin escolhe entre os dele e todos.
  */
 export function ProjectPicker({ onPick }: { onPick: (id: string) => void }) {
+  const { isSuperAdmin, managerId } = useAuth();
   const [list, setList] = useState<GerProject[] | null>(null);
   const [pendencias, setPendencias] = useState<ProjectPendency[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [mine, setMine] = useState(true);
-  const [managerId, setManagerId] = useState<string | null>(null);
   const [fase, setFaseState] = useState<Fase | null>(lerFase);
   const setFase = (f: Fase | null) => { setFaseState(f); guardarFase(f); };
 
@@ -106,10 +108,7 @@ export function ProjectPicker({ onPick }: { onPick: (id: string) => void }) {
     setList(null); setError(null);
     buscar().then(([ps, pend]) => { setList(ps); setPendencias(pend); }).catch(err => { setError(errorMessage(err)); setList([]); });
   }, [buscar]);
-  useEffect(() => {
-    load();
-    supabase.rpc("get_my_manager_id").then(({ data }) => setManagerId((data as string | null) ?? null));
-  }, [load]);
+  useEffect(load, [load]);
 
   // ao vivo: projeto que muda de coluna no Kanban (ou volta para esta aba) atualiza as caixas sem piscar a tela
   useEffect(() => {
@@ -126,8 +125,8 @@ export function ProjectPicker({ onPick }: { onPick: (id: string) => void }) {
     return () => { clearTimeout(timer); supabase.removeChannel(canal); document.removeEventListener("visibilitychange", aoVoltar); };
   }, [buscar]);
 
-  // quem não é GP de nenhum projeto vê todos
-  const onlyMine = mine && !!managerId;
+  // GP: só os projetos dele; Super Admin que não é GP vê todos
+  const onlyMine = !isSuperAdmin || (mine && !!managerId);
   const base = useMemo(() => (list ?? []).filter(p => !onlyMine || p.manager_id === managerId), [list, onlyMine, managerId]);
   const abertasPorProjeto = useMemo(() => {
     const ids = new Set(base.map(p => p.id));
@@ -163,7 +162,7 @@ export function ProjectPicker({ onPick }: { onPick: (id: string) => void }) {
 
   const ferramentas = (
     <div className="ml-auto flex w-full flex-wrap items-center gap-2 sm:w-auto">
-      {managerId && (
+      {isSuperAdmin && managerId && (
         <div className="flex rounded-lg border bg-card p-0.5" role="group" aria-label="Quais projetos">
           {[{ v: true, l: "Meus projetos" }, { v: false, l: "Todos" }].map(o => (
             <button key={o.l} type="button" onClick={() => setMine(o.v)} aria-pressed={mine === o.v}
@@ -243,7 +242,7 @@ export function ProjectPicker({ onPick }: { onPick: (id: string) => void }) {
                 {linhas.length === 0 ? (
                   <EmptyBlock icon={FolderSearch}
                     title={q ? "Nenhum projeto com essa busca" : `Nenhum projeto em ${nomeFase(fase!)}`}
-                    text={q ? "Confira o nome do cliente ou o código, ou procure em todos os projetos." : onlyMine ? "Você não tem projetos nesta fase do Kanban agora." : "Nenhum projeto está nesta fase do Kanban agora."}
+                    text={q ? `Confira o nome do cliente ou o código${isSuperAdmin ? ", ou procure em todos os projetos" : ""}.` : onlyMine ? "Você não tem projetos nesta fase do Kanban agora." : "Nenhum projeto está nesta fase do Kanban agora."}
                     action={q ? <Button variant="outline" size="sm" onClick={() => { setQuery(""); setMine(false); }}>Limpar busca</Button> : undefined} />
                 ) : (
                   <ul className="divide-y">

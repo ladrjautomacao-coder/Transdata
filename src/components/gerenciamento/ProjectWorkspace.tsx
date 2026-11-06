@@ -123,7 +123,7 @@ function andamento<Id extends string>(lista: { a: Atividade<Id>; sit: SituacaoAt
  * módulos); com ?modulo=01 ou 02, as atividades daquele módulo.
  */
 export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => void }) {
-  const { profile } = useAuth();
+  const { profile, isSuperAdmin, managerId } = useAuth();
   const [params, setParams] = useSearchParams();
   const qual = params.get("modulo");
   const modulo: ModuloNum | null = MODULOS.find(m => m === qual) ?? null;
@@ -203,6 +203,20 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
       </div>
     );
   }
+  // o GP abre só os projetos dele (o banco também barra); o Super Admin abre todos
+  if (!isSuperAdmin && project.manager_id !== managerId) {
+    return (
+      <div className="flex flex-col gap-5">
+        {back}
+        <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-card px-3.5 py-2.5 text-sm">
+          <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="flex-1">
+            <b>{project.company_name}</b> é um projeto de {project.manager?.full_name ?? "outro GP"}. No Gerenciamento você abre só os projetos em que é o GP.
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   const lista01 = ordem.map(id => MODULO_01.atividades.find(a => a.id === id)!).map(a => ({ a, sit: situacao(a.id, estado, project, ordem) }));
   const and01 = andamento(lista01);
@@ -257,10 +271,7 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
       {/* Header */}
       <div className="-mt-2 flex flex-wrap items-end gap-4">
         <div className="min-w-0 flex-1 basis-72">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Gerenciamento</span>
-            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-200">Em desenvolvimento · só Super Admin</span>
-          </div>
+          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Gerenciamento</span>
           <h1 className="text-2xl font-bold tracking-tight">{project.company_name}</h1>
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
             {project.project_code && <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{project.project_code}</span>}

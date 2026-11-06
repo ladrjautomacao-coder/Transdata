@@ -4,8 +4,8 @@ import { ProjectPicker } from "@/components/gerenciamento/ProjectPicker";
 import { ProjectWorkspace } from "@/components/gerenciamento/ProjectWorkspace";
 
 /**
- * Gerenciamento (em desenvolvimento, só Super Admin): primeiro o GP escolhe o projeto,
- * depois trabalha nos módulos de gerenciamento daquele projeto (?projeto=<id>).
+ * Gerenciamento (Gerentes de Projetos, só nos projetos deles; Super Admin em todos): primeiro o GP
+ * escolhe o projeto, depois trabalha nos módulos de gerenciamento daquele projeto (?projeto=<id>).
  */
 export default function Gerenciamento() {
   const [params, setParams] = useSearchParams();
@@ -18,10 +18,7 @@ export default function Gerenciamento() {
       {/* Header */}
       <div className="flex flex-wrap items-end gap-4">
         <div className="min-w-0 flex-1 basis-64">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Gestão de Projetos</span>
-            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-200">Em desenvolvimento · só Super Admin</span>
-          </div>
+          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Gestão de Projetos</span>
           <h1 className="text-2xl font-bold tracking-tight">Gerenciamento</h1>
           <p className="text-sm text-muted-foreground">Escolha o projeto para abrir os módulos de gerenciamento: as rotinas do GP, do cadastro à entrega.</p>
         </div>

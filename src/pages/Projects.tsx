@@ -6,7 +6,7 @@ import { Plus, List, Signal, Kanban, CalendarRange, ListChecks } from "lucide-re
 
 export default function Projects() {
   const navigate = useNavigate();
-  const { isAdmin, isSuperAdmin, loading } = useAuth();
+  const { isAdmin, isSuperAdmin, managerId, loading } = useAuth();
   const branding = useTenantBranding();
 
   if (loading) {
@@ -36,13 +36,12 @@ export default function Projects() {
       icon: List,
       onClick: () => navigate("/projetos/lista"),
     },
-    // Em desenvolvimento: só Super Admin até as rotinas do GP ficarem prontas
-    ...(isSuperAdmin ? [{
+    // Gerentes de Projetos (os projetos deles) e Super Admin (todos)
+    ...(isSuperAdmin || managerId ? [{
       title: "Gerenciamento",
       description: "O roteiro do GP em cada fase do projeto",
       icon: ListChecks,
       onClick: () => navigate("/projetos/gerenciamento"),
-      badge: "Em desenvolvimento",
     }] : []),
     // Teste isolado: Cronograma só aparece pra este tenant enquanto validamos
     // se vale a pena expor pra todo mundo.
