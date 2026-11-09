@@ -27,7 +27,7 @@ export const MODULO_02 = {
 };
 
 /** Onde o GP simula os custos da viagem e pede o adiantamento de verba. */
-export const ONFLY_URL = "https://www.onfly.com.br/";
+export const ONFLY_URL = "https://app.onfly.com/login";
 
 /** Estado do módulo 02 de um projeto (gravado inteiro em gerenciamento_modulo02.estado). */
 export interface Modulo02Estado {
