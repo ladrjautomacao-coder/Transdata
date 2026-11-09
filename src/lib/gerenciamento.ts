@@ -191,13 +191,20 @@ export const CHECKLIST_ITENS: { id: ChecklistItemId; texto: string; resp: RespCh
 export type ChecklistResultado = "atendido" | "excecao";
 
 /* ─── Handover: perguntas indispensáveis ao Executivo de Vendas ─── */
-export type PerguntaHandoverId = "prometido" | "escopo" | "validacao" | "dependencias" | "risco";
-/** `curto`: o assunto da pergunta, para registro e TAP. Todas obrigatórias ("Não." também vale). */
-export const PERGUNTAS_HANDOVER: { id: PerguntaHandoverId; texto: string; curto: string }[] = [
+export type PerguntaHandoverId = "prometido" | "migracao" | "sistemas" | "validacao" | "dependencias" | "risco";
+/** Perguntas que saíram do Handover: quem já respondeu continua vendo a resposta no registro e no TAP. */
+type PerguntaHandoverAntigaId = "escopo";
+type PerguntaHandover = { id: PerguntaHandoverId | PerguntaHandoverAntigaId; texto: string; curto: string; antiga?: true };
+/** Todas, na ordem em que são (ou eram) feitas. */
+const TODAS_PERGUNTAS_HANDOVER: PerguntaHandover[] = [
   { id: "prometido", curto: "Promessas fora da proposta ou do contrato",
     texto: "Existe algo que foi prometido ao cliente durante a negociação que não aparece claramente na proposta ou no contrato?" },
-  { id: "escopo", curto: "Entendimentos diferentes sobre o escopo",
+  { id: "escopo", antiga: true, curto: "Entendimentos diferentes sobre o escopo",
     texto: "Existe algo que o cliente acredita que receberá, mas que podemos ter uma interpretação diferente sobre estar ou não no escopo?" },
+  { id: "migracao", curto: "Processo de migração apresentado",
+    texto: "Foi apresentado o processo de migração?" },
+  { id: "sistemas", curto: "Sistemas vendidos (urbano, seccionado)",
+    texto: "Quais sistemas foram vendidos? Urbano? Seccionado?" },
   { id: "validacao", curto: "Itens sem validação técnica",
     texto: "Existe alguma funcionalidade, integração ou prazo apresentado ao cliente que ainda não tenha sido tecnicamente validado?" },
   { id: "dependencias", curto: "Dependências do cliente ou de terceiros",
@@ -205,6 +212,11 @@ export const PERGUNTAS_HANDOVER: { id: PerguntaHandoverId; texto: string; curto:
   { id: "risco", curto: "Possível \"isso foi prometido pelo Comercial\"",
     texto: "Se daqui a três meses o cliente disser \"isso foi prometido pelo Comercial\", sobre qual assunto você acredita que poderá ser?" },
 ];
+/** As perguntas feitas hoje. `curto`: o assunto da pergunta, para registro e TAP. Todas obrigatórias ("Não." também vale). */
+export const PERGUNTAS_HANDOVER = TODAS_PERGUNTAS_HANDOVER.filter(q => !q.antiga) as { id: PerguntaHandoverId; texto: string; curto: string }[];
+/** Perguntas de um Handover registrado: as de hoje e as que saíram, se tiveram resposta. */
+export const perguntasDoRegistro = (h: Modulo01Estado["handover"]) =>
+  TODAS_PERGUNTAS_HANDOVER.filter(q => !q.antiga || (h.respostas?.[q.id] ?? "").trim());
 
 /** Perguntas do Handover já respondidas. */
 export const respondidasHandover = (h: Modulo01Estado["handover"]) => PERGUNTAS_HANDOVER.filter(q => (h.respostas?.[q.id] ?? "").trim()).length;
@@ -250,8 +262,8 @@ export interface Modulo01Estado {
   codigobd: { enviadoEm: string | null; codigo: string; registradoEm: string | null; por: string };
   handover: {
     agendadoPara: string; participantes: string; particularidades: string; atencao: string; expectativas: string; registradoEm: string | null;
-    /** Respostas do Executivo de Vendas às perguntas indispensáveis (PERGUNTAS_HANDOVER). */
-    respostas: Partial<Record<PerguntaHandoverId, string>>;
+    /** Respostas do Executivo de Vendas às perguntas indispensáveis (PERGUNTAS_HANDOVER e as que saíram). */
+    respostas: Partial<Record<PerguntaHandoverId | PerguntaHandoverAntigaId, string>>;
     /** Previsão de entrega dos equipamentos (AAAA-MM-DD). */
     previsaoEquipamentos: string;
   };

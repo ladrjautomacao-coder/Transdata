@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  ATIVIDADE_FIXA, MODULO_01, PERGUNTAS_HANDOVER, agora, dataBr, faltandoHandover, linkExterno, quando, respondidasHandover, situacao,
+  ATIVIDADE_FIXA, MODULO_01, PERGUNTAS_HANDOVER, agora, dataBr, faltandoHandover, linkExterno, perguntasDoRegistro, quando, respondidasHandover, situacao,
   type Atividade, type AtividadeId, type GerProject, type Modulo01Estado, type PerguntaHandoverId, type SituacaoAtividade,
 } from "@/lib/gerenciamento";
 import { NOME_OPERADORA } from "@/lib/coberturaOperadoras";
@@ -228,11 +228,11 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
           <Registro texto={`Handover registrado em ${quando(h.registradoEm)} por ${userName}`} onDesfazer={() => set({ registradoEm: null })}>
             {h.previsaoEquipamentos && <> · equipamentos previstos para <b>{dataBr(h.previsaoEquipamentos)}</b></>}
           </Registro>
-          {respondidasHandover(h) > 0 && (
+          {perguntasDoRegistro(h).some(q => respostas[q.id]?.trim()) && (
             <div className="rounded-lg border border-border/60 p-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Perguntas ao Executivo de Vendas</p>
               <dl className="mt-1.5 space-y-1.5 text-[13px]">
-                {PERGUNTAS_HANDOVER.map((q, i) => (
+                {perguntasDoRegistro(h).map((q, i) => (
                   <div key={q.id} className="grid gap-x-3 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
                     <dt className="text-muted-foreground">{i + 1}. {q.curto}</dt>
                     <dd className="whitespace-pre-line font-medium">{respostas[q.id]?.trim() || "—"}</dd>
@@ -281,7 +281,7 @@ export function Modulo01({ project, estado, onChange, userName, ordem, travada, 
             </span>
           </div>
           <p className="text-[12px] text-muted-foreground">
-            Faça as cinco perguntas a {project.executive?.full_name ?? "o Executivo de Vendas"}. Todas são obrigatórias: se não houver nada, responda "Não".
+            Faça todas as perguntas a {project.executive?.full_name ?? "o Executivo de Vendas"}. Todas são obrigatórias: se não houver nada, responda "Não".
           </p>
           <ol className="space-y-2.5">
             {PERGUNTAS_HANDOVER.map((q, i) => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { faltandoHandover, linkExterno, modulo01Vazio, normalizarModulo01, respondidasHandover } from "@/lib/gerenciamento";
+import { faltandoHandover, linkExterno, modulo01Vazio, normalizarModulo01, perguntasDoRegistro, respondidasHandover } from "@/lib/gerenciamento";
 
 describe("linkExterno", () => {
   it("aceita link completo e completa o https:// de endereço sem ele", () => {
@@ -39,14 +39,20 @@ describe("normalizarModulo01", () => {
 });
 
 describe("Handover: perguntas ao Executivo de Vendas", () => {
-  it("só fica pronto com a data, as cinco respostas e a previsão dos equipamentos", () => {
+  it("só fica pronto com a data, as seis respostas e a previsão dos equipamentos", () => {
     const h = modulo01Vazio().handover;
-    expect(faltandoHandover(h)).toEqual(["data da reunião", "5 perguntas", "previsão de entrega dos equipamentos"]);
+    expect(faltandoHandover(h)).toEqual(["data da reunião", "6 perguntas", "previsão de entrega dos equipamentos"]);
     const quase = { ...h, agendadoPara: "2026-10-28T10:00", previsaoEquipamentos: "2026-11-20",
-      respostas: { prometido: "Não.", escopo: "Recarga embarcada em todos os carros.", validacao: "  ", dependencias: "Obra da garagem.", risco: "Prazo da recarga." } };
-    expect(respondidasHandover(quase)).toBe(4);
+      respostas: { prometido: "Não.", migracao: "Sim, na reunião de fechamento.", sistemas: "Urbano e seccionado.", validacao: "  ", dependencias: "Obra da garagem.", risco: "Prazo da recarga." } };
+    expect(respondidasHandover(quase)).toBe(5);
     expect(faltandoHandover(quase)).toEqual(["1 pergunta"]);
     expect(faltandoHandover({ ...quase, respostas: { ...quase.respostas, validacao: "Não." } })).toEqual([]);
+  });
+  it("a pergunta que saiu não conta mais, mas a resposta antiga continua no registro", () => {
+    const h = { ...modulo01Vazio().handover, respostas: { prometido: "Não.", escopo: "Recarga embarcada em todos os carros." } };
+    expect(respondidasHandover(h)).toBe(1);
+    expect(perguntasDoRegistro(h).map(q => q.id)).toEqual(["prometido", "escopo", "migracao", "sistemas", "validacao", "dependencias", "risco"]);
+    expect(perguntasDoRegistro(modulo01Vazio().handover).map(q => q.id)).toEqual(["prometido", "migracao", "sistemas", "validacao", "dependencias", "risco"]);
   });
   it("Handover gravado antes das perguntas abre sem quebrar", () => {
     const e = normalizarModulo01({ handover: { agendadoPara: "2026-10-28T10:00", registradoEm: "2026-10-27T10:00:00Z" } });
