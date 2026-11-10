@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ArrowDown, ArrowUp, Check, CheckCircle2, ExternalLink, Lock, RotateCcw } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Check, CheckCircle2, ExternalLink, Lock, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RESPONSAVEL_LABEL, type Atividade, type SituacaoAtividade } from "@/lib/gerenciamento";
 
@@ -61,6 +61,28 @@ export function AbrirLink({ href }: { href: string | null }) {
     <Button variant="outline" className="h-9" asChild>
       <a href={href} target="_blank" rel="noopener noreferrer" title={href}><ExternalLink className="mr-1.5 h-4 w-4" />Abrir</a>
     </Button>
+  );
+}
+
+/** Lembrete do que não pode ficar para trás. */
+export function Lembrete({ icone, children }: { icone: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5 text-[13px] text-amber-900 dark:text-amber-100">
+      <span className="mt-0.5 shrink-0">{icone}</span>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
+/** Rodapé das atividades com formulário: o que falta, ou a dica, e o botão. */
+export function Rodape({ falta, dica, children }: { falta: string[]; dica: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-t pt-3">
+      {falta.length > 0
+        ? <p className="flex min-w-0 flex-1 basis-60 items-start gap-1.5 text-[13px] text-amber-800 dark:text-amber-200"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />Falta: {falta.join(", ")}.</p>
+        : <p className="min-w-0 flex-1 basis-60 text-[13px] text-muted-foreground">{dica}</p>}
+      {children}
+    </div>
   );
 }
 

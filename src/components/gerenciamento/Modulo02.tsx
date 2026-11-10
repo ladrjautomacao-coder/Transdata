@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import {
-  AlertTriangle, CalendarCheck, CalendarClock, Check, CheckCircle2, Circle, ExternalLink, FileText, KeyRound, Laptop, Lock, Mail, Paperclip, Plane, ScanLine, Wallet,
+  CalendarCheck, CalendarClock, Check, CheckCircle2, Circle, ExternalLink, FileText, KeyRound, Laptop, Lock, Mail, Paperclip, Plane, ScanLine, Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,7 @@ import { cartoesDoTermo, qtdTermo } from "@/lib/termoCartoes";
 import type { Comprovante } from "@/lib/comprovantesFinanceiro";
 import { CartoesTermo } from "./CartoesTermo";
 import { ComprovantesFinanceiroDialog } from "./ComprovantesFinanceiroDialog";
-import { Etapa, Registro } from "./Etapa";
+import { Etapa, Lembrete, Registro, Rodape } from "./Etapa";
 import { TermoCartoesDialog } from "./TermoCartoesDialog";
 import { VisitaPeEmailDialog } from "./VisitaPeEmailDialog";
 
@@ -37,28 +37,6 @@ function CampoValor({ id, label, value, onChange, className = "" }: { id: string
           value={value} onChange={ev => onChange(ev.target.value.replace(/[^\d.,]/g, ""))} />
       </div>
       {invalido && <p className="mt-1 text-[11px] text-destructive">Use só números, ex.: 1.250,00</p>}
-    </div>
-  );
-}
-
-/** Lembrete do que não pode ficar para trás na viagem. */
-function Lembrete({ icone, children }: { icone: ReactNode; children: ReactNode }) {
-  return (
-    <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5 text-[13px] text-amber-900 dark:text-amber-100">
-      <span className="mt-0.5 shrink-0">{icone}</span>
-      <div className="min-w-0 flex-1">{children}</div>
-    </div>
-  );
-}
-
-/** Rodapé das atividades com formulário: o que falta, ou a dica, e o botão. */
-function Rodape({ falta, dica, children }: { falta: string[]; dica: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-center gap-3 border-t pt-3">
-      {falta.length > 0
-        ? <p className="flex min-w-0 flex-1 basis-60 items-start gap-1.5 text-[13px] text-amber-800 dark:text-amber-200"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />Falta: {falta.join(", ")}.</p>
-        : <p className="min-w-0 flex-1 basis-60 text-[13px] text-muted-foreground">{dica}</p>}
-      {children}
     </div>
   );
 }
