@@ -57,6 +57,14 @@
     --marca-rosa: 340 77% 56%;
     --marca-logo: 275 71% 27%;
     --marca-fundo: 275 72% 14%;
+
+    /* Faixa superior do portal (igual nos dois temas): degradê roxo, lilás de destaque e a
+       tinta escura usada sobre o lilás. */
+    --faixa-inicio: 268 47% 17%;
+    --faixa-fim: 276 61% 26%;
+    --marca-lilas: 270 77% 71%;
+    --marca-lilas-claro: 269 78% 85%;
+    --marca-tinta: 270 59% 11%;
   }
 
   .dark {
@@ -169,6 +177,67 @@
     --app-sidebar-accent-foreground: 0 0% 100%;
     --app-sidebar-border: 275 40% 34%;
     --app-sidebar-ring: var(--marca-laranja);
+  }
+}
+
+/* Faixa superior do portal (FaixaPortal): vidro roxo fosco com uma linha lilás que brilha embaixo. */
+@layer components {
+  .faixa-portal {
+    background: linear-gradient(90deg, hsl(var(--faixa-inicio) / 0.94), hsl(var(--faixa-fim) / 0.94));
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+  .faixa-portal::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, hsl(var(--marca-lilas)) 20%, hsl(var(--marca-lilas-claro)) 50%, hsl(var(--marca-lilas)) 80%, transparent);
+    box-shadow: 0 0 10px 1px hsl(var(--marca-lilas) / 0.45), 0 0 22px 2px hsl(var(--marca-lilas) / 0.25);
+  }
+  /* botão quadrado da faixa (menu, assistente, avisos, instalar) */
+  .botao-faixa {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 10px;
+    background: rgb(20 11 30 / 0.45);
+    border: 1px solid hsl(var(--marca-lilas) / 0.22);
+    color: hsl(var(--marca-lilas-claro));
+    transition: background-color 0.15s, border-color 0.15s;
+  }
+  .botao-faixa:hover,
+  .botao-faixa[data-state="open"] {
+    background: rgb(255 255 255 / 0.08);
+    border-color: hsl(var(--marca-lilas));
+  }
+  .botao-faixa:focus-visible,
+  .busca-faixa:focus-visible,
+  .marca-faixa:focus-visible {
+    outline: 2px solid hsl(var(--marca-lilas-claro));
+    outline-offset: 2px;
+  }
+  /* busca: parece um campo, abre a busca do portal (Ctrl+K) */
+  .busca-faixa {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    height: 38px;
+    border-radius: 12px;
+    background: rgb(20 11 30 / 0.45);
+    border: 1px solid hsl(var(--marca-lilas) / 0.22);
+    color: rgb(226 208 247 / 0.62);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .busca-faixa:hover {
+    border-color: hsl(var(--marca-lilas));
+    box-shadow: 0 0 0 3px hsl(var(--marca-lilas) / 0.18);
   }
 }
 

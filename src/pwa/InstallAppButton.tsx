@@ -66,10 +66,9 @@ export function InstallAppButton({ variant = "header" }: { variant?: "header" | 
           <Button size="sm" variant="outline" onClick={onClick} className="shrink-0"><Download className="mr-1.5 h-4 w-4" />Instalar</Button>
         </div>
       ) : variant === "header" ? (
-        <Button variant="ghost" size="sm" onClick={onClick} title="Instalar o portal como aplicativo"
-          className="h-9 gap-1.5 rounded-lg px-2 text-muted-foreground hover:bg-muted hover:text-foreground">
-          <Download className="h-4 w-4" /><span className="hidden text-xs sm:inline">Instalar app</span>
-        </Button>
+        <button type="button" onClick={onClick} title="Instalar o portal como aplicativo" aria-label="Instalar o portal como aplicativo" className="botao-faixa">
+          <Download className="h-[18px] w-[18px]" />
+        </button>
       ) : (
         <Button size="sm" variant="outline" onClick={onClick}><Download className="mr-1.5 h-4 w-4" />Instalar aplicativo</Button>
       )}

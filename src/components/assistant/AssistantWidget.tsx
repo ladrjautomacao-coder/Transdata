@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { MessageCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { AssistantChat } from "./AssistantChat";
 import { useAuth } from "@/contexts/AuthContext";
 
-/** Botão "Assistente" no topo do portal (só Super Admin): abre a conversa ao lado. Atalho Ctrl+J. */
+/** Botão do assistente na faixa superior (só Super Admin): abre a conversa ao lado. Atalho Ctrl+J. */
 export function AssistantWidget() {
   const { user, isSuperAdmin } = useAuth();
   const [open, setOpen] = useState(false);
@@ -26,17 +25,15 @@ export function AssistantWidget() {
 
   return (
     <>
-      <Button
-        variant="outline"
-        size="sm"
+      <button
+        type="button"
         onClick={() => setOpen(true)}
-        title="Assistente Transdata (Ctrl+J)"
+        title="Assistente (Ctrl+J)"
         aria-label="Abrir o assistente"
-        className="h-9 gap-2 rounded-lg border-primary/20 bg-primary/10 px-2.5 text-primary hover:bg-primary/15 hover:text-primary sm:px-3"
+        className="botao-faixa"
       >
-        <MessageCircle className="h-4 w-4" />
-        <span className="hidden text-[13px] font-semibold sm:inline">Assistente</span>
-      </Button>
+        <MessageCircle className="h-[18px] w-[18px]" />
+      </button>
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">

@@ -21,10 +21,7 @@ export interface SidebarBadges {
   projects?: number;
 }
 
-/**
- * O menu do portal (sem filtro de permissão): a lateral filtra pelo que cada um pode ver e o
- * caminho de navegação do topo usa os mesmos nomes.
- */
+/** O menu do portal (sem filtro de permissão): a lateral filtra pelo que cada um pode ver. */
 export function gruposDoMenu(badges: SidebarBadges = {}): NavGroupDef[] {
   return [
     {
@@ -82,16 +79,4 @@ export function gruposDoMenu(badges: SidebarBadges = {}): NavGroupDef[] {
       ],
     },
   ];
-}
-
-/** O item do menu da tela atual (o de caminho mais longo que combina) e o grupo dele. */
-export function itemDoMenu(pathname: string): { grupo: NavGroupDef; item: NavItem } | null {
-  let melhor: { grupo: NavGroupDef; item: NavItem } | null = null;
-  for (const grupo of gruposDoMenu()) {
-    for (const item of grupo.items) {
-      const combina = item.url === "/" ? pathname === "/" : pathname === item.url || pathname.startsWith(`${item.url}/`);
-      if (combina && (!melhor || item.url.length > melhor.item.url.length)) melhor = { grupo, item };
-    }
-  }
-  return melhor;
 }

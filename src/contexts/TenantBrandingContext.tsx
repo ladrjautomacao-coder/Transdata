@@ -19,7 +19,7 @@ interface TenantBranding {
 const FALLBACK_TENANT_SLUG = "transdata";
 const TRANSDATA_BRANDING: TenantBranding = {
   slug: FALLBACK_TENANT_SLUG,
-  portalName: "GP Transdata",
+  portalName: "CS Flow",
   logoUrl: logoTransdata,
   primaryColor: "273 70% 32%",
   sidebarColor: "273 70% 18%",
@@ -85,7 +85,7 @@ export function TenantBrandingProvider({ children }: { children: ReactNode }) {
 
     if (slug === FALLBACK_TENANT_SLUG) {
       setState(TRANSDATA_BRANDING);
-      document.title = "GP Transdata - Gestão de Projetos";
+      document.title = "CS Flow - Gestão de Projetos";
     }
 
     (supabase.rpc as any)("get_public_tenant_branding", { _slug: slug }).then(({ data }: { data: unknown }) => {
@@ -111,7 +111,7 @@ export function TenantBrandingProvider({ children }: { children: ReactNode }) {
       };
       setState(branding);
       document.title = branding.slug === "transdata"
-        ? "Transdata - Gestão de Projetos"
+        ? "CS Flow - Gestão de Projetos"
         : `${branding.portalName} - Gestão de Projetos`;
 
       const root = document.documentElement;

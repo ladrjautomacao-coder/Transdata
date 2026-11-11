@@ -180,14 +180,14 @@ export function AlertsBell() {
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Alertas">
-          <Bell className="h-4 w-4" />
+        <button type="button" className="botao-faixa" aria-label={unseenTotal > 0 ? `Alertas (${unseenTotal} novos)` : "Alertas"} title="Alertas">
+          <Bell className="h-[18px] w-[18px]" />
           {unseenTotal > 0 && (
-            <Badge className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px] bg-red-500 hover:bg-red-500 text-white border-0">
+            <Badge className="absolute -top-1.5 -right-1.5 h-4 min-w-4 px-1 text-[10px] bg-rose-500 hover:bg-rose-500 text-white border-0 shadow-[0_0_0_2px_hsl(var(--faixa-inicio))]">
               {unseenTotal > 99 ? "99+" : unseenTotal}
             </Badge>
           )}
-        </Button>
+        </button>
       </PopoverTrigger>
 
       <PopoverContent align="end" className="w-96 p-0">

@@ -67,6 +67,9 @@ export default {
           rosa: "hsl(var(--marca-rosa))",
           logo: "hsl(var(--marca-logo))",
           fundo: "hsl(var(--marca-fundo))",
+          lilas: "hsl(var(--marca-lilas))",
+          "lilas-claro": "hsl(var(--marca-lilas-claro))",
+          tinta: "hsl(var(--marca-tinta))",
         },
       },
       borderRadius: {

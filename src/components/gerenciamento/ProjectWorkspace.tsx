@@ -18,7 +18,6 @@ import { MODULO_03, fetchModulo03, modulo03Vazio, salvarModulo03, situacao03, ty
 import { cartoesDoTermo, qtdTermo } from "@/lib/termoCartoes";
 import { montarTap, type DadosTap } from "@/lib/tap";
 import { CabecalhoProjeto, NavModulos, NumeroModulo, ProgressoProjeto, destaqueValido, type AvisoProjeto, type ModuloProgresso } from "./ProgressoProjeto";
-import { useMigalha } from "@/components/layout/Migalhas";
 // a cidade da entrada do portal (vídeo da Runway), parada, ao fundo do cabeçalho do projeto
 import imagemCidade from "@/assets/entrada/entrada-login.jpg";
 import { TapDialog } from "./TapDialog";
@@ -185,8 +184,6 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   const [tap, setTap] = useState<DadosTap | null>(null);
   // número do cabeçalho tocado: acende nas trilhas as atividades daquela situação
   const [escolhido, setEscolhido] = useState<SituacaoAtividade | null>(null);
-  // o projeto aberto aparece no fim do caminho de navegação do topo
-  useMigalha(project?.company_name);
   useEffect(() => {
     if (!foco) return;
     const t = setTimeout(() => {
