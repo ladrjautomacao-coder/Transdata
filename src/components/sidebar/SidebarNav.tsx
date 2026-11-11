@@ -36,7 +36,7 @@ export interface NavItem {
   badge?: number;
 }
 
-/** Item do menu na lateral roxa: o ativo ganha fundo claro, ícone laranja e um filete no degradê do logo. */
+/** Item do menu na lateral roxa: o ativo ganha fundo claro e ícone laranja (a linha do grupo fica ao lado). */
 export function SidebarItem({ item }: { item: NavItem }) {
   return (
     <SidebarMenuItem>
@@ -45,7 +45,7 @@ export function SidebarItem({ item }: { item: NavItem }) {
           to={item.url}
           end={item.end}
           className="group/nav relative flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[14px] text-white/80 transition-colors duration-150 hover:bg-white/10 hover:text-white"
-          activeClassName="!bg-white/[0.13] !text-white font-semibold before:absolute before:-left-2 before:bottom-1.5 before:top-1.5 before:w-[3px] before:rounded-r-full before:bg-gradient-to-b before:from-marca-laranja before:to-marca-rosa"
+          activeClassName="!bg-white/[0.13] !text-white font-semibold"
         >
           <item.icon aria-hidden="true" className="h-4 w-4 shrink-0 text-white/55 transition-colors group-hover/nav:text-white group-[.font-semibold]/nav:text-orange-300" />
           <span className="truncate">{item.title}</span>
@@ -131,15 +131,27 @@ export function SidebarNavGroup({
     );
   }
 
-  // Título do grupo: rótulo pequeno em maiúsculas, discreto, sobre a lateral roxa.
-  const title = <span className="truncate">{label}</span>;
-  const titleClassName = cn(
-    "flex min-h-7 w-full items-center gap-2 rounded-md px-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em]",
-    hasActive ? "text-white/70" : "text-white/45",
+  // Título do grupo em destaque, como em 22/10: ícone em quadrado + nome em negrito. O grupo da tela
+  // atual ganha o quadrado no laranja-rosa do logo e a linha dos itens acesa.
+  const title = (
+    <>
+      <span
+        className={cn(
+          "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors",
+          hasActive
+            ? "bg-gradient-to-br from-marca-laranja to-marca-rosa text-white shadow-[0_2px_10px_hsl(var(--marca-rosa)/0.35)]"
+            : "bg-white/10 text-marca-lilas-claro",
+        )}
+      >
+        <Icon aria-hidden="true" className="h-4 w-4" />
+      </span>
+      <span className="truncate text-[15px] font-bold leading-tight">{label}</span>
+    </>
   );
+  const titleClassName = "flex min-h-9 w-full items-center gap-2.5 rounded-md px-1.5 text-left text-white";
 
   return (
-    <UISidebarGroup className="px-0 py-1.5">
+    <UISidebarGroup className="border-t border-white/10 px-0 py-2.5 first:border-t-0">
       {collapsible ? (
         <button
           type="button"
@@ -148,14 +160,13 @@ export function SidebarNavGroup({
           onClick={() => setExpanded((value) => !value)}
           className={cn(
             titleClassName,
-            "transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-300/70",
+            "transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-300/70",
           )}
         >
-          <Icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
           {title}
           <ChevronRight
             aria-hidden="true"
-            className={cn("ml-auto h-4 w-4 shrink-0 transition-transform", isOpen && "rotate-90")}
+            className={cn("ml-auto h-4 w-4 shrink-0 text-white/60 transition-transform", isOpen && "rotate-90")}
           />
         </button>
       ) : (
@@ -164,7 +175,8 @@ export function SidebarNavGroup({
       {isOpen && (
         <SidebarGroupContent
           id={contentId}
-          className="mt-0.5"
+          // w-auto: recuado pela linha do grupo sem passar da borda direita da lateral
+          className={cn("ml-[19px] mt-1 w-auto border-l-2 pl-2", hasActive ? "border-orange-300/70" : "border-white/15")}
         >
           <SidebarMenu className="gap-0.5">
             {items.map((item) => (
