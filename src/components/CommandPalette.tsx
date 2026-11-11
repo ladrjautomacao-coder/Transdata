@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
+import { EVENTO_ABRIR_BUSCA } from "@/lib/atalhos";
 
 interface ProjectItem {
   id: string;
@@ -42,8 +43,14 @@ export function CommandPalette() {
         setOpen(o => !o);
       }
     };
+    // a busca do topo do portal também abre aqui
+    const abrir = () => setOpen(true);
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    window.addEventListener(EVENTO_ABRIR_BUSCA, abrir);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener(EVENTO_ABRIR_BUSCA, abrir);
+    };
   }, []);
 
   useEffect(() => {

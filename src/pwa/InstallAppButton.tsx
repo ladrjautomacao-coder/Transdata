@@ -67,7 +67,7 @@ export function InstallAppButton({ variant = "header" }: { variant?: "header" | 
         </div>
       ) : variant === "header" ? (
         <Button variant="ghost" size="sm" onClick={onClick} title="Instalar o portal como aplicativo"
-          className="h-8 gap-1.5 px-2 text-white hover:bg-white/15 hover:text-white">
+          className="h-9 gap-1.5 rounded-lg px-2 text-muted-foreground hover:bg-muted hover:text-foreground">
           <Download className="h-4 w-4" /><span className="hidden text-xs sm:inline">Instalar app</span>
         </Button>
       ) : (

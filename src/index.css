@@ -50,6 +50,13 @@
 
     --glow-primary: 222 45% 30%;
     --glow-secondary: 28 78% 55%;
+
+    /* Cores do logo Transdata (iguais no claro e no escuro): o laranja e o rosa do "T",
+       o roxo do fundo do logo (a lateral começa nele) e o roxo escuro onde a lateral termina. */
+    --marca-laranja: 26 93% 54%;
+    --marca-rosa: 340 77% 56%;
+    --marca-logo: 275 71% 27%;
+    --marca-fundo: 275 72% 14%;
   }
 
   .dark {
@@ -151,28 +158,28 @@
     --sidebar-ring: 17 89% 58%;
   }
 
-  /* Paleta do menu lateral (AppSidebar). Claro: branco com roxo da marca, como
-     sempre foi. Escuro: acompanha o tema, usando os tokens do próprio tenant. */
+  /* Paleta do menu lateral (AppSidebar): roxo da marca nos dois temas, começando na cor do
+     fundo do logo (o logo se funde com a lateral). O degradê vem de .lateral-marca, abaixo. */
   :root {
-    --app-sidebar-background: 0 0% 100%;
-    --app-sidebar-foreground: 222 18% 18%;
-    --app-sidebar-primary: 276 63% 28%;
+    --app-sidebar-background: var(--marca-logo);
+    --app-sidebar-foreground: 0 0% 100%;
+    --app-sidebar-primary: var(--marca-laranja);
     --app-sidebar-primary-foreground: 0 0% 100%;
-    --app-sidebar-accent: 276 40% 95%;
-    --app-sidebar-accent-foreground: 276 63% 24%;
-    --app-sidebar-border: 220 14% 90%;
-    --app-sidebar-ring: 276 63% 28%;
+    --app-sidebar-accent: 275 45% 36%;
+    --app-sidebar-accent-foreground: 0 0% 100%;
+    --app-sidebar-border: 275 40% 34%;
+    --app-sidebar-ring: var(--marca-laranja);
   }
-  :root.dark {
-    --app-sidebar-background: var(--background);
-    --app-sidebar-foreground: var(--foreground);
-    --app-sidebar-primary: var(--primary);
-    --app-sidebar-primary-foreground: var(--primary-foreground);
-    --app-sidebar-accent: var(--secondary);
-    --app-sidebar-accent-foreground: var(--secondary-foreground);
-    --app-sidebar-border: var(--border);
-    --app-sidebar-ring: var(--ring);
-  }
+}
+
+/* Lateral do portal: degradê do roxo do logo para o roxo escuro (desktop e gaveta do celular). */
+.lateral-marca [data-sidebar="sidebar"],
+.lateral-marca[data-sidebar="sidebar"] {
+  background-image: linear-gradient(180deg, hsl(var(--marca-logo)) 0%, hsl(275 68% 20%) 55%, hsl(var(--marca-fundo)) 100%);
+}
+.dark .lateral-marca [data-sidebar="sidebar"],
+.dark .lateral-marca[data-sidebar="sidebar"] {
+  background-image: linear-gradient(180deg, hsl(var(--marca-logo)) 0%, hsl(275 70% 15%) 45%, hsl(275 70% 9%) 100%);
 }
 
 @layer base {

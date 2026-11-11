@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowLeft, ArrowUpDown, CheckCircle2, FileText, Gauge, Layers, Loader2, Lock, LockOpen, RefreshCw, Rocket, RotateCcw } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowUpDown, CalendarX, CheckCircle2, FileText, Loader2, Lock, LockOpen, RefreshCw, Rocket, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
@@ -17,7 +17,10 @@ import { MODULO_02, fetchModulo02, modulo02Vazio, salvarModulo02, situacao02, ty
 import { MODULO_03, fetchModulo03, modulo03Vazio, salvarModulo03, situacao03, type Modulo03Estado } from "@/lib/modulo03";
 import { cartoesDoTermo, qtdTermo } from "@/lib/termoCartoes";
 import { montarTap, type DadosTap } from "@/lib/tap";
-import { CartaoModulo, CartaoProgresso, ProgressoProjeto, type ModuloProgresso } from "./ProgressoProjeto";
+import { CabecalhoProjeto, NavModulos, NumeroModulo, ProgressoProjeto, destaqueValido, type AvisoProjeto, type ModuloProgresso } from "./ProgressoProjeto";
+import { useMigalha } from "@/components/layout/Migalhas";
+// a cidade da entrada do portal (vídeo da Runway), parada, ao fundo do cabeçalho do projeto
+import imagemCidade from "@/assets/entrada/entrada-login.jpg";
 import { TapDialog } from "./TapDialog";
 import { Modulo01 } from "./Modulo01";
 import { Modulo02, ReuniaoPe } from "./Modulo02";
@@ -49,13 +52,14 @@ function ProgressRing({ done, total }: { done: number; total: number }) {
   return (
     <div className="relative h-[76px] w-[76px] shrink-0" role="img" aria-label={`${done} de ${total} atividades feitas`}>
       <svg viewBox="0 0 76 76" className="h-full w-full -rotate-90">
-        <circle cx="38" cy="38" r={r} fill="none" strokeWidth="7" className="stroke-primary-foreground/20" />
-        <circle cx="38" cy="38" r={r} fill="none" strokeWidth="7" strokeLinecap="round" className="stroke-primary-foreground transition-[stroke-dashoffset] duration-500"
+        <circle cx="38" cy="38" r={r} fill="none" strokeWidth="7" className="stroke-primary/15" />
+        <circle cx="38" cy="38" r={r} fill="none" strokeWidth="7" strokeLinecap="round"
+          className={`transition-[stroke-dashoffset] duration-500 ${pct === 1 ? "stroke-emerald-500" : "stroke-primary"}`}
           strokeDasharray={c} strokeDashoffset={c * (1 - pct)} />
       </svg>
       <span className="absolute inset-0 flex flex-col items-center justify-center leading-none">
-        <span className="text-lg font-bold tabular-nums">{done}/{total}</span>
-        <span className="mt-0.5 text-[10px] font-medium opacity-80">feitas</span>
+        <span className="font-display text-xl font-bold tabular-nums">{done}/{total}</span>
+        <span className="mt-0.5 text-[11px] font-medium text-muted-foreground">feitas</span>
       </span>
     </div>
   );
@@ -89,20 +93,26 @@ function SituacaoGravacao({ g, onTentar }: { g: Gravacao; onTentar: () => void }
 const MODULOS = ["01", "02", "03"] as const;
 type ModuloNum = (typeof MODULOS)[number];
 
-/** Destaque do módulo aberto: nome, próximo passo e o anel de progresso. */
+/** Destaque do módulo aberto: número, nome, próximo passo (no laranja do logo) e o anel de progresso. */
 function DestaqueModulo({ numero, nome, resumo, proxima, feitas, total, children }: {
   numero: string; nome: string; resumo: string; proxima?: string; feitas: number; total: number; children?: ReactNode;
 }) {
   return (
-    <section aria-labelledby="ger-mod-titulo" className="flex flex-wrap items-center gap-5 overflow-hidden rounded-2xl bg-gradient-to-br from-primary to-primary/80 p-5 text-primary-foreground shadow-sm sm:p-6">
+    <section aria-labelledby="ger-mod-titulo" className="flex flex-wrap items-center gap-5 rounded-xl border border-border/70 bg-card p-5 shadow-sm sm:p-6">
+      <NumeroModulo numero={numero} tamanho="lg" />
       <div className="min-w-0 flex-1 basis-64">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-80">Módulo {numero}</p>
-        <h2 id="ger-mod-titulo" className="text-xl font-bold sm:text-2xl">{nome}</h2>
-        <p className="mt-1 max-w-xl text-sm opacity-85">{resumo}</p>
+        <h2 id="ger-mod-titulo" className="text-2xl font-bold leading-tight">{nome}</h2>
+        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{resumo}</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <p className="inline-flex items-center gap-1.5 rounded-lg bg-primary-foreground/15 px-2.5 py-1.5 text-[13px] font-medium">
-            <Rocket className="h-4 w-4" />{proxima ? <>Próximo passo: <b>{proxima}</b></> : "Módulo concluído"}
-          </p>
+          {proxima ? (
+            <p className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500/10 px-2.5 py-1.5 text-[13px] font-medium text-orange-800 dark:text-orange-200">
+              <Rocket className="h-4 w-4 shrink-0" />Próximo passo: <b>{proxima}</b>
+            </p>
+          ) : (
+            <p className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-2.5 py-1.5 text-[13px] font-medium text-emerald-800 dark:text-emerald-200">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />Módulo concluído
+            </p>
+          )}
           {children}
         </div>
       </div>
@@ -173,6 +183,10 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   const [foco, setFoco] = useState<{ atividade: string | null } | null>(null);
   // TAP: foto do módulo no clique em "Gerar documento TAP" (o diálogo gera o PDF)
   const [tap, setTap] = useState<DadosTap | null>(null);
+  // número do cabeçalho tocado: acende nas trilhas as atividades daquela situação
+  const [escolhido, setEscolhido] = useState<SituacaoAtividade | null>(null);
+  // o projeto aberto aparece no fim do caminho de navegação do topo
+  useMigalha(project?.company_name);
   useEffect(() => {
     if (!foco) return;
     const t = setTimeout(() => {
@@ -250,11 +264,6 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   const gerarTap = () => { void gerarTapCom(estado); };
   const BOTAO_TAP = "Gerar documento TAP";
   const userName = profile?.full_name ?? "Você";
-  const voltarAoProgresso = (
-    <Button variant="ghost" size="sm" className="-mb-1 -ml-2 h-8 w-fit text-muted-foreground" onClick={() => irPara(null)}>
-      <Gauge className="mr-1.5 h-4 w-4" />Voltar ao progresso do projeto
-    </Button>
-  );
   const reuniaoPe = m2.estado.contato.registradoEm ? m2.estado.contato.reuniaoPe : null;
   // o progresso do projeto soma as atividades de todos os módulos (a lateral sai desta lista)
   const modulos: (ModuloProgresso &{ numero: ModuloNum })[] = [
@@ -277,51 +286,49 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   const cartoesLevados = m2.estado.cartoes.registradoEm
     ? cartoesDoTermo(project, m2.estado.cartoes).filter(x => x.quantidade > 0).map(x => `${qtdTermo(x.quantidade)} ${x.tipo.trim() || "outro"}`).join(" · ")
     : undefined;
+  // o que pede atenção no projeto, ao lado dos módulos (as atividades aguardando retorno entram sozinhas)
+  const avisos: AvisoProjeto[] = [
+    ...(!reuniaoPe ? [{ icone: CalendarX, titulo: "Reunião de PE sem data", texto: "Agende com o cliente no módulo 02.", tom: "ambar" as const, modulo: "02", atividade: "contato" }] : []),
+    ...(and01.proxima ? [{ icone: Lock, titulo: "TAP bloqueado", texto: "Libera quando o módulo 01 chegar a 100%.", tom: "neutro" as const, modulo: "01" }] : []),
+  ];
+  const destaque = destaqueValido(modulos, escolhido);
+  /** Número do cabeçalho tocado: destaca (ou tira o destaque) e, com um módulo aberto, volta ao progresso. */
+  const destacar = (s: SituacaoAtividade) => {
+    setEscolhido(atual => (atual === s && modulo === null ? null : s));
+    if (modulo !== null) irPara(null);
+  };
 
   return (
     <div className="flex flex-col gap-5">
-      {back}
-      {/* Header */}
-      <div className="-mt-2 flex flex-wrap items-end gap-4">
-        <div className="min-w-0 flex-1 basis-72">
-          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Gerenciamento</span>
-          <h1 className="text-2xl font-bold tracking-tight">{project.company_name}</h1>
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-            {project.project_code && <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{project.project_code}</span>}
-            <span>{formatLocation(project.city, project.state, project.country_code)}</span>
-            <span>· <b className="font-semibold text-primary">{phase ?? statusLabels[project.status as keyof typeof statusLabels] ?? project.status}</b></span>
-            <span>· GP {project.manager?.full_name ?? "não definido"}</span>
-          </p>
-          {solucoes.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {solucoes.map(s => <span key={s} className="rounded-full border border-border/70 bg-card px-2 py-0.5 text-[11px] font-medium">{s}</span>)}
-            </div>
-          )}
-        </div>
-        <div className="ml-auto">
-          <SituacaoGravacao g={juntarGravacoes([m1.gravacao, m2.gravacao, m3.gravacao])} onTentar={() => { m1.salvarAgora(); m2.salvarAgora(); m3.salvarAgora(); }} />
-        </div>
+      <CabecalhoProjeto
+        nome={project.company_name}
+        fase={phase ?? statusNome}
+        local={formatLocation(project.city, project.state, project.country_code)}
+        gp={project.manager?.full_name ?? "não definido"}
+        codigo={project.project_code}
+        solucoes={solucoes}
+        imagem={imagemCidade}
+        modulos={modulos}
+        destaque={modulo === null ? destaque : null}
+        onDestacar={destacar}
+        onBack={onBack}
+      />
+
+      {/* abas inteiras na linha; o "Salvo no banco" desce quando não couber ao lado */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="min-w-0 max-w-full"><NavModulos modulos={modulos} ativo={modulo} onIr={m => irPara(m as ModuloNum | null)} /></div>
+        <div className="ml-auto"><SituacaoGravacao g={juntarGravacoes([m1.gravacao, m2.gravacao, m3.gravacao])} onTentar={() => { m1.salvarAgora(); m2.salvarAgora(); m3.salvarAgora(); }} /></div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
-        {/* Progresso do projeto e módulos */}
-        <nav aria-label="Progresso do projeto e módulos" className="flex flex-col gap-2">
-          <CartaoProgresso modulos={modulos} ativo={modulo === null} onClick={() => irPara(null)} />
-          <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">Módulos do projeto</p>
-          {modulos.map(m => <CartaoModulo key={m.numero} m={m} ativo={modulo === m.numero} onClick={() => irPara(m.numero)} />)}
-          <div className="flex items-center gap-2 rounded-xl border border-dashed border-border p-3 text-[13px] text-muted-foreground">
-            <Layers className="h-4 w-4 shrink-0" />Próximos módulos: em definição
-          </div>
-        </nav>
-
+      <div className="min-w-0">
         {modulo === null ? (
-          <ProgressoProjeto modulos={modulos} onAbrir={(m, atividade) => irPara(m as ModuloNum, atividade)} />
+          <ProgressoProjeto modulos={modulos} onAbrir={(m, atividade) => irPara(m as ModuloNum, atividade)}
+            destaque={destaque} onLimparDestaque={() => setEscolhido(null)} avisos={avisos} nomeGp={project.manager?.full_name ?? null} />
         ) : modulo === "01" ? (
           <div className="flex min-w-0 flex-col gap-4">
-            {voltarAoProgresso}
             <DestaqueModulo numero={MODULO_01.numero} nome={MODULO_01.nome} resumo={MODULO_01.resumo} proxima={and01.proxima?.titulo} feitas={and01.feitas} total={and01.total}>
               {!and01.proxima && (
-                <Button size="sm" className="h-8 bg-primary-foreground text-primary hover:bg-primary-foreground/90" onClick={gerarTap}>
+                <Button size="sm" className="h-8 bg-emerald-600 text-white hover:bg-emerald-500" onClick={gerarTap}>
                   <FileText className="mr-1.5 h-4 w-4" />{BOTAO_TAP}
                 </Button>
               )}
@@ -348,17 +355,15 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
           </div>
         ) : modulo === "02" ? (
           <div className="flex min-w-0 flex-col gap-4">
-            {voltarAoProgresso}
             <DestaqueModulo numero={MODULO_02.numero} nome={MODULO_02.nome} resumo={MODULO_02.resumo} proxima={and02.proxima?.titulo} feitas={and02.feitas} total={and02.total}>
-              <ReuniaoPe reuniaoPe={reuniaoPe} sobreMarca />
+              <ReuniaoPe reuniaoPe={reuniaoPe} />
             </DestaqueModulo>
             <Modulo02 project={project} estado={m2.estado} onChange={u => m2.setEstado(u)} userName={userName} emailCliente={estado.carrier.para} />
           </div>
         ) : (
           <div className="flex min-w-0 flex-col gap-4">
-            {voltarAoProgresso}
             <DestaqueModulo numero={MODULO_03.numero} nome={MODULO_03.nome} resumo={MODULO_03.resumo} proxima={and03.proxima?.titulo} feitas={and03.feitas} total={and03.total}>
-              <ReuniaoPe reuniaoPe={reuniaoPe} sobreMarca />
+              <ReuniaoPe reuniaoPe={reuniaoPe} />
             </DestaqueModulo>
             <Modulo03 project={project} estado={m3.estado} onChange={u => m3.setEstado(u)} userName={userName} cartoesLevados={cartoesLevados} />
           </div>

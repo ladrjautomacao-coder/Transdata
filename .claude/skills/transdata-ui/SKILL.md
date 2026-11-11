@@ -12,7 +12,14 @@ Telas de referência (leia uma delas antes de criar algo novo):
 
 ## 1. Regras de ouro
 
-1. **Multi-tenant: nunca fixe a cor da marca.** `--primary`, fontes e sidebar mudam por tenant (`TenantBrandingContext`, `:root[data-tenant="transdata"]` em `src/index.css`). Use **tokens**: `bg-primary`, `text-primary`, `bg-primary/10`, `border-primary/30`, `ring-primary`, `bg-card`, `bg-muted`, `text-muted-foreground`, `border-border`, `text-destructive`. O roxo `#4b1768` só aparece na sidebar (já existente) — não copie para telas.
+1. **Nunca fixe a cor da marca.** `--primary`, fontes e sidebar vêm de `:root[data-tenant="transdata"]` em `src/index.css`. Use **tokens**: `bg-primary`, `text-primary`, `bg-primary/10`, `border-primary/30`, `ring-primary`, `bg-card`, `bg-muted`, `text-muted-foreground`, `border-border`, `text-destructive`. Cores do logo também são tokens: `marca-laranja` e `marca-rosa` (o "T"), `marca-logo` (fundo do logo, começo da lateral) e `marca-fundo` (roxo escuro). Nada de `#4b1768` ou outro hex em `className`.
+
+### Identidade visual (proposta B, aprovada em 11/11/2026)
+- **Moldura** (`AppLayout`/`AppSidebar`): lateral roxa em degradê a partir da cor do logo (`.lateral-marca`), topo claro com o caminho de navegação (`Migalhas`; a tela acrescenta o último trecho com `useMigalha(nome)`), busca (`abrirBusca()` = Ctrl+K), botão "Assistente", avisos e tema. Nada flutuando sobre o conteúdo.
+- **Fontes**: corpo em Space Grotesk (carregada no `index.html`); títulos `h1`–`h6` e números grandes em Rajdhani (`font-display`).
+- **Roxo = feito/seleção; laranja do logo = a próxima coisa a fazer** (degradê `from-marca-laranja to-marca-rosa`, como a bolinha da próxima etapa e o selo da fase). Âmbar só para o que pede ação; esmeralda para concluído/salvo.
+- **Cabeçalho de destaque** (ex.: `CabecalhoProjeto` em `src/components/gerenciamento/ProgressoProjeto.tsx`): imagem da cidade ao fundo sob véu `from-marca-fundo via-marca-logo`, texto branco, anel no degradê do logo. Um por tela; o resto em cartões claros (`rounded-xl border border-border/70 bg-card shadow-sm`).
+- **Etapas/trilhas**: nome inteiro (até 4 linhas, `hyphens-auto`, `lang="pt-BR"`), nunca cortado em "…" no meio do nome.
 2. **Dark mode sempre.** Nada de `bg-white`/`text-black`/`text-slate-*` em telas: use os tokens acima. Cores semânticas com opacidade + variante dark: `bg-emerald-500/15 text-emerald-700 dark:text-emerald-300`.
 3. **Reutilize antes de criar.** shadcn em `src/components/ui/*` (dialog, sheet, alert-dialog, select, popover, tooltip, tabs, switch, skeleton, table, badge…), ícones `lucide-react`, toasts `sonner` (`toast.success/error/warning/info`), `formatLocation()` de `src/lib/location.ts`, `statusLabels`/`subPhasesByStatus` de `src/pages/ProjectManagement.tsx`, `teamRoleLabels` de `src/lib/teamRoleLabels.ts`.
 4. **Textos em português do Brasil**, curtos e orientados à ação ("Solicitar agenda", "Aprovar e publicar no calendário"). Labels vindos de configuração do tenant (status, papéis) nunca são fixos no código.

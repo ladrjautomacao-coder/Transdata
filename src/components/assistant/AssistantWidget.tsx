@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { MessageCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { Sparkles } from "lucide-react";
 import { AssistantChat } from "./AssistantChat";
 import { useAuth } from "@/contexts/AuthContext";
 
+/** Botão "Assistente" no topo do portal (só Super Admin): abre a conversa ao lado. Atalho Ctrl+J. */
 export function AssistantWidget() {
   const { user, isSuperAdmin } = useAuth();
   const [open, setOpen] = useState(false);
@@ -24,17 +26,17 @@ export function AssistantWidget() {
 
   return (
     <>
-      <button
+      <Button
+        variant="outline"
+        size="sm"
         onClick={() => setOpen(true)}
         title="Assistente Transdata (Ctrl+J)"
-        className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 ring-1 ring-primary/40 hover:scale-105 hover:shadow-xl transition-all duration-200 group"
+        aria-label="Abrir o assistente"
+        className="h-9 gap-2 rounded-lg border-primary/20 bg-primary/10 px-2.5 text-primary hover:bg-primary/15 hover:text-primary sm:px-3"
       >
-        <Sparkles className="h-6 w-6 group-hover:rotate-12 transition-transform" />
-        <span className="absolute -top-1 -right-1 flex h-3 w-3">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
-          <span className="relative inline-flex h-3 w-3 rounded-full bg-accent" />
-        </span>
-      </button>
+        <MessageCircle className="h-4 w-4" />
+        <span className="hidden text-[13px] font-semibold sm:inline">Assistente</span>
+      </Button>
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">

@@ -7,7 +7,7 @@ import remarkGfm from "remark-gfm";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Sparkles, Send, RotateCcw, Loader2, Wrench } from "lucide-react";
+import { MessageCircle, Send, RotateCcw, Loader2, Wrench } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const ENDPOINT = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/project-assistant`;
@@ -87,7 +87,7 @@ function AssistantChatInner({ token, onClose }: { token: string; onClose?: () =>
     <div className="flex h-full flex-col bg-background">
       <header className="flex items-center gap-2 border-b px-4 py-3 bg-card/60 backdrop-blur">
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-primary">
-          <Sparkles className="h-4 w-4" />
+          <MessageCircle className="h-4 w-4" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold leading-tight">Assistente Transdata</p>

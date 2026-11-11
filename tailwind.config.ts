@@ -13,6 +13,10 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        // títulos e números grandes da marca Transdata
+        display: ["Rajdhani", "sans-serif"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -56,6 +60,13 @@ export default {
           "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
+        },
+        // cores do logo Transdata (src/index.css --marca-*)
+        marca: {
+          laranja: "hsl(var(--marca-laranja))",
+          rosa: "hsl(var(--marca-rosa))",
+          logo: "hsl(var(--marca-logo))",
+          fundo: "hsl(var(--marca-fundo))",
         },
       },
       borderRadius: {

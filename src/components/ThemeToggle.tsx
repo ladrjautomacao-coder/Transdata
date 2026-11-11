@@ -26,8 +26,9 @@ export function ThemeToggle() {
       variant="ghost"
       size="icon"
       onClick={() => setDark(!dark)}
-      className="h-8 w-8 text-white hover:bg-white/15 hover:text-white transition-colors"
+      className="h-9 w-9 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
       title={dark ? "Modo claro" : "Modo escuro"}
+      aria-label={dark ? "Mudar para o modo claro" : "Mudar para o modo escuro"}
     >
       {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
     </Button>

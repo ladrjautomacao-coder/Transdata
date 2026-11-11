@@ -36,6 +36,7 @@ export interface NavItem {
   badge?: number;
 }
 
+/** Item do menu na lateral roxa: o ativo ganha fundo claro, ícone laranja e um filete no degradê do logo. */
 export function SidebarItem({ item }: { item: NavItem }) {
   return (
     <SidebarMenuItem>
@@ -43,21 +44,13 @@ export function SidebarItem({ item }: { item: NavItem }) {
         <NavLink
           to={item.url}
           end={item.end}
-          className="group/nav flex items-center gap-2 rounded-md px-3 py-1.5 text-slate-700 border-l-[3px] border-transparent transition-colors duration-150 hover:bg-slate-100 hover:text-slate-950 dark:text-sidebar-foreground dark:hover:bg-sidebar-accent dark:hover:text-sidebar-foreground"
-          activeClassName="!bg-[#f1e8f6] !text-[#4b1768] font-semibold !border-[#4b1768] dark:!bg-primary/15 dark:!text-primary dark:!border-primary"
+          className="group/nav relative flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[14px] text-white/80 transition-colors duration-150 hover:bg-white/10 hover:text-white"
+          activeClassName="!bg-white/[0.13] !text-white font-semibold before:absolute before:-left-2 before:bottom-1.5 before:top-1.5 before:w-[3px] before:rounded-r-full before:bg-gradient-to-b before:from-marca-laranja before:to-marca-rosa"
         >
-          <item.icon aria-hidden="true" className="h-4 w-4 shrink-0 transition-colors group-hover/nav:text-[#4b1768] group-[.font-semibold]/nav:text-[#4b1768] dark:group-hover/nav:text-primary dark:group-[.font-semibold]/nav:text-primary" />
+          <item.icon aria-hidden="true" className="h-4 w-4 shrink-0 text-white/55 transition-colors group-hover/nav:text-white group-[.font-semibold]/nav:text-orange-300" />
           <span className="truncate">{item.title}</span>
           {typeof item.badge === "number" && item.badge > 0 && (
-            <span
-              className={cn(
-                "ml-auto min-w-[20px] rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none",
-                "bg-slate-200 text-slate-700 dark:bg-sidebar-accent dark:text-sidebar-foreground",
-                "group-[.font-semibold]/nav:bg-[#4b1768] group-[.font-semibold]/nav:text-white",
-                "dark:group-[.font-semibold]/nav:bg-primary dark:group-[.font-semibold]/nav:text-primary-foreground",
-                "group-data-[collapsible=icon]:hidden",
-              )}
-            >
+            <span className="ml-auto min-w-[20px] rounded-full bg-marca-laranja px-1.5 py-0.5 text-center text-[11px] font-semibold leading-none text-white group-data-[collapsible=icon]:hidden">
               {item.badge}
             </span>
           )}
@@ -102,30 +95,30 @@ export function SidebarNavGroup({
               aria-label={label}
               title={label}
               className={cn(
-                "flex h-10 w-full items-center justify-center rounded-md border shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4b1768] dark:focus-visible:ring-primary",
+                "relative flex h-10 w-full items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70",
                 hasActive
-                  ? "border-[#4b1768] bg-[#4b1768] text-white hover:bg-[#5c1f7f] dark:border-primary dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
-                  : "border-slate-200 bg-[#f8f4fb] text-[#4b1768] hover:bg-[#f1e8f6] data-[state=open]:bg-[#f1e8f6] dark:border-sidebar-border dark:bg-sidebar-accent dark:text-primary dark:hover:bg-primary/15 dark:data-[state=open]:bg-primary/15",
+                  ? "bg-white/[0.15] text-orange-300 before:absolute before:-left-2 before:bottom-2 before:top-2 before:w-[3px] before:rounded-r-full before:bg-gradient-to-b before:from-marca-laranja before:to-marca-rosa"
+                  : "text-white/70 hover:bg-white/10 hover:text-white data-[state=open]:bg-white/10 data-[state=open]:text-white",
               )}
             >
               <Icon aria-hidden="true" className="h-5 w-5 shrink-0" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="start" sideOffset={8} className="w-56">
-            <DropdownMenuLabel className="text-[#4b1768] dark:text-primary">{label}</DropdownMenuLabel>
+            <DropdownMenuLabel className="text-primary">{label}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {items.map((item) => (
               <DropdownMenuItem key={item.url} asChild className="cursor-pointer">
                 <NavLink
                   to={item.url}
                   end={item.end}
-                  className="flex items-center gap-2 text-slate-700 dark:text-foreground"
-                  activeClassName="!bg-[#f1e8f6] !text-[#4b1768] font-semibold dark:!bg-primary/15 dark:!text-primary"
+                  className="flex items-center gap-2 text-foreground"
+                  activeClassName="!bg-primary/10 !text-primary font-semibold"
                 >
                   <item.icon aria-hidden="true" className="h-4 w-4 shrink-0" />
                   <span className="truncate">{item.title}</span>
                   {typeof item.badge === "number" && item.badge > 0 && (
-                    <span className="ml-auto min-w-[20px] rounded-full bg-slate-200 px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-slate-700 dark:bg-muted dark:text-foreground">
+                    <span className="ml-auto min-w-[20px] rounded-full bg-marca-laranja px-1.5 py-0.5 text-center text-[11px] font-semibold leading-none text-white">
                       {item.badge}
                     </span>
                   )}
@@ -138,27 +131,15 @@ export function SidebarNavGroup({
     );
   }
 
-  // Título do grupo em destaque, como item de menu: ícone em quadrado + nome em negrito.
-  const title = (
-    <>
-      <span
-        className={cn(
-          "flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors",
-          hasActive
-            ? "bg-[#4b1768] text-white dark:bg-primary dark:text-primary-foreground"
-            : "bg-[#f1e8f6] text-[#4b1768] dark:bg-primary/15 dark:text-primary",
-        )}
-      >
-        <Icon aria-hidden="true" className="h-4 w-4" />
-      </span>
-      <span className="truncate text-[15px] font-bold leading-tight">{label}</span>
-    </>
+  // Título do grupo: rótulo pequeno em maiúsculas, discreto, sobre a lateral roxa.
+  const title = <span className="truncate">{label}</span>;
+  const titleClassName = cn(
+    "flex min-h-7 w-full items-center gap-2 rounded-md px-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em]",
+    hasActive ? "text-white/70" : "text-white/45",
   );
-  const titleClassName =
-    "flex min-h-9 w-full items-center gap-2.5 rounded-md px-1.5 text-left text-[#4b1768] dark:text-primary";
 
   return (
-    <UISidebarGroup className="border-t border-slate-200 py-2.5 first:border-t-0 dark:border-sidebar-border">
+    <UISidebarGroup className="px-0 py-1.5">
       {collapsible ? (
         <button
           type="button"
@@ -167,9 +148,10 @@ export function SidebarNavGroup({
           onClick={() => setExpanded((value) => !value)}
           className={cn(
             titleClassName,
-            "transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4b1768] dark:hover:bg-sidebar-accent dark:focus-visible:ring-primary",
+            "transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-300/70",
           )}
         >
+          <Icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
           {title}
           <ChevronRight
             aria-hidden="true"
@@ -182,10 +164,7 @@ export function SidebarNavGroup({
       {isOpen && (
         <SidebarGroupContent
           id={contentId}
-          className={cn(
-            "ml-[19px] mt-1 border-l-2 pl-2",
-            hasActive ? "border-[#4b1768] dark:border-primary" : "border-slate-200 dark:border-sidebar-border",
-          )}
+          className="mt-0.5"
         >
           <SidebarMenu className="gap-0.5">
             {items.map((item) => (

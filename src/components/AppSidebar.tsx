@@ -1,11 +1,5 @@
 import { useMemo, useState } from "react";
-import {
-  FolderKanban, LayoutDashboard, HardHat, BookOpenCheck, Users, LogOut, ShieldCheck,
-  Settings, KeyRound, LifeBuoy, Wallet, ChevronsLeft, Search, MoreVertical, UserRound, Eye, FileUp, Building2, Tag,
-  CalendarPlus, CalendarRange, BookOpen, ClipboardCheck, LayoutGrid, Workflow,
-} from "lucide-react";
-import { URL_GESTAO_OPERACIONAL } from "@/lib/gestaoOperacional";
-import type { LucideIcon } from "lucide-react";
+import { LogOut, Settings, ChevronsLeft, Search, MoreVertical, UserRound, Building2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -17,24 +11,17 @@ import { Input } from "@/components/ui/input";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SidebarNavGroup, type NavItem } from "@/components/sidebar/SidebarNav";
+import { SidebarNavGroup } from "@/components/sidebar/SidebarNav";
+import { gruposDoMenu, type SidebarBadges } from "@/components/sidebar/menu";
 import { useTenantBranding } from "@/contexts/TenantBrandingContext";
+import { cn } from "@/lib/utils";
 
-interface NavGroupDef {
-  label: string;
-  icon: LucideIcon;
-  items: NavItem[];
-  /** Título recolhível; os demais grupos ficam sempre abertos. */
-  collapsible?: boolean;
-}
+export type { SidebarBadges } from "@/components/sidebar/menu";
 
-/** Badges are driven by state so they can be wired to live counters later. */
-export interface SidebarBadges {
-  financeiro?: number;
-  suporte?: number;
-  projects?: number;
-}
-
+/**
+ * Lateral do portal no roxo da marca: começa na cor do fundo do logo (o logo se funde com ela) e
+ * escurece para baixo (.lateral-marca em src/index.css). Recolhida, mostra só o "T" do logo e os grupos.
+ */
 export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
   const { signOut, profile, isAdmin, isSuperAdmin } = useAuth();
   const { can } = usePermissions();
@@ -43,62 +30,7 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
   const [query, setQuery] = useState("");
   const collapsed = state === "collapsed" && !isMobile;
 
-  const groups: NavGroupDef[] = useMemo(() => [
-    {
-      label: "Projetos",
-      icon: FolderKanban,
-      items: [
-        { title: "Dashboard", url: "/", icon: LayoutDashboard, module: "dashboard", end: true },
-        { title: "Gestão de Projetos", url: "/projetos", icon: FolderKanban, module: "projects", badge: badges.projects },
-        { title: "Visão Comercial", url: "/comercial", icon: Eye, module: "visao_comercial" },
-      ],
-    },
-    {
-      label: "Implantação",
-      icon: HardHat,
-      items: [
-        { title: "Report IMP", url: "/implantacao/report-imp", icon: FileUp, module: "report_imp" },
-        { title: "Solicitação de agenda", url: "/implantacao/solicitacoes", icon: CalendarPlus, module: "agenda_solicitacao" },
-        { title: "Aprovação de agenda", url: "/implantacao/aprovacao", icon: ClipboardCheck, module: "agenda_solicitacao", action: "approve" },
-        { title: "Agenda técnica", url: "/implantacao/calendario", icon: CalendarRange, module: "agenda_calendario" },
-        { title: "Área do Implantador", url: "/implantacao/implantador", icon: HardHat, module: "area_implantador" },
-      ],
-    },
-    {
-      // em desenvolvimento: só o Super Admin vê; as áreas abrem pelos quadrantes da página, como em Projetos
-      label: "Gestão Operacional",
-      icon: Workflow,
-      items: [
-        { title: "Visão geral", url: URL_GESTAO_OPERACIONAL, icon: LayoutGrid, superAdminOnly: true },
-      ],
-    },
-    {
-      label: "Gestão de Contratos",
-      icon: Wallet,
-      items: [{ title: "Gestão de Contratos", url: "/financeiro", icon: Wallet, module: "financeiro", badge: badges.financeiro }],
-    },
-    {
-      label: "Suporte Técnico",
-      icon: LifeBuoy,
-      items: [
-        { title: "Suporte Técnico", url: "/suporte", icon: LifeBuoy, module: "suporte", badge: badges.suporte },
-        { title: "Acervo Técnico", url: "/acervo", icon: BookOpen, module: "acervo" },
-      ],
-    },
-    {
-      label: "Administração",
-      icon: Settings,
-      collapsible: true,
-      items: [
-        { title: "Equipe", url: "/admin/equipe", icon: Users, module: "admin_team" },
-        { title: "Usuários", url: "/admin/usuarios", icon: ShieldCheck, module: "admin_users" },
-        { title: "Permissões", url: "/admin/permissoes", icon: KeyRound, module: "admin_users" },
-        { title: "Configurações", url: "/admin/configuracoes", icon: Settings, module: "admin_settings" },
-        { title: "Personalização", url: "/admin/tipos-projeto", icon: Tag, module: "admin_settings" },
-        { title: "Manual do Sistema", url: "/manual", icon: BookOpenCheck, module: "admin_manual" },
-      ],
-    },
-  ], [badges.financeiro, badges.suporte, badges.projects]);
+  const groups = useMemo(() => gruposDoMenu(badges), [badges]);
 
   const visibleGroups = groups
     .map(g => ({
@@ -118,10 +50,9 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
   return (
     <Sidebar
       collapsible="icon"
-      className="border-r-0"
+      className="lateral-marca border-r-0"
       style={{
-        fontFamily: "'Source Sans 3', sans-serif",
-        // Valores em src/index.css (--app-sidebar-*): claro = branco da marca, escuro = tema escuro.
+        // Valores em src/index.css (--app-sidebar-*): roxo da marca nos dois temas.
         "--sidebar-background": "var(--app-sidebar-background)",
         "--sidebar-foreground": "var(--app-sidebar-foreground)",
         "--sidebar-primary": "var(--app-sidebar-primary)",
@@ -132,57 +63,55 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
         "--sidebar-ring": "var(--app-sidebar-ring)",
       } as React.CSSProperties}
     >
-      {/* Header */}
-      <div className={`relative flex h-14 shrink-0 items-center overflow-hidden bg-[#4b1768] text-white ${collapsed ? "justify-center px-0" : "px-3"}`}>
-        <div className={`relative z-10 flex min-w-0 items-center gap-2.5 ${collapsed ? "" : "flex-1"}`}>
-          {/* object-contain: logos não quadrados (ex.: marca com texto) aparecem inteiros, sem recorte */}
-          {branding.logoUrl ? (
-            <img
-              src={branding.logoUrl}
-              alt={branding.portalName}
-              className={`shrink-0 rounded-md object-contain ${collapsed ? "h-9 w-9" : "h-10 w-10"}`}
+      {/* Logo: o fundo roxo do logo é a cor de cima da lateral */}
+      <div className={cn("relative flex shrink-0 items-center", collapsed ? "h-16 justify-center" : "h-[76px] px-2")}>
+        {branding.logoUrl ? (
+          collapsed ? (
+            <span
+              role="img"
+              aria-label={branding.portalName}
+              className="h-8 w-[25px] shrink-0 bg-no-repeat"
+              // só o "T" do logo (o nome começa logo à direita dele)
+              style={{ backgroundImage: `url(${branding.logoUrl})`, backgroundSize: "100px auto", backgroundPosition: "-3px -30px" }}
             />
           ) : (
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white/15 text-white">
-              <Building2 className="h-5 w-5" />
-            </div>
-          )}
-          {!collapsed && (
-            <>
-              <div className="flex min-w-0 flex-col">
-                <span className="truncate text-sm font-bold tracking-wide text-white">{branding.portalName}</span>
-                <span className="truncate text-[10px] uppercase tracking-[0.12em] text-white/65">Sistema de gestão</span>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleSidebar}
-                aria-label="Recolher menu"
-                className="ml-auto h-7 w-7 text-white/75 hover:bg-white/15 hover:text-white"
-              >
-                <ChevronsLeft className="h-4 w-4" />
-              </Button>
-            </>
-          )}
-        </div>
-
+            <img src={branding.logoUrl} alt={branding.portalName} className="h-[68px] w-full max-w-[200px] object-cover object-[50%_60%]" />
+          )
+        ) : (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white/15 text-white">
+            <Building2 className="h-5 w-5" />
+          </div>
+        )}
+        {!collapsed && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleSidebar}
+            aria-label="Recolher menu"
+            title="Recolher menu"
+            className="absolute right-2 top-2 h-7 w-7 text-white/60 hover:bg-white/10 hover:text-white"
+          >
+            <ChevronsLeft className="h-4 w-4" />
+          </Button>
+        )}
       </div>
 
       {!collapsed && (
-        <div className="shrink-0 bg-white px-3 pb-3 pt-2 dark:bg-sidebar">
+        <div className="shrink-0 px-3 pb-2">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500 dark:text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/55" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar no menu..."
-              className="h-8 rounded-md border-slate-200 bg-white pl-8 text-xs text-slate-800 placeholder:text-slate-500 focus-visible:ring-sidebar-ring dark:border-sidebar-border dark:bg-sidebar-accent dark:text-sidebar-foreground dark:placeholder:text-muted-foreground"
+              placeholder="Buscar no menu"
+              aria-label="Buscar no menu"
+              className="h-9 rounded-lg border-white/15 bg-white/[0.08] pl-8 text-[13px] text-white placeholder:text-white/55 focus-visible:ring-1 focus-visible:ring-orange-300/70 focus-visible:ring-offset-0"
             />
           </div>
         </div>
       )}
 
-      <SidebarContent className="gap-0 bg-white px-1 dark:bg-sidebar">
+      <SidebarContent className="gap-0 px-2 pb-2">
         {visibleGroups.map(g => (
           <SidebarNavGroup
             key={g.label}
@@ -194,21 +123,23 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
           />
         ))}
         {visibleGroups.length === 0 && !collapsed && (
-          <p className="px-4 py-3 text-xs text-sidebar-foreground/40">Nenhum item encontrado.</p>
+          <p className="px-3 py-3 text-xs text-white/55">Nenhum item encontrado.</p>
         )}
       </SidebarContent>
 
-      {/* Footer */}
-      <SidebarFooter className="border-t border-sidebar-border bg-white p-2 dark:bg-sidebar">
-        <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-[11px] font-bold text-sidebar-primary-foreground">
+      {/* Quem está usando */}
+      <SidebarFooter className="border-t border-white/10 p-3">
+        <div className={cn("flex items-center gap-2.5", collapsed && "justify-center")}>
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-marca-laranja to-marca-rosa text-[11px] font-bold text-white" title={collapsed ? name : undefined}>
             {initials}
           </div>
           {!collapsed && (
             <>
               <div className="flex min-w-0 flex-col">
-                <span className="truncate text-xs font-medium text-slate-800 dark:text-sidebar-foreground">{name}</span>
-                <span className="truncate text-[10px] text-slate-500 dark:text-muted-foreground">{roleLabel}</span>
+                <span className="truncate text-[13px] font-semibold text-white">{name}</span>
+                <span className="flex items-center gap-1.5 truncate text-[11px] text-white/60">
+                  <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />{roleLabel} · online
+                </span>
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -216,7 +147,7 @@ export function AppSidebar({ badges = {} }: { badges?: SidebarBadges }) {
                     variant="ghost"
                     size="icon"
                     aria-label="Opções da conta"
-                    className="ml-auto h-7 w-7 text-slate-500 hover:bg-slate-100 hover:text-sidebar-primary dark:text-muted-foreground dark:hover:bg-sidebar-accent"
+                    className="ml-auto h-7 w-7 text-white/60 hover:bg-white/10 hover:text-white"
                   >
                     <MoreVertical className="h-4 w-4" />
                   </Button>
