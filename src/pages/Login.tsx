@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,9 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Pause, Play } from "lucide-react";
 import LogoAnimation from "@/components/LogoAnimation";
 import { InstallAppButton } from "@/pwa/InstallAppButton";
+// Vídeo da entrada gerado na Runway (ver runway/LEIA-ME.md); a imagem é o primeiro quadro, usada enquanto carrega
+import videoEntrada from "@/assets/entrada/entrada-login.mp4";
+import posterEntrada from "@/assets/entrada/entrada-login.jpg";
 
 type Branding = ReturnType<typeof useTenantBranding>;
 
@@ -53,7 +56,26 @@ function CorporateStatementCarousel({ tone, compact = false }: { tone: "dark" | 
         isDark ? "border-orange-400/70" : "border-[#4b1768]/50"
       } ${compact ? "max-w-md" : ""}`}
     >
-      <div className="mb-2 flex justify-end">
+      <div className={`relative flex h-20 items-center overflow-hidden ${compact ? "h-16" : ""}`} aria-live="polite">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={statement.title}
+            initial={reduceMotion ? false : { opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduceMotion ? undefined : { opacity: 0, y: -18 }}
+            transition={{ duration: reduceMotion ? 0 : 0.55, ease: "easeOut" }}
+            className="w-full"
+          >
+            <p className={`mb-1 text-xs font-bold uppercase tracking-[0.2em] ${isDark ? "text-orange-300" : "text-[#4b1768]"}`}>
+              {statement.title}
+            </p>
+            <p className={`text-base font-medium leading-relaxed sm:text-lg ${isDark ? "text-white/90" : "text-slate-700"}`}>
+              {statement.text}
+            </p>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+      <div className="mt-2 flex justify-start">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5" role="group" aria-label="Selecionar declaração institucional">
             {CORPORATE_STATEMENTS.map((item, index) => (
@@ -83,44 +105,113 @@ function CorporateStatementCarousel({ tone, compact = false }: { tone: "dark" | 
           )}
         </div>
       </div>
-      <div className={`relative flex h-20 items-center overflow-hidden ${compact ? "h-16" : ""}`} aria-live="polite">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={statement.title}
-            initial={reduceMotion ? false : { opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={reduceMotion ? undefined : { opacity: 0, y: -18 }}
-            transition={{ duration: reduceMotion ? 0 : 0.55, ease: "easeOut" }}
-            className="w-full"
-          >
-            <p className={`mb-1 text-xs font-bold uppercase tracking-[0.2em] ${isDark ? "text-orange-300" : "text-[#4b1768]"}`}>
-              {statement.title}
-            </p>
-            <p className={`text-base font-medium leading-relaxed sm:text-lg ${isDark ? "text-white/90" : "text-slate-700"}`}>
-              {statement.text}
-            </p>
-          </motion.div>
-        </AnimatePresence>
-      </div>
     </section>
   );
 }
 
-// Tela de acesso da Transdata (cliente fundador) — layout e texto originais, intocados.
-function TransdataLogin({ branding, email, setEmail, password, setPassword, submitting, onSubmit }: LoginFormProps) {
+function economizaDados() {
+  try {
+    return (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fundo da entrada: vídeo em loop gerado na Runway (runway/), por trás de um véu escuro na cor da marca.
+ * Quem pede menos animação no sistema ou economia de dados vê só a imagem parada; o vídeo pode ser pausado.
+ */
+function FundoEntrada() {
+  const reduceMotion = useReducedMotion();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [falhou, setFalhou] = useState(false);
+  const [rodando, setRodando] = useState(false);
+  const [pausado, setPausado] = useState(false);
+  const comVideo = !reduceMotion && !falhou && !economizaDados();
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!comVideo || !video) return;
+    // o React não grava "muted" como atributo, e sem ele o Safari não toca sozinho
+    video.muted = true;
+    video.play().catch(() => setPausado(true));
+  }, [comVideo]);
+
+  const alternar = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      video.play().then(() => setPausado(false)).catch(() => setFalhou(true));
+    } else {
+      video.pause();
+      setPausado(true);
+    }
+  };
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center overflow-auto bg-background px-4 py-8">
-      <div className="mb-3 w-full max-w-md">
-        <CorporateStatementCarousel tone="light" compact />
+    <>
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
+        <img src={posterEntrada} alt="" className="h-full w-full object-cover" />
+        {comVideo && (
+          <video
+            ref={videoRef}
+            src={videoEntrada}
+            poster={posterEntrada}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            onPlaying={() => setRodando(true)}
+            onError={() => setFalhou(true)}
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ${rodando ? "opacity-100" : "opacity-0"}`}
+          />
+        )}
+        <div className="absolute inset-0 bg-primary/30 mix-blend-multiply" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/45 to-black/80 lg:bg-gradient-to-r lg:from-black/85 lg:via-black/50 lg:to-black/25" />
       </div>
-      <div className="w-full max-w-md">
+      {comVideo && (rodando || pausado) && (
+        <button
+          type="button"
+          onClick={alternar}
+          aria-label={pausado ? "Reproduzir o vídeo de fundo" : "Pausar o vídeo de fundo"}
+          aria-pressed={pausado}
+          title={pausado ? "Reproduzir o vídeo de fundo" : "Pausar o vídeo de fundo"}
+          className="absolute bottom-4 left-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/35 text-white/80 transition-colors hover:bg-black/55 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+        >
+          {pausado ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+        </button>
+      )}
+    </>
+  );
+}
+
+// Tela de acesso da Transdata: vídeo de fundo, apresentação à esquerda e o acesso à direita (textos do acesso originais).
+function TransdataLogin({ branding, email, setEmail, password, setPassword, submitting, onSubmit }: LoginFormProps) {
+  const reduceMotion = useReducedMotion();
+  return (
+    <div className="relative isolate flex min-h-screen flex-col overflow-x-hidden bg-black">
+      <FundoEntrada />
+      <main className="mx-auto grid w-full max-w-6xl flex-1 content-center items-center gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-16 lg:py-12">
+        <motion.section
+          initial={reduceMotion ? false : { opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="mx-auto w-full max-w-md text-white lg:mx-0 lg:max-w-xl"
+        >
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">{branding.portalName}</p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">Gestão de Projetos</h1>
+          <div className="mt-5 lg:mt-8">
+            <CorporateStatementCarousel tone="dark" />
+          </div>
+        </motion.section>
         <motion.div
-          initial={{ opacity: 0, x: 20 }}
+          initial={reduceMotion ? false : { opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6, delay: 0.3 }}
-          className="relative z-10 w-full max-w-md"
+          className="relative z-10 mx-auto w-full max-w-md"
         >
-          <Card className="w-full max-w-md shadow-lg border-primary/20">
+          <Card className="w-full max-w-md border-primary/20 shadow-2xl">
             <CardHeader className="text-center space-y-3">
               <LogoAnimation tone="light" />
               <p className="text-sm font-semibold uppercase tracking-wide text-primary">{branding.portalName}</p>
@@ -150,12 +241,12 @@ function TransdataLogin({ branding, email, setEmail, password, setPassword, subm
               </div>
             </CardContent>
           </Card>
+          {/* Instalar o portal como aplicativo — só aparece quando ainda não está instalado */}
+          <div className="mt-4 w-full max-w-md">
+            <InstallAppButton variant="login" />
+          </div>
         </motion.div>
-      </div>
-      {/* Instalar o portal como aplicativo — só aparece quando ainda não está instalado */}
-      <div className="mt-4 w-full max-w-md">
-        <InstallAppButton variant="login" />
-      </div>
+      </main>
     </div>
   );
 }

@@ -1,0 +1,11 @@
+{
+  "name": "transdata-runway",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gerar": "node gerar-video.mjs"
+  },
+  "dependencies": {
+    "@runwayml/sdk": "latest"
+  }
+}
