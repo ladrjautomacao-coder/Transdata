@@ -18,17 +18,24 @@ Nunca cole a chave em chat, código ou commit.
 
 ## Vídeo da entrada (tela de login)
 
-Arquivos usados pelo site: `src/assets/entrada/entrada-login.mp4` (loop de 8 s, sem som) e `entrada-login.jpg` (primeiro quadro, mostrado enquanto carrega e para quem pede menos movimento).
+Arquivos usados pelo site: `src/assets/entrada/entrada-login.mp4` (loop de ~20 s, sem som) e `entrada-login.jpg` (primeiro quadro, mostrado enquanto carrega e para quem pede menos movimento).
+
+Fundo de tela pede vídeo calmo: velocidade real (nada de time-lapse/hyperlapse, que dá sensação de tremor), câmera quase parada e a mesma luz do começo ao fim. A primeira versão (time-lapse do entardecer à noite) foi trocada por isso.
 
 Gerado em 10/11/2026 com:
 
 ```
-node gerar-video.mjs --segundos 10 --prompt "Slow cinematic aerial drone shot at blue hour over a modern Brazilian city. A wide avenue with a dedicated bus lane runs diagonally through the frame; city buses with warm headlights glide smoothly along it, leaving soft long-exposure light trails in amber and orange. Deep violet and indigo sky fading to a warm orange glow on the horizon, light haze, city lights twinkling in the distance. Calm, steady forward camera movement, no cuts, photorealistic, elegant and premium mood. No text, no signs, no logos, no people close up."
+node gerar-video.mjs --segundos 10 --prompt "Locked-off wide shot from a high rooftop at blue hour over a modern Brazilian city, overlooking a wide avenue with a dedicated bus lane. Real-time speed, NOT a time-lapse, NOT a hyperlapse. A few city buses and cars move slowly and smoothly along the avenue with warm headlights. The camera is almost still: an extremely slow, perfectly smooth, stabilized drift forward, like a tripod on a slider. Constant lighting from start to finish: deep violet and indigo sky with a faint warm orange glow on the horizon, steady city lights, no flicker, no exposure changes, no clouds rushing. Calm, serene, premium mood, photorealistic, soft haze. No text, no signs, no logos, no cuts."
 ```
 
-Depois, o loop sem emenda (o fim se funde com o começo em 2 s) e a imagem, com ffmpeg, a partir da raiz do projeto (troque `ENTRADA.mp4` pelo arquivo gerado e `8.042` pela duração dele menos 2):
+Depois, com ffmpeg, a partir da raiz do projeto (troque `ENTRADA.mp4` pelo arquivo gerado):
 
-```
-ffmpeg -i runway\videos\ENTRADA.mp4 -filter_complex "[0:v]split[a][b];[a]trim=start=2,setpts=PTS-STARTPTS[corpo];[b]trim=end=2,setpts=PTS-STARTPTS[inicio];[corpo][inicio]xfade=transition=fade:duration=2:offset=6.042,format=yuv420p[v]" -map "[v]" -an -c:v libx264 -preset slow -crf 27 -profile:v high -movflags +faststart src\assets\entrada\entrada-login.mp4
-ffmpeg -i src\assets\entrada\entrada-login.mp4 -frames:v 1 -q:v 4 src\assets\entrada\entrada-login.jpg
-```
+1. Trecho limpo (dos 4 s ao fim; antes disso aparece a mureta da laje) desacelerado para 60%, com quadros intermediários:
+   ```
+   ffmpeg -ss 4 -i runway\videos\ENTRADA.mp4 -vf "minterpolate=fps=40:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1,setpts=PTS*40/24" -r 24 -an -c:v libx264 -preset fast -crf 18 lento.mp4
+   ```
+2. Loop em vai e volta (avança e recua, sem corte). `237` = número de quadros do `lento.mp4` menos 2:
+   ```
+   ffmpeg -i lento.mp4 -filter_complex "[0:v]setpts=N/24/TB,split[ida][b];[b]reverse,select='between(n\,1\,237)',setpts=N/24/TB[volta];[ida][volta]concat=n=2:v=1,format=yuv420p[v]" -map "[v]" -an -r 24 -c:v libx264 -preset slow -crf 26 -profile:v high -movflags +faststart src\assets\entrada\entrada-login.mp4
+   ffmpeg -i src\assets\entrada\entrada-login.mp4 -frames:v 1 -q:v 4 src\assets\entrada\entrada-login.jpg
+   ```
