@@ -12,6 +12,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Pause, Play } from "lucide-react";
 import LogoAnimation from "@/components/LogoAnimation";
 import { InstallAppButton } from "@/pwa/InstallAppButton";
+import { LogotipoCsFlow, MarcaT } from "@/components/marca/MarcaCsFlow";
 // Vídeo da entrada gerado na Runway (ver runway/LEIA-ME.md); a imagem é o primeiro quadro, usada enquanto carrega
 import videoEntrada from "@/assets/entrada/entrada-login.mp4";
 import posterEntrada from "@/assets/entrada/entrada-login.jpg";
@@ -199,8 +200,17 @@ function TransdataLogin({ branding, email, setEmail, password, setPassword, subm
           transition={{ duration: 0.8, ease: "easeOut" }}
           className="mx-auto w-full max-w-md text-white lg:mx-0 lg:max-w-xl"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">{branding.portalName}</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">Gestão de Projetos</h1>
+          {branding.portalName === "CS Flow" ? (
+            // a mesma marca da faixa interna: o "T" da Transdata e o logotipo "CSflow", em tamanho de entrada
+            <div className="flex items-center gap-3 sm:gap-4">
+              <MarcaT tamanho="lg" />
+              <LogotipoCsFlow className="text-[34px] sm:text-[42px]" />
+            </div>
+          ) : (
+            <p className="text-3xl font-bold tracking-tight sm:text-4xl">{branding.portalName}</p>
+          )}
+          {/* título da página só para leitor de tela: na tela, a marca já diz onde se está */}
+          <h1 className="sr-only">{branding.portalName}: acesso ao portal</h1>
           <div className="mt-5 lg:mt-8">
             <CorporateStatementCarousel tone="dark" />
           </div>

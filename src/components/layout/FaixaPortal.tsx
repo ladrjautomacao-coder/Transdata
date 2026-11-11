@@ -1,7 +1,7 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronDown, LogOut, Moon, Search, Settings, Sun, UserRound } from "lucide-react";
-import marcaT from "@/assets/logo-transdata-t.png";
+import { LogotipoCsFlow, MarcaT } from "@/components/marca/MarcaCsFlow";
 import { useSidebar } from "@/components/ui/sidebar";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -13,38 +13,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTenantBranding } from "@/contexts/TenantBrandingContext";
 import { useTema } from "@/hooks/useTema";
 import { abrirBusca } from "@/lib/atalhos";
-
-/**
- * O "T" do logo Transdata inteiro (com o traço de cima completo) num quadrado no roxo do fundo do
- * logo. O arquivo é só o "T", recortado do logo sem as letras do nome.
- */
-function MarcaLogo() {
-  return (
-    <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-marca-logo ring-1 ring-marca-lilas/30">
-      <img src={marcaT} alt="" className="w-7" />
-    </span>
-  );
-}
-
-/** Logotipo "CSflow": "CS" forte, "flow" em lilás e uma onda de fluxo no laranja-rosa do logo embaixo. */
-function LogotipoCsFlow() {
-  const id = useId();
-  return (
-    <span aria-hidden className="relative whitespace-nowrap pb-[6px] text-[22px] font-bold leading-[1.05] tracking-[-0.03em] text-white">
-      CS<span className="relative font-medium text-marca-lilas-claro">flow
-        <svg width="51" height="8" viewBox="0 0 44 7" fill="none" className="absolute -bottom-[7px] -left-[5px]">
-          <defs>
-            <linearGradient id={id} x1="0" x2="1">
-              <stop offset="0" stopColor="hsl(var(--marca-laranja))" />
-              <stop offset="1" stopColor="hsl(var(--marca-rosa))" />
-            </linearGradient>
-          </defs>
-          <path d="M1 4.5 C 8 0.5, 13 0.5, 20 3.5 S 33 6.5, 43 1.5" stroke={`url(#${id})`} strokeWidth="2" strokeLinecap="round" />
-        </svg>
-      </span>
-    </span>
-  );
-}
 
 /** Selo de conexão: "Sistema online" com o ponto verde pulsando; sem internet, fica vermelho. */
 function StatusConexao() {
@@ -120,10 +88,10 @@ export function FaixaPortal() {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" /></svg>
         </button>
         <Link to="/" className="marca-faixa flex items-center gap-2.5 rounded-lg" aria-label={`${portalName}: página inicial`}>
-          <MarcaLogo />
+          <MarcaT />
           <span className="hidden sm:flex">
             {portalName === "CS Flow"
-              ? <LogotipoCsFlow />
+              ? <LogotipoCsFlow className="text-[22px]" />
               : <span className="whitespace-nowrap text-[15px] font-bold tracking-[-0.01em] text-white">{portalName}</span>}
           </span>
         </Link>
