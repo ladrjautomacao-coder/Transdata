@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { GerProject } from "@/lib/gerenciamento";
-import { assuntoCodigoBd, codigoProjetoBd, emailHtmlCodigoBd, emailTextoCodigoBd, faltandoCodigoBd } from "@/lib/codigoBd";
+import {
+  assuntoCodigo, assuntoCodigoBd, codigoProjetoBd, emailHtmlCodigo, emailHtmlCodigoBd, emailTextoCodigo, emailTextoCodigoBd, faltandoCodigoBd,
+} from "@/lib/codigoBd";
 
 const projeto = (extra: Partial<GerProject> = {}) => ({
   company_name: "Auto Coletivo Cacador Ltda", project_code: "CACSCASUPG0008-AUTOCOLETIVOCACADORLTDA", city: "CAÇADOR", state: "SC",
@@ -25,5 +27,21 @@ describe("e-mail do cadastro do código BD", () => {
   it("sem CNPJ ou sem código do projeto, o e-mail não fica pronto", () => {
     expect(faltandoCodigoBd(projeto())).toEqual([]);
     expect(faltandoCodigoBd(projeto({ cnpj: null, project_code: null }))).toEqual(["Código do projeto", "CNPJ no cadastro do projeto"]);
+  });
+});
+
+describe("e-mail do cadastro do código ITS / Gestão de frota", () => {
+  const its = () => projeto({ fleet_size: 30, project_solutions: [{ solution: { name: "Bilhetagem" } }, { solution: { name: "Its (legado)" } }, { solution: { name: "Gestão de frota" } }] });
+  it("assunto e pedido próprios, com o mesmo código do projeto", () => {
+    expect(assuntoCodigo(its(), "its")).toBe("CADASTRO DO CÓDIGO ITS / GESTÃO DE FROTA | CACSCASUPG0008 - AUTO COLETIVO CACADOR LTDA");
+    const texto = emailTextoCodigo(its(), "Luiz Alves", "its");
+    expect(texto).toContain("cadastro do cliente no ITS / Gestão de frota");
+    expect(emailHtmlCodigo(its(), "Luiz Alves", "its")).toContain("CADASTRO DO CÓDIGO ITS / GESTÃO DE FROTA");
+  });
+  it("no lugar do sistema de bilhetagem, a solução de ITS / Gestão de frota e a frota", () => {
+    const texto = emailTextoCodigo(its(), "Luiz Alves", "its");
+    expect(texto).toContain("Solução: Its (legado), Gestão de frota");
+    expect(texto).toContain("Frota: 30 veículos");
+    expect(texto).not.toContain("Sistema:");
   });
 });

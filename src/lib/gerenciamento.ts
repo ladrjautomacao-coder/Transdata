@@ -137,12 +137,14 @@ export const equipamentosOf = (p: GerProject) => (p.project_equipments ?? [])
 const SOLUCOES_COBERTURA = /carrier|\bits\b|gest[aã]o de frota/i;
 /** Projeto com Carrier, ITS ou Gestão de Frota. */
 export const precisaCobertura = (p: GerProject) => solutionsOf(p).some(n => SOLUCOES_COBERTURA.test(n));
+/** Projeto com ITS ou Gestão de frota: entra o cadastro do código ITS / Gestão de frota. */
+export const temItsGestaoFrota = (p: GerProject) => solutionsOf(p).some(n => /\bits\b|gest[aã]o de frota/i.test(n));
 
 /* ─── Módulo 01 ─── */
 export type Responsavel = "portal" | "gp" | "assistente";
 export const RESPONSAVEL_LABEL: Record<Responsavel, string> = { portal: "Automático", gp: "GP", assistente: "Assistente de Projetos" };
 
-export type AtividadeId = "portal" | "pedidos" | "totvs" | "drive" | "codigobd" | "checklist" | "datacenter" | "handover" | "carrier";
+export type AtividadeId = "portal" | "pedidos" | "totvs" | "drive" | "codigobd" | "codigoits" | "checklist" | "datacenter" | "handover" | "carrier";
 
 /** Atividade de um módulo (`Id`: as atividades daquele módulo; o padrão é o módulo 01). */
 export interface Atividade<Id extends string = AtividadeId> {
@@ -179,6 +181,7 @@ export const MODULO_01 = {
     { id: "drive", titulo: "Pastas do projeto no Drive", descricao: "Crie as pastas do projeto no Drive da Transdata, com todos os documentos padrão de projeto.", responsavel: "assistente",
       campo: { label: "Link da pasta no Drive", placeholder: "https://drive.google.com/...", url: true, abrir: "Abrir pasta" } },
     { id: "codigobd", titulo: "Cadastro do código BD", descricao: "Peça por e-mail o cadastro do cliente no banco de dados e anote o código BD que voltar.", responsavel: "assistente" },
+    { id: "codigoits", titulo: "Cadastro do código ITS / Gestão de frota", descricao: "Peça por e-mail o cadastro do cliente no ITS / Gestão de frota e anote o código que voltar.", responsavel: "assistente" },
     { id: "checklist", titulo: "Checklist de pré-requisitos", descricao: "Confira se o projeto cumpre os pré-requisitos para virar projeto.", responsavel: "assistente" },
     { id: "datacenter", titulo: "Sites e credenciais no Data Center", descricao: "Peça por e-mail ao Data Center a criação dos sites do cliente no banco de dados e as credenciais de acesso.", responsavel: "gp" },
     { id: "handover", titulo: "Reunião de Handover", descricao: "Passagem de bastão do Comercial para Projetos, com o Executivo de Vendas.", responsavel: "gp" },
@@ -279,6 +282,8 @@ export interface Modulo01Estado {
    * código do cliente no BD que voltou — fecha a atividade e preenche o e-mail ao Data Center.
    */
   codigobd: { enviadoEm: string | null; codigo: string; registradoEm: string | null; por: string };
+  /** Cadastro do código ITS / Gestão de frota: igual ao código BD (só nos projetos com ITS ou Gestão de frota). */
+  codigoits: { enviadoEm: string | null; codigo: string; registradoEm: string | null; por: string };
   handover: {
     agendadoPara: string; participantes: string; particularidades: string; atencao: string; expectativas: string; registradoEm: string | null;
     /** Respostas do Executivo de Vendas às perguntas indispensáveis (PERGUNTAS_HANDOVER e as que saíram). */
@@ -302,6 +307,7 @@ export const modulo01Vazio = (): Modulo01Estado => ({
   checklist: { itens: {}, naoAplica: {}, vencimentoDzero: "", observacoes: "", emailComercialEm: null, autorizadoPor: "", resultado: null, em: null, emailGpEm: null },
   datacenter: { concluidoEm: null, email: null },
   codigobd: { enviadoEm: null, codigo: "", registradoEm: null, por: "" },
+  codigoits: { enviadoEm: null, codigo: "", registradoEm: null, por: "" },
   handover: { agendadoPara: "", participantes: "", particularidades: "", atencao: "", expectativas: "", registradoEm: null, respostas: {}, previsaoEquipamentos: "" },
   carrier: { concluidoEm: null, recomendada: null, para: "", codIbge: null, recomendadas: [] },
 });
@@ -315,6 +321,7 @@ export function normalizarModulo01(raw: unknown): Modulo01Estado {
     checklist: { ...v.checklist, ...r.checklist, itens: { ...r.checklist?.itens }, naoAplica: { ...r.checklist?.naoAplica } },
     datacenter: { ...v.datacenter, ...r.datacenter },
     codigobd: { ...v.codigobd, ...r.codigobd },
+    codigoits: { ...v.codigoits, ...r.codigoits },
     handover: { ...v.handover, ...r.handover, respostas: { ...r.handover?.respostas } },
     carrier: { ...v.carrier, ...r.carrier },
   };
@@ -368,11 +375,13 @@ export const checklistLiberado = (e: Modulo01Estado) =>
 export function situacao(a: AtividadeId, e: Modulo01Estado, p: GerProject, ordem: AtividadeId[] = ORDEM_PADRAO): SituacaoAtividade {
   if (a === "portal") return "feito";
   if (a === "carrier" && !precisaCobertura(p)) return "naoaplica";
+  if (a === "codigoits" && !temItsGestaoFrota(p)) return "naoaplica";
   const feito = a === "checklist" ? checklistLiberado(e)
     : a === "datacenter" ? !!e.datacenter.concluidoEm
     : a === "handover" ? !!e.handover.registradoEm
     : a === "carrier" ? !!e.carrier.concluidoEm
     : a === "codigobd" ? !!e.codigobd.registradoEm
+    : a === "codigoits" ? !!e.codigoits.registradoEm
     : !!e.feitos[a];
   if (feito) return "feito";
   const abaixoDoChecklist = ordem.indexOf(a) > ordem.indexOf("checklist");
@@ -380,5 +389,6 @@ export function situacao(a: AtividadeId, e: Modulo01Estado, p: GerProject, ordem
   if (a === "checklist" && e.checklist.emailComercialEm) return "aguardando";
   // e-mail enviado: falta o código BD voltar
   if (a === "codigobd" && e.codigobd.enviadoEm) return "aguardando";
+  if (a === "codigoits" && e.codigoits.enviadoEm) return "aguardando";
   return "afazer";
 }

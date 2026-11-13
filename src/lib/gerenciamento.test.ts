@@ -1,5 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { faltandoHandover, linkExterno, modulo01Vazio, normalizarModulo01, perguntasDoRegistro, respondidasHandover } from "@/lib/gerenciamento";
+import {
+  faltandoHandover, linkExterno, modulo01Vazio, normalizarModulo01, perguntasDoRegistro, respondidasHandover, situacao, type GerProject,
+} from "@/lib/gerenciamento";
+
+describe("cadastro do código ITS / Gestão de frota", () => {
+  const com = (...n: string[]) => ({ project_solutions: n.map(name => ({ solution: { name } })) }) as unknown as GerProject;
+  it("só nos projetos com ITS ou Gestão de frota", () => {
+    expect(situacao("codigoits", modulo01Vazio(), com("Bilhetagem", "Carrier"))).toBe("naoaplica");
+    expect(situacao("codigoits", modulo01Vazio(), com("Bilhetagem", "Its (legado)"))).toBe("afazer");
+    expect(situacao("codigoits", modulo01Vazio(), com("Gestão de frota"))).toBe("afazer");
+  });
+  it("e-mail enviado aguarda o código; código registrado fecha a atividade", () => {
+    const e = modulo01Vazio();
+    e.codigoits = { ...e.codigoits, enviadoEm: "2026-11-13T10:00:00Z" };
+    expect(situacao("codigoits", e, com("Its (legado)"))).toBe("aguardando");
+    e.codigoits = { ...e.codigoits, codigo: "00812", registradoEm: "2026-11-14T10:00:00Z", por: "Silvana" };
+    expect(situacao("codigoits", e, com("Its (legado)"))).toBe("feito");
+  });
+  it("estado antigo, sem o código ITS, ganha o vazio", () => {
+    expect(normalizarModulo01({ codigobd: { codigo: "00745" } }).codigoits).toEqual(modulo01Vazio().codigoits);
+  });
+});
 
 describe("linkExterno", () => {
   it("aceita link completo e completa o https:// de endereço sem ele", () => {

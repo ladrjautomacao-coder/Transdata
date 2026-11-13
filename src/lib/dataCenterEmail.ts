@@ -11,8 +11,10 @@ export type SistemaDC = (typeof SISTEMAS)[number];
 
 /** O que o GP escolhe ou digita. */
 export interface DataCenterForm {
-  /** Código do cliente, 5 dígitos (ex.: 00745). */
+  /** Código do cliente no TDMax (código BD), 5 dígitos (ex.: 00745); sempre obrigatório. */
   codigo: string;
+  /** Código do cliente no ITS / Gestão de frota, 5 dígitos; obrigatório só no projeto com ITS ou Gestão de frota. */
+  codigoIts: string;
   /** Um ou mais (ex.: TDMax Urbano e TDMax Seccionado no mesmo cliente). */
   sistemas: SistemaDC[];
   recolhimento: "com" | "sem";
@@ -32,6 +34,8 @@ export interface DataCenterForm {
 const solucoes = (p: GerProject) => p.project_solutions.map(s => s.solution?.name ?? "").filter(Boolean);
 const temSolucao = (p: GerProject, re: RegExp) => solucoes(p).some(n => re.test(n));
 export const temCarrier = (p: GerProject) => temSolucao(p, /carrier/i);
+/** Projeto marcado com ITS ou Gestão de frota no cadastro: o código ITS / Gestão de frota é obrigatório. */
+export const exigeCodigoIts = (p: GerProject) => temSolucao(p, /\bits\b|gest[aã]o de frota/i);
 
 /** Sistemas sugeridos pelo cadastro (o GP marca ou desmarca). */
 export function sistemasSugeridos(p: GerProject): SistemaDC[] {
@@ -49,7 +53,7 @@ export function sistemasSugeridos(p: GerProject): SistemaDC[] {
 
 /** Valores iniciais: o mais comum hoje, para o GP só ajustar o que muda. */
 export const formInicial = (p: GerProject): DataCenterForm => ({
-  codigo: "", sistemas: sistemasSugeridos(p), recolhimento: "sem", migracao: false, migracaoDe: "",
+  codigo: "", codigoIts: "", sistemas: sistemasSugeridos(p), recolhimento: "sem", migracao: false, migracaoDe: "",
   prefixo: "4", mascara: "4",
   crm: true, recarga: true, abt: false, billing: false, observacoes: "", logo: null,
 });
@@ -81,7 +85,8 @@ export const assuntoDC = (p: GerProject, f: DataCenterForm) => `DATA CENTER | CR
 /** O que ainda falta para o e-mail ficar pronto. */
 export function faltando(p: GerProject, f: DataCenterForm): string[] {
   const out: string[] = [];
-  if (!/^\d{5}$/.test(f.codigo)) out.push("Código do cliente com 5 dígitos");
+  if (!/^\d{5}$/.test(f.codigo)) out.push("Código TDMax com 5 dígitos");
+  if (exigeCodigoIts(p) && !/^\d{5}$/.test(f.codigoIts ?? "")) out.push("Código ITS / Gestão de frota com 5 dígitos");
   if (!f.sistemas.length) out.push("Sistema");
   if (f.migracao && !f.migracaoDe.trim()) out.push("Sistema de origem da migração");
   if (!soDigitos(f.prefixo)) out.push("Dígitos do prefixo");
@@ -101,6 +106,7 @@ export function linhasDC(p: GerProject, f: DataCenterForm): { grupo: string; lin
       { label: "Selo", valor: "Liberação para Criação do BD no DC", origem: "padrao" },
       { label: "Departamento", valor: "CPQ - PMO", origem: "padrao" },
       { label: "Código do Cliente", valor: codigoCliente(p, f), origem: "gp" },
+      ...(exigeCodigoIts(p) ? [{ label: "Código ITS / Gestão de frota", valor: f.codigoIts || "—", origem: "gp" as const }] : []),
       { label: "Sistema", valor: sistemasTexto(f.sistemas), origem: "gp" },
     ] },
     { grupo: "Configuração", linhas: [

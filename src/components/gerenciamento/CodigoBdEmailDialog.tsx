@@ -8,24 +8,35 @@ import type { GerProject } from "@/lib/gerenciamento";
 import { copiarEmail } from "@/lib/emailOutlook";
 import { temCnpj } from "@/lib/dataCenterEmail";
 import {
-  CODIGO_BD_DESTINATARIO, assuntoCodigoBd, emailHtmlCodigoBd, emailTextoCodigoBd, faltandoCodigoBd, linhasCodigoBd, mailtoCodigoBd, outlookWebCodigoBd,
+  CODIGO_BD_DESTINATARIO, TIPOS_CODIGO, assuntoCodigo, emailHtmlCodigo, emailTextoCodigo, faltandoCodigoBd, linhasCodigo, mailtoCodigo, outlookWebCodigo,
+  type TipoCodigo,
 } from "@/lib/codigoBd";
 import { Fixo, Grupo, PassoColar } from "./DataCenterEmailDialog";
 
 /**
- * E-mail do cadastro do código BD: tudo vem do cadastro do projeto. O GP confere, copia e abre
- * o Outlook com destinatário e assunto prontos; o corpo formatado vai copiado para colar.
+ * E-mail do cadastro do código BD (ou do código ITS / Gestão de frota): tudo vem do cadastro do
+ * projeto. O GP confere, copia e abre o Outlook com destinatário e assunto prontos; o corpo
+ * formatado vai copiado para colar.
  */
-export function CodigoBdEmailDialog({ open, onOpenChange, project, gp, onCopiado, onAtualizarProjeto }: {
+export function CodigoBdEmailDialog({ open, onOpenChange, project, gp, onCopiado, onAtualizarProjeto, tipo = "bd" }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   project: GerProject;
   gp: string;
-  /** O GP copiou o e-mail: a atividade passa a aguardar o código BD. */
+  /** O GP copiou o e-mail: a atividade passa a aguardar o código. */
   onCopiado: () => void;
   /** Relê o cadastro do projeto (depois de completar o CNPJ em outra aba). */
   onAtualizarProjeto: () => Promise<unknown>;
+  /** Qual cadastro o e-mail pede: banco de dados (padrão) ou ITS / Gestão de frota. */
+  tipo?: TipoCodigo;
 }) {
+  const nome = TIPOS_CODIGO[tipo].nome;
+  const assuntoCodigoBd = (p: GerProject) => assuntoCodigo(p, tipo);
+  const emailHtmlCodigoBd = (p: GerProject, g: string) => emailHtmlCodigo(p, g, tipo);
+  const emailTextoCodigoBd = (p: GerProject, g: string) => emailTextoCodigo(p, g, tipo);
+  const linhasCodigoBd = (p: GerProject) => linhasCodigo(p, tipo);
+  const mailtoCodigoBd = (p: GerProject) => mailtoCodigo(p, tipo);
+  const outlookWebCodigoBd = (p: GerProject) => outlookWebCodigo(p, tipo);
   const [conferido, setConferido] = useState(false);
   const [aberto, setAberto] = useState(false);
   const [atualizando, setAtualizando] = useState(false);
@@ -45,7 +56,7 @@ export function CodigoBdEmailDialog({ open, onOpenChange, project, gp, onCopiado
   const copiar = async () => {
     if (!(await copiarEmail(html, texto))) { toast.error("Não foi possível copiar. Tente de novo ou selecione a prévia e copie."); return; }
     onCopiado();
-    toast.success("E-mail copiado. No Outlook, clique no corpo e cole (Ctrl+V). Depois anote o código BD que voltar.");
+    toast.success(`E-mail copiado. No Outlook, clique no corpo e cole (Ctrl+V). Depois anote o ${nome} que voltar.`);
   };
   const abrirOutlook = async () => {
     if (!(await copiarEmail(html, texto))) { toast.error("Não foi possível copiar o e-mail. Tente de novo."); return; }
@@ -58,8 +69,8 @@ export function CodigoBdEmailDialog({ open, onOpenChange, project, gp, onCopiado
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
         <DialogHeader className="space-y-1 border-b px-5 py-4 text-left">
-          <DialogTitle className="flex items-center gap-2"><Database className="h-5 w-5 text-primary" />E-mail do cadastro do código BD</DialogTitle>
-          <DialogDescription>Tudo vem do cadastro do projeto. Confira a prévia e abra no Outlook já com destinatário e assunto; quando o código BD voltar, anote na atividade.</DialogDescription>
+          <DialogTitle className="flex items-center gap-2"><Database className="h-5 w-5 text-primary" />E-mail do cadastro do {nome}</DialogTitle>
+          <DialogDescription>Tudo vem do cadastro do projeto. Confira a prévia e abra no Outlook já com destinatário e assunto; quando o {nome} voltar, anote na atividade.</DialogDescription>
         </DialogHeader>
 
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-y-auto lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:overflow-hidden">
@@ -84,7 +95,8 @@ export function CodigoBdEmailDialog({ open, onOpenChange, project, gp, onCopiado
                 </div>
               )}
               <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
-                <Lock className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />O código do projeto vai sem o nome da empresa do final, seguido da razão social. O sistema segue as soluções e a frota do cadastro, como no e-mail ao Data Center.
+                <Lock className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />O código do projeto vai sem o nome da empresa do final, seguido da razão social.{" "}
+                {tipo === "bd" ? "O sistema segue as soluções e a frota do cadastro, como no e-mail ao Data Center." : "A solução e a frota seguem o cadastro do projeto."}
               </p>
             </Grupo>
           </div>
@@ -108,7 +120,7 @@ export function CodigoBdEmailDialog({ open, onOpenChange, project, gp, onCopiado
           {aberto ? (
             <div className="flex flex-wrap items-center gap-3">
               <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-              <p className="min-w-0 flex-1 basis-72 text-[13px]"><b>Agora cole no Outlook:</b> clique no corpo do e-mail, acima da sua assinatura, e use <b>Ctrl+V</b>. Depois é só enviar. Quando o código BD voltar, anote na atividade.</p>
+              <p className="min-w-0 flex-1 basis-72 text-[13px]"><b>Agora cole no Outlook:</b> clique no corpo do e-mail, acima da sua assinatura, e use <b>Ctrl+V</b>. Depois é só enviar. Quando o {nome} voltar, anote na atividade.</p>
               <Button variant="ghost" size="sm" className="h-9" asChild><a href={outlookWebCodigoBd(project)} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-4 w-4" />Outlook na web</a></Button>
               <Button variant="outline" size="sm" className="h-9" onClick={copiar}><Copy className="mr-1.5 h-4 w-4" />Copiar de novo</Button>
               <Button size="sm" className="h-9" onClick={() => onOpenChange(false)}><Check className="mr-1.5 h-4 w-4" />Fechar</Button>
@@ -120,8 +132,8 @@ export function CodigoBdEmailDialog({ open, onOpenChange, project, gp, onCopiado
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>Falta: {falta.join(", ")}.</span>
                 </p>
               ) : (
-                <label htmlFor="bd-conferi" className="flex min-w-0 flex-1 basis-72 cursor-pointer items-center gap-2 text-[13px] font-medium">
-                  <Checkbox id="bd-conferi" checked={conferido} onCheckedChange={v => setConferido(v === true)} />
+                <label htmlFor={`${tipo}-conferi`} className="flex min-w-0 flex-1 basis-72 cursor-pointer items-center gap-2 text-[13px] font-medium">
+                  <Checkbox id={`${tipo}-conferi`} checked={conferido} onCheckedChange={v => setConferido(v === true)} />
                   Conferi as informações da prévia
                 </label>
               )}

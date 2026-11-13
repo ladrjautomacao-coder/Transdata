@@ -8,7 +8,7 @@ import { codigoCliente, sistemasTexto } from "@/lib/dataCenterEmail";
 import { NOME_OPERADORA } from "@/lib/coberturaOperadoras";
 import {
   CHECKLIST_ITENS, MODULO_01, RESPONSAVEL_LABEL, RESP_CHECKLIST, dataBr, dataHoraBr, fimDoContrato, linkExterno, naoAplica, perguntasDoRegistro, precisaCobertura, solutionsOf,
-  type AtividadeId, type GerProject, type Modulo01Estado,
+  temItsGestaoFrota, type AtividadeId, type GerProject, type Modulo01Estado,
 } from "@/lib/gerenciamento";
 
 export type Par = [rotulo: string, valor: string];
@@ -71,6 +71,7 @@ export function montarTap({ project, estado, ordem, emitidoPor, fase, coordenado
   const solucoes = solutionsOf(project);
   const local = formatLocation(project.city, project.state, project.country_code);
   const cobertura = precisaCobertura(project);
+  const its = temItsGestaoFrota(project);
   const c = estado.checklist;
   const dc = estado.datacenter;
   const h = estado.handover;
@@ -103,7 +104,7 @@ export function montarTap({ project, estado, ordem, emitidoPor, fase, coordenado
 
   // as atividades do módulo que ficam com a Assistente ("checklist de pré-requisitos"); o mapa de calor só com cobertura
   const daAssistente = MODULO_01.atividades
-    .filter(a => a.responsavel === "assistente" && (a.id !== "carrier" || cobertura))
+    .filter(a => a.responsavel === "assistente" && (a.id !== "carrier" || cobertura) && (a.id !== "codigoits" || its))
     .map(a => a.titulo.charAt(0).toLowerCase() + a.titulo.slice(1));
   const partes = [
     { papel: `${papelGp} (designado)`, nome: gp, responsabilidade: "Conduz o projeto do planejamento à entrega e responde pelas atividades deste termo." },
@@ -152,6 +153,9 @@ export function montarTap({ project, estado, ordem, emitidoPor, fase, coordenado
         return { ...base, concluidaEm: dataBr(f?.em), registro: f?.valor ? "Pasta do projeto no Drive" : "Sem link informado", link: linkExterno(f?.valor) ?? undefined };
       }
       case "codigobd": return { ...base, concluidaEm: dataBr(estado.codigobd.registradoEm), registro: estado.codigobd.codigo ? `Código BD ${estado.codigobd.codigo}` : "—" };
+      case "codigoits":
+        if (!its) return null;
+        return { ...base, concluidaEm: dataBr(estado.codigoits.registradoEm), registro: estado.codigoits.codigo ? `Código ITS / Gestão de frota ${estado.codigoits.codigo}` : "—" };
       case "checklist": return { ...base, concluidaEm: dataBr(c.em), registro: c.resultado === "excecao" ? `Exceção: ${ou(c.autorizadoPor)}` : "Atendido" };
       case "datacenter": return { ...base, concluidaEm: dataBr(dc.concluidoEm), registro: dc.email?.codigo ? codigoCliente(project, dc.email) : "Pedido feito por fora do portal" };
       case "handover": return { ...base, concluidaEm: dataBr(h.registradoEm), registro: h.agendadoPara ? `Reunião em ${dataHoraBr(h.agendadoPara)}` : "Reunião registrada" };

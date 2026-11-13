@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { GerProject } from "@/lib/gerenciamento";
 import {
-  DC_DESTINATARIO, SISTEMAS, alternarSistema, assuntoDC, cidadeUf, codigoCliente, emailHtmlDC, emailTextoDC, faltando, formInicial,
+  DC_DESTINATARIO, SISTEMAS, alternarSistema, assuntoDC, cidadeUf, codigoCliente, emailHtmlDC, emailTextoDC, exigeCodigoIts, faltando, formInicial,
   licenciados, mailtoDC, outlookWebDC, razaoSocial, reservas, soDigitos, temCarrier, temCnpj, totalCarros, type DataCenterForm,
 } from "@/lib/dataCenterEmail";
 import { copiarEmail } from "@/lib/emailOutlook";
@@ -145,7 +145,7 @@ function SimNao({ id, label, value, onChange }: { id: string; label: string; val
  * E-mail ao Data Center: o GP completa o que varia, confere a prévia e abre o Outlook
  * com destinatário e assunto prontos; o corpo formatado vai copiado para colar.
  */
-export function DataCenterEmailDialog({ open, onOpenChange, project, form, onForm, gp, codigoBD, onCopiado, onAtualizarProjeto }: {
+export function DataCenterEmailDialog({ open, onOpenChange, project, form, onForm, gp, codigoBD, codigoITS, onCopiado, onAtualizarProjeto }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   project: GerProject;
@@ -154,6 +154,8 @@ export function DataCenterEmailDialog({ open, onOpenChange, project, form, onFor
   gp: string;
   /** Código BD anotado na atividade "Cadastro do código BD": preenche o código do cliente. */
   codigoBD?: string;
+  /** Código anotado na atividade "Cadastro do código ITS / Gestão de frota": preenche o código ITS. */
+  codigoITS?: string;
   /** O GP copiou o e-mail: a atividade fica feita. */
   onCopiado: () => void;
   /** Relê o cadastro do projeto (depois de completar o CNPJ em outra aba). */
@@ -163,6 +165,10 @@ export function DataCenterEmailDialog({ open, onOpenChange, project, form, onFor
   const f: DataCenterForm = { ...formInicial(project), ...form };
   if (!f.codigo && codigoBD) f.codigo = codigoBD;
   const doCodigoBD = !!codigoBD && f.codigo === codigoBD;
+  // projeto marcado com ITS ou Gestão de frota no cadastro: o código ITS também é obrigatório
+  const pedeIts = exigeCodigoIts(project);
+  if (pedeIts && !f.codigoIts && codigoITS) f.codigoIts = codigoITS;
+  const doCodigoITS = !!codigoITS && f.codigoIts === codigoITS;
   const set = (patch: Partial<DataCenterForm>) => { onForm({ ...f, ...patch }); setConferido(false); setAberto(false); };
   const [conferido, setConferido] = useState(false);
   const [aberto, setAberto] = useState(false);
@@ -210,7 +216,7 @@ export function DataCenterEmailDialog({ open, onOpenChange, project, form, onFor
               <Fixo label="Selo" valor="Liberação para Criação do BD no DC" origem="padrão" />
               <Fixo label="Departamento" valor="CPQ - PMO" origem="padrão" />
               <div>
-                <Label className="text-xs" htmlFor="dc-codigo">Código do cliente *</Label>
+                <Label className="text-xs" htmlFor="dc-codigo">Código do cliente no TDMax *</Label>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   <Input id="dc-codigo" inputMode="numeric" maxLength={5} placeholder="00745" className="h-9 w-28 font-mono"
                     value={f.codigo} onChange={e => set({ codigo: soDigitos(e.target.value).slice(0, 5) })}
@@ -222,6 +228,18 @@ export function DataCenterEmailDialog({ open, onOpenChange, project, form, onFor
                   nome, cidade e UF vêm do cadastro e o final vem dos sistemas (TDMax Urbano e Seccionado viram "TDMax").
                 </p>
               </div>
+              {pedeIts && (
+                <div>
+                  <Label className="text-xs" htmlFor="dc-codigo-its">Código ITS / Gestão de frota *</Label>
+                  <Input id="dc-codigo-its" inputMode="numeric" maxLength={5} placeholder="00812" className="mt-1.5 h-9 w-28 font-mono"
+                    value={f.codigoIts} onChange={e => set({ codigoIts: soDigitos(e.target.value).slice(0, 5) })}
+                    onBlur={() => { if (f.codigoIts && f.codigoIts.length < 5) set({ codigoIts: f.codigoIts.padStart(5, "0") }); }} />
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {doCodigoITS ? <b className="font-semibold text-foreground">Os 5 dígitos vieram da atividade "Cadastro do código ITS / Gestão de frota". </b> : "Você digita os 5 dígitos. "}
+                    Obrigatório porque o projeto tem ITS ou Gestão de frota no cadastro.
+                  </p>
+                </div>
+              )}
               <div>
                 <Label className="text-xs">Sistema * <span className="font-normal text-muted-foreground">(um ou mais)</span></Label>
                 <div className="mt-1.5"><Multi label="Sistema" value={f.sistemas} options={[...SISTEMAS]} onToggle={s => set({ sistemas: alternarSistema(f.sistemas, s) })} /></div>
