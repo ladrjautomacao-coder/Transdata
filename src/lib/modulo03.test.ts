@@ -7,7 +7,7 @@ const T = "2026-11-12T10:00:00Z";
 /** Tudo feito, menos o encerramento. */
 const quaseTudo = (): Modulo03Estado => ({
   ...modulo03Vazio(),
-  apresentacao: { data: "2026-11-12", participantes: "", slides: {}, campos: {}, logo: null, registradoEm: T, por: "GP" },
+  apresentacao: { data: "2026-11-12", participantes: "", slides: {}, campos: {}, datas: {}, logo: null, registradoEm: T, por: "GP" },
   cartoes: { chave: T, senha: T, sam: T, por: "GP" },
   cronograma: { visitas: [visita("a", "2026-11-13", T)], registradoEm: T, por: "GP" },
   regras: { regras: "Integração de 60 minutos.", particularidades: "", necessidades: "", registradoEm: T, por: "GP" },

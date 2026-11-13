@@ -6,6 +6,8 @@ import type { LogoCliente } from "@/lib/logoCliente";
 
 /** O que o GP completa para os slides: telefone do GP, cliente no IGRE e câmeras da biometria. */
 export type CampoApresentacao = "gpTelefone" | "igre" | "cameras";
+/** Datas que o GP prevê para o cronograma (AAAA-MM-DD): reunião de PE, prazos dos pré-requisitos e visitas. */
+export type DataCronograma = "pe" | "pre1" | "v1Inicio" | "v1Fim" | "pre2" | "v2Inicio" | "v2Fim" | "v3Inicio" | "v3Fim";
 
 export type AtividadeId03 = "apresentacao" | "cartoes" | "cronograma" | "visitas" | "regras" | "encerramento";
 
@@ -58,12 +60,13 @@ export interface Modulo03Estado {
   /**
    * `data`: AAAA-MM-DD da apresentação; `participantes`: quem assistiu, do lado do cliente;
    * `slides`: o que o GP ligou ou desligou no roteiro (id do slide → mostrar), o resto segue o modelo;
-   * `campos`: o que o GP completou para os slides (sem a chave: vale o sugerido); `logo`: logo do
+   * `campos`: o que o GP completou para os slides (sem a chave: vale o sugerido); `datas`: as datas
+   * previstas do cronograma (a Agenda de Implantação, quando aprovada, vale mais); `logo`: logo do
    * cliente enviado aqui (sem ele, vale o do e-mail ao Data Center, no módulo 01).
    */
   apresentacao: {
     data: string; participantes: string; slides: Record<string, boolean>;
-    campos: Partial<Record<CampoApresentacao, string>>; logo: LogoCliente | null;
+    campos: Partial<Record<CampoApresentacao, string>>; datas: Partial<Record<DataCronograma, string>>; logo: LogoCliente | null;
     registradoEm: string | null; por: string;
   };
   /** Quando cada cartão operacional foi gravado e configurado. */
@@ -77,7 +80,7 @@ export interface Modulo03Estado {
 }
 
 export const modulo03Vazio = (): Modulo03Estado => ({
-  apresentacao: { data: "", participantes: "", slides: {}, campos: {}, logo: null, registradoEm: null, por: "" },
+  apresentacao: { data: "", participantes: "", slides: {}, campos: {}, datas: {}, logo: null, registradoEm: null, por: "" },
   cartoes: { chave: null, senha: null, sam: null, por: "" },
   cronograma: { visitas: [], registradoEm: null, por: "" },
   regras: { regras: "", particularidades: "", necessidades: "", registradoEm: null, por: "" },

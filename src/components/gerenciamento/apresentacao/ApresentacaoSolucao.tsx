@@ -11,10 +11,10 @@ import { cn } from "@/lib/utils";
 import { formatLocation } from "@/lib/location";
 import { agora, dataBr, equipamentosOf, fetchCoordenadorContato, fetchEmailDaEquipe, solutionsOf, type GerProject } from "@/lib/gerenciamento";
 import { enviarLogo } from "@/lib/logoCliente";
-import type { CampoApresentacao, Modulo03Estado } from "@/lib/modulo03";
+import type { CampoApresentacao, DataCronograma, Modulo03Estado } from "@/lib/modulo03";
 import {
-  SECOES, VELOCIDADES, duracaoDoRoteiro, eAtlasBox, eV6, fetchVisitasAgenda, minutos, nomeDeExibicao, nomeNoSlide, slidesDoProjeto, solucoesSemSlide,
-  temBiometria, type DadosApresentacao, type SlideId,
+  SECOES, VELOCIDADES, datasDoCronograma, duracaoDoRoteiro, eAtlasBox, eV6, fetchVisitasAgenda, minutos, nomeDeExibicao, nomeNoSlide, periodoCurto,
+  slidesDoProjeto, solucoesSemSlide, temBiometria, type CronogramaDoSlide, type DadosApresentacao, type SlideId,
 } from "@/lib/apresentacao";
 import { Registro, Rodape } from "../Etapa";
 import { ModoApresentacao, Palco, PalcoFluido, telaCheia, velocidadeSalva } from "./ModoApresentacao";
@@ -23,6 +23,66 @@ import { Slide } from "./Slides";
 const p2 = (n: number) => String(n).padStart(2, "0");
 const hoje = () => { const d = new Date(); return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`; };
 const lista = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} e ${xs[xs.length - 1]}`);
+
+/**
+ * Datas do cronograma que o GP leva para a reunião de PE: a reunião, os prazos dos pré-requisitos e
+ * as visitas previstas. Visita já aprovada na Agenda de Implantação aparece confirmada, sem edição.
+ */
+function DatasDoCronograma({ datas, resolvido, its, onData }: {
+  datas: Partial<Record<DataCronograma, string>>;
+  resolvido: CronogramaDoSlide;
+  its: boolean;
+  onData: (k: DataCronograma, v: string) => void;
+}) {
+  const campo = (k: DataCronograma, rotulo: string, valor?: string) => (
+    <Input type="date" aria-label={rotulo} className="h-8 px-2 text-xs" value={valor ?? datas[k] ?? ""} onChange={ev => onData(k, ev.target.value)} />
+  );
+  const visita = (n: 1 | 2 | 3, titulo: string) => {
+    const v = resolvido.visitas[n];
+    return (
+      <div className="rounded-lg border border-border/60 p-2.5">
+        <p className="text-xs font-medium">{titulo}</p>
+        {v?.confirmada ? (
+          <p className="mt-1.5 flex items-center gap-1.5 text-[12px] font-semibold text-primary" title="Aprovada na Agenda de Implantação">
+            <Check className="h-3.5 w-3.5" />{periodoCurto(v.periodo)}<span className="font-normal text-muted-foreground">confirmada</span>
+          </p>
+        ) : (
+          <div className="mt-1.5 grid gap-1.5">
+            <span className="flex items-center gap-1.5"><span className="w-6 text-[11px] text-muted-foreground">de</span>{campo(`v${n}Inicio` as DataCronograma, `${titulo}: início`)}</span>
+            <span className="flex items-center gap-1.5"><span className="w-6 text-[11px] text-muted-foreground">até</span>{campo(`v${n}Fim` as DataCronograma, `${titulo}: fim (opcional)`)}</span>
+          </div>
+        )}
+      </div>
+    );
+  };
+  const prazo = (k: "pre1" | "pre2", titulo: string) => (
+    <div className="rounded-lg border border-dashed border-border/80 p-2.5">
+      <p className="text-xs font-medium">{titulo}</p>
+      <p className="mt-0.5 text-[11px] text-muted-foreground">Prazo (opcional)</p>
+      <div className="mt-1">{campo(k, `${titulo}: prazo`)}</div>
+    </div>
+  );
+  return (
+    <div className="mt-3 border-t pt-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+        <p className="text-xs font-semibold">Datas do cronograma</p>
+        <p className="text-[11px] text-muted-foreground">Previstas pelo GP. Quando a visita for aprovada na Agenda de Implantação, a data dela entra no lugar, com ✓.</p>
+      </div>
+      <div className={cn("mt-2 grid gap-2.5 sm:grid-cols-3", its ? "xl:grid-cols-6" : "xl:grid-cols-5")}>
+        <div className="rounded-lg border border-border/60 p-2.5">
+          <p className="text-xs font-medium">Reunião de PE</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground" title="Sem data digitada, vale a reunião agendada no Módulo 02 ou a data da apresentação">Do Módulo 02 ou da apresentação</p>
+          <div className="mt-1">{campo("pe", "Reunião de PE", datas.pe ?? resolvido.pe ?? "")}</div>
+        </div>
+        {prazo("pre1", "Pré-requisitos da 1ª visita")}
+        {visita(1, "1ª visita")}
+        {prazo("pre2", "Pré-requisitos da 2ª visita")}
+        {visita(2, "2ª visita")}
+        {its && visita(3, "3ª visita (ITS)")}
+      </div>
+    </div>
+  );
+}
 
 /** Imprime os slides (um por página) para o GP salvar em PDF e mandar ao cliente. */
 function ImpressaoSlides({ slides, dados, onFim }: { slides: SlideId[]; dados: DadosApresentacao; onFim: () => void }) {
@@ -70,6 +130,7 @@ export function ApresentacaoSolucao({ project, estado, reuniaoPe, logoModulo01, 
   const a = estado.apresentacao;
   const set = (patch: Partial<Modulo03Estado["apresentacao"]>) => onChange(e => ({ ...e, apresentacao: { ...e.apresentacao, ...patch } }));
   const setCampo = (k: CampoApresentacao, v: string) => onChange(e => ({ ...e, apresentacao: { ...e.apresentacao, campos: { ...e.apresentacao.campos, [k]: v } } }));
+  const setData = (k: DataCronograma, v: string) => onChange(e => ({ ...e, apresentacao: { ...e.apresentacao, datas: { ...e.apresentacao.datas, [k]: v } } }));
   const [apresentando, setApresentando] = useState<{ inicio: number; automatico: boolean } | null>(null);
   const [imprimindo, setImprimindo] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -87,6 +148,8 @@ export function ApresentacaoSolucao({ project, estado, reuniaoPe, logoModulo01, 
   const tecnico = coordenador ? `${coordenador.nome}, Coordenador de Implantação${coordenador.email ? ` · ${coordenador.email}` : ""}` : "";
   const logo = a.logo?.url ?? logoModulo01;
   const data = a.data || hoje();
+  const datas = a.datas ?? {};
+  const cronograma = datasDoCronograma(datas, visitasAgenda, reuniaoPe, data);
   const dados: DadosApresentacao = useMemo(() => ({
     cliente: project.company_name,
     cidade: formatLocation(nomeDeExibicao(project.city), project.state, project.country_code),
@@ -105,7 +168,8 @@ export function ApresentacaoSolucao({ project, estado, reuniaoPe, logoModulo01, 
     reuniaoPe,
     visitasTecnicas: estado.cronograma.visitas.filter(v => v.data).map(v => ({ tipo: v.tipo, local: v.local, data: v.data })),
     visitasAgenda,
-  }), [project, data, logo, gpEmail, campos.gpTelefone, tecnico, campos.cameras, campos.igre, reuniaoPe, estado.cronograma.visitas, visitasAgenda]); // eslint-disable-line react-hooks/exhaustive-deps
+    cronograma,
+  }), [project, data, logo, gpEmail, campos.gpTelefone, tecnico, campos.cameras, campos.igre, reuniaoPe, estado.cronograma.visitas, visitasAgenda, JSON.stringify(cronograma)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const escolhas = a.slides ?? {};
   const slides = slidesDoProjeto(solucoes, escolhas, equipamentos);
@@ -245,6 +309,9 @@ export function ApresentacaoSolucao({ project, estado, reuniaoPe, logoModulo01, 
             </div>
           </div>
         </div>
+        {slides.some(s => s.modelo.id === "cronograma" && s.incluido) && (
+          <DatasDoCronograma datas={datas} resolvido={cronograma} its={solucoes.some(s => /\bits\b/i.test(s))} onData={setData} />
+        )}
       </div>
 
       {/* roteiro: o GP desliga o que não vai mostrar para este cliente */}

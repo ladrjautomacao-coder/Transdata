@@ -2,6 +2,7 @@
 // os GPs usavam no PowerPoint: Reunião PE, ChatBot, Biometria Facial e Migração BD) e a montagem
 // automática pelo que o projeto contratou.
 import { supabase } from "@/integrations/supabase/client";
+import type { DataCronograma } from "@/lib/modulo03";
 
 const SIGLAS = /^(ltda\.?|s\.?a\.?|s\/a|me|epp|eireli)$/i;
 const LIGACOES = /^(de|da|do|das|dos|e)$/i;
@@ -213,6 +214,59 @@ export interface DadosApresentacao {
   visitasTecnicas: { tipo: string; local: string; data: string }[];
   /** Visitas de implantação aprovadas na Agenda de Implantação. */
   visitasAgenda: { finalidade: string; inicio: string; fim: string }[];
+  /** Datas do cronograma já resolvidas (ver `datasDoCronograma`). */
+  cronograma: CronogramaDoSlide;
+}
+
+/* ─── Cronograma: datas previstas pelo GP e confirmadas na Agenda ─── */
+
+/** Período de AAAA-MM-DD a AAAA-MM-DD (um dia só: início = fim). */
+export interface Periodo { inicio: string; fim: string }
+/** Uma visita no cronograma: confirmada (aprovada na Agenda de Implantação) ou prevista pelo GP. */
+export interface DataVisita { periodo: Periodo; confirmada: boolean }
+export interface CronogramaDoSlide {
+  /** Reunião de PE (AAAA-MM-DD). */
+  pe: string | null;
+  /** Prazos dos pré-requisitos da 1ª e da 2ª visita (AAAA-MM-DD). */
+  pre1: string | null;
+  pre2: string | null;
+  /** 1ª, 2ª e 3ª visita (a 3ª é a do ITS). */
+  visitas: Record<1 | 2 | 3, DataVisita | null>;
+}
+
+const RE_VISITA: Record<1 | 2 | 3, RegExp> = { 1: /1[ªa°o]?\s*visita/i, 2: /2[ªa°o]?\s*visita/i, 3: /3[ªa°o]?\s*visita/i };
+
+/**
+ * As datas do slide do cronograma. Visita aprovada na Agenda de Implantação vale mais que a prevista
+ * pelo GP; a reunião de PE é a que o GP digitou, a agendada no módulo 02 ou a data da apresentação
+ * (a apresentação acontece na própria reunião de PE).
+ */
+export function datasDoCronograma(
+  gp: Partial<Record<DataCronograma, string>>, agenda: DadosApresentacao["visitasAgenda"], reuniaoPe: string | null, dataApresentacao: string,
+): CronogramaDoSlide {
+  const visita = (n: 1 | 2 | 3): DataVisita | null => {
+    const a = agenda.find(x => RE_VISITA[n].test(x.finalidade));
+    if (a) return { periodo: { inicio: a.inicio.slice(0, 10), fim: a.fim.slice(0, 10) }, confirmada: true };
+    const ini = gp[`v${n}Inicio`], fim = gp[`v${n}Fim`];
+    if (!ini) return null;
+    return { periodo: { inicio: ini, fim: fim && fim >= ini ? fim : ini }, confirmada: false };
+  };
+  return {
+    pe: gp.pe || reuniaoPe?.slice(0, 10) || dataApresentacao || null,
+    pre1: gp.pre1 || null,
+    pre2: gp.pre2 || null,
+    visitas: { 1: visita(1), 2: visita(2), 3: visita(3) },
+  };
+}
+
+const dia = (v: string) => { const [a, m, d] = v.slice(0, 10).split("-"); return { a, m, d }; };
+/** "2026-11-24" → "24/11" */
+export const diaMes = (v: string) => { const x = dia(v); return `${x.d}/${x.m}`; };
+/** Período curto: "24/11", "24 a 26/11" ou "28/11 a 02/12". */
+export function periodoCurto(p: Periodo): string {
+  const a = dia(p.inicio), b = dia(p.fim);
+  if (p.inicio.slice(0, 10) === p.fim.slice(0, 10)) return `${a.d}/${a.m}`;
+  return a.m === b.m ? `${a.d} a ${b.d}/${b.m}` : `${a.d}/${a.m} a ${b.d}/${b.m}`;
 }
 
 // implantation_requests ainda fora do types.ts

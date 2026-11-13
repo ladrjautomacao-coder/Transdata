@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 import {
-  AlertTriangle, BadgeCheck, Ban, CalendarDays, Camera, ClipboardCheck, Clock, CloudCog, CreditCard, Database, DatabaseZap, Facebook,
+  AlertTriangle, BadgeCheck, Ban, CalendarDays, Camera, Check, ClipboardCheck, Clock, CloudCog, CreditCard, Database, DatabaseZap, Facebook,
   FileText, Globe, Headphones, Image as ImageIcon, Lightbulb, LifeBuoy, Mail, MessageCircle, Phone, RefreshCw, ScanFace, SearchCheck,
   Smartphone, Square, UserRound, UsersRound, Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { dataBr } from "@/lib/gerenciamento";
-import { eAtlasBox, eV6, nomeDeExibicao, nomeEquipamento, nomeNoSlide, slideContratado, type DadosApresentacao, type Equipamento, type SlideId } from "@/lib/apresentacao";
+import {
+  diaMes, eAtlasBox, eV6, nomeDeExibicao, nomeEquipamento, nomeNoSlide, periodoCurto, slideContratado, type DadosApresentacao, type Equipamento, type SlideId,
+} from "@/lib/apresentacao";
 import logoT from "@/assets/apresentacao/t-laranja.webp";
 import videoCidade from "@/assets/entrada/entrada-login.mp4";
 import posterCidade from "@/assets/entrada/entrada-login.jpg";
@@ -155,8 +156,20 @@ function PainelAmbiente({ estatico, className, children }: { estatico?: boolean;
   );
 }
 
+/** Data de uma etapa no slide: confirmada na Agenda, prevista pelo GP, prazo ou ainda a agendar. */
+interface ChipData { texto: string; tipo: "confirmada" | "prevista" | "prazo" | "pendente" }
+const CHIP_DATA: Record<ChipData["tipo"], string> = {
+  confirmada: "bg-marca-logo text-white",
+  prevista: "border-2 border-marca-laranja bg-marca-laranja/10 text-[hsl(var(--sl-texto))]",
+  prazo: "bg-marca-lilas/20 text-marca-logo",
+  pendente: "border border-dashed border-[hsl(var(--sl-suave))] text-[hsl(var(--sl-suave))]",
+};
+
 /** Etapas em linha, ligadas por um traço (marcos, cronogramas). */
-function Etapas({ etapas, className }: { etapas: { titulo: string; icone?: typeof Camera; data?: string | null; mostrarData?: boolean; itens?: string[] }[]; className?: string }) {
+function Etapas({ etapas, className }: {
+  etapas: { titulo: string; icone?: typeof Camera; tom?: "roxo" | "lilas" | "laranja"; chip?: ChipData; itens?: string[] }[];
+  className?: string;
+}) {
   return (
     <div className={cn("relative", className)}>
       <div aria-hidden className="absolute left-[24px] right-[24px] top-[27px] h-[4px] rounded-full bg-gradient-to-r from-marca-logo via-marca-lilas to-marca-laranja" />
@@ -164,14 +177,13 @@ function Etapas({ etapas, className }: { etapas: { titulo: string; icone?: typeo
         {etapas.map((e, i) => (
           <li key={e.titulo} className="pr-4">
             <span className={cn("flex h-[58px] w-[58px] items-center justify-center rounded-full border-[6px] border-[hsl(var(--sl-fundo))] text-white",
-              i === 0 ? "bg-marca-logo" : e.mostrarData === false ? "bg-marca-lilas" : "bg-gradient-to-br from-marca-laranja to-marca-rosa")}>
+              (e.tom ?? (i === 0 ? "roxo" : "laranja")) === "roxo" ? "bg-marca-logo" : e.tom === "lilas" ? "bg-marca-lilas" : "bg-gradient-to-br from-marca-laranja to-marca-rosa")}>
               {e.icone ? <e.icone className="h-6 w-6" /> : <span className="text-[18px] font-bold">{i + 1}</span>}
             </span>
             <p className="mt-3 text-[18.5px] font-semibold leading-tight text-[hsl(var(--sl-texto))]">{e.titulo}</p>
-            {e.mostrarData && (
-              <span className={cn("mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[14px] font-semibold",
-                e.data ? "bg-marca-logo text-white" : "border border-dashed border-[hsl(var(--sl-suave))] text-[hsl(var(--sl-suave))]")}>
-                <CalendarDays className="h-3.5 w-3.5" />{e.data ?? "a agendar"}
+            {e.chip && (
+              <span className={cn("mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[14px] font-semibold", CHIP_DATA[e.chip.tipo])}>
+                {e.chip.tipo === "confirmada" ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : <CalendarDays className="h-3.5 w-3.5" />}{e.chip.texto}
               </span>
             )}
             {e.itens && (
@@ -186,20 +198,12 @@ function Etapas({ etapas, className }: { etapas: { titulo: string; icone?: typeo
   );
 }
 
-const p2 = (n: number) => String(n).padStart(2, "0");
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 /** AAAA-MM-DD → "12 de novembro de 2026" */
 const dataExtenso = (v: string) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v);
   return m ? `${Number(m[3])} de ${MESES[Number(m[2]) - 1]} de ${m[1]}` : v;
 };
-/** Período curto: "04/11", "04 a 06/11" ou "28/11 a 02/12". */
-function periodo(inicio: string, fim: string) {
-  const a = new Date(inicio), b = new Date(fim);
-  const da = `${p2(a.getDate())}/${p2(a.getMonth() + 1)}`, db = `${p2(b.getDate())}/${p2(b.getMonth() + 1)}`;
-  if (da === db) return da;
-  return a.getMonth() === b.getMonth() ? `${p2(a.getDate())} a ${db}` : `${da} a ${db}`;
-}
 
 /* ─── Abertura ─── */
 
@@ -604,26 +608,35 @@ function Materiais(p: SlideProps) {
 /* ─── Cronograma ─── */
 
 function Cronograma(p: SlideProps) {
-  const { dados } = p;
-  const visita = (re: RegExp) => {
-    const v = dados.visitasAgenda.find(x => re.test(x.finalidade));
-    return v ? periodo(v.inicio, v.fim) : null;
+  const c = p.dados.cronograma;
+  const its = p.dados.solucoes.some(s => /\bits\b/i.test(s));
+  const visita = (n: 1 | 2 | 3): ChipData => {
+    const v = c.visitas[n];
+    if (!v) return { texto: "a agendar", tipo: "pendente" };
+    return v.confirmada ? { texto: periodoCurto(v.periodo), tipo: "confirmada" } : { texto: `prevista ${periodoCurto(v.periodo)}`, tipo: "prevista" };
   };
-  const its = dados.solucoes.some(s => /\bits\b/i.test(s));
+  const prazo = (d: string | null): ChipData | undefined => (d ? { texto: `até ${diaMes(d)}`, tipo: "prazo" } : undefined);
+  const visitas = [1, 2, ...(its ? [3] : [])] as (1 | 2 | 3)[];
+  const temConfirmada = visitas.some(n => c.visitas[n]?.confirmada), temPrevista = visitas.some(n => c.visitas[n] && !c.visitas[n]!.confirmada);
   return (
     <Moldura secao="Cronograma" p={p}>
       <div className="sl-entra absolute left-[64px] top-[112px]">
         <Titulo className="text-[54px]">Sistema de Bilhetagem Eletrônica</Titulo>
-        <p className="mt-1 text-[19px] text-[hsl(var(--sl-suave))]">Datas da Agenda de Implantação; o que ainda não tem data vai ser agendado.</p>
       </div>
-      <Etapas className="absolute left-[64px] right-[64px] top-[268px]" etapas={[
-        { titulo: "Reunião de PE", data: dados.reuniaoPe ? dataBr(dados.reuniaoPe.slice(0, 10)).slice(0, 5) : null, mostrarData: true },
-        { titulo: "Pré-requisitos da 1ª visita", mostrarData: false, itens: ["Chicotes (AtlasBox com RF6)", "Cartões 4K e 1K", "POS A910S", "Leitora ACR38 (inicializar cartões)", "Computadores (coleta)", "Antena de coleta (WPA 2,4 GHz)"] },
-        { titulo: "1ª visita", data: visita(/1[ªa°o]?\s*visita/i), mostrarData: true },
-        { titulo: "Pré-requisitos da 2ª visita", mostrarData: false, itens: ["100% da instalação embarcada", "Configurações iniciais do sistema"] },
-        { titulo: "2ª visita", data: visita(/2[ªa°o]?\s*visita/i), mostrarData: true, itens: ["Serviços"] },
-        ...(its ? [{ titulo: "3ª visita (ITS)", data: visita(/3[ªa°o]?\s*visita/i), mostrarData: true }] : []),
+      <Etapas className="absolute left-[64px] right-[64px] top-[232px]" etapas={[
+        { titulo: "Reunião de PE", tom: "roxo", chip: c.pe ? { texto: diaMes(c.pe), tipo: "confirmada" } : { texto: "a agendar", tipo: "pendente" } },
+        { titulo: "Pré-requisitos da 1ª visita", tom: "lilas", chip: prazo(c.pre1), itens: ["Chicotes (AtlasBox com RF6)", "Cartões 4K e 1K", "POS A910S", "Leitora ACR38 (inicializar cartões)", "Computadores (coleta)", "Antena de coleta (WPA 2,4 GHz)"] },
+        { titulo: "1ª visita", chip: visita(1) },
+        { titulo: "Pré-requisitos da 2ª visita", tom: "lilas", chip: prazo(c.pre2), itens: ["100% da instalação embarcada", "Configurações iniciais do sistema"] },
+        { titulo: "2ª visita", chip: visita(2), itens: ["Serviços"] },
+        ...(its ? [{ titulo: "3ª visita (ITS)", chip: visita(3) }] : []),
       ]} />
+      {(temConfirmada || temPrevista) && (
+        <p className="absolute bottom-[64px] left-[64px] flex items-center gap-5 text-[14px] text-[hsl(var(--sl-suave))]">
+          {temConfirmada && <span className="flex items-center gap-1.5"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-marca-logo text-white"><Check className="h-3 w-3" strokeWidth={3} /></span>Confirmada na Agenda de Implantação</span>}
+          {temPrevista && <span className="flex items-center gap-1.5"><span className="h-4 w-7 rounded-full border-2 border-marca-laranja bg-marca-laranja/10" />Prevista: pode mudar até a confirmação</span>}
+        </p>
+      )}
     </Moldura>
   );
 }

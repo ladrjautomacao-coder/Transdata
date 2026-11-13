@@ -1,5 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { duracaoDoRoteiro, nomeDeExibicao, segundosNoSlide, slideContratado, slidesDoProjeto, temBiometria } from "@/lib/apresentacao";
+import {
+  datasDoCronograma, duracaoDoRoteiro, nomeDeExibicao, periodoCurto, segundosNoSlide, slideContratado, slidesDoProjeto, temBiometria,
+} from "@/lib/apresentacao";
+
+describe("apresentação da solução: datas do cronograma", () => {
+  const agenda = [{ finalidade: "1ª visita · Bilhetagem", inicio: "2026-11-24T08:00:00-03:00", fim: "2026-11-26T18:00:00-03:00" }];
+
+  it("visita aprovada na Agenda vale mais que a prevista pelo GP", () => {
+    const c = datasDoCronograma({ v1Inicio: "2026-11-20", v2Inicio: "2026-12-08", v2Fim: "2026-12-10" }, agenda, null, "2026-11-12");
+    expect(c.visitas[1]).toEqual({ periodo: { inicio: "2026-11-24", fim: "2026-11-26" }, confirmada: true });
+    expect(c.visitas[2]).toEqual({ periodo: { inicio: "2026-12-08", fim: "2026-12-10" }, confirmada: false });
+    expect(c.visitas[3]).toBeNull();
+  });
+
+  it("fim vazio ou antes do início vira um dia só", () => {
+    expect(datasDoCronograma({ v2Inicio: "2026-12-08" }, [], null, "").visitas[2]?.periodo).toEqual({ inicio: "2026-12-08", fim: "2026-12-08" });
+    expect(datasDoCronograma({ v2Inicio: "2026-12-08", v2Fim: "2026-12-01" }, [], null, "").visitas[2]?.periodo.fim).toBe("2026-12-08");
+  });
+
+  it("reunião de PE: a digitada, senão a do módulo 02, senão a data da apresentação", () => {
+    expect(datasDoCronograma({ pe: "2026-11-10" }, [], "2026-11-12T09:00", "2026-11-13").pe).toBe("2026-11-10");
+    expect(datasDoCronograma({}, [], "2026-11-12T09:00", "2026-11-13").pe).toBe("2026-11-12");
+    expect(datasDoCronograma({}, [], null, "2026-11-13").pe).toBe("2026-11-13");
+  });
+
+  it("período curto no slide", () => {
+    expect(periodoCurto({ inicio: "2026-11-24", fim: "2026-11-24" })).toBe("24/11");
+    expect(periodoCurto({ inicio: "2026-11-24", fim: "2026-11-26" })).toBe("24 a 26/11");
+    expect(periodoCurto({ inicio: "2026-11-28", fim: "2026-12-02" })).toBe("28/11 a 02/12");
+  });
+});
 
 const ids = (xs: ReturnType<typeof slidesDoProjeto>, f: (s: (typeof xs)[number]) => boolean) => xs.filter(f).map(s => s.modelo.id);
 
