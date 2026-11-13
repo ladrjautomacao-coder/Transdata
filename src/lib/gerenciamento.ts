@@ -36,13 +36,16 @@ export interface GerProject {
   atlas_pay: boolean;
   project_type: { name: string } | null;
   project_solutions: { solution: { name: string } | null }[];
+  /** Equipamentos do cadastro do projeto (AB FULL, V6 SECC…), com a quantidade. */
+  project_equipments?: { quantity: number | null; equipment_type: { name: string } | null }[];
 }
 
 const COLS =
   "id, company_name, project_code, city, state, country_code, status, sub_phase, created_at, manager_id, fleet_size, fleet_urbano, fleet_seccionado, " +
   "reserve_fleet, cnpj, atlas_pay, contract_date, contractual_deadline_days, d_zero_date, handover_date, project_segment, client_manager_name, operation_cities, " +
   "manager:team_members!projects_manager_id_fkey(full_name), executive:team_members!projects_executive_id_fkey(full_name), " +
-  "project_type:project_types(name), project_solutions(solution:solutions(name))";
+  "project_type:project_types(name), project_solutions(solution:solutions(name)), " +
+  "project_equipments(quantity, equipment_type:equipment_types(name))";
 
 export async function fetchGerProjects(): Promise<GerProject[]> {
   const { data, error } = await supabase.from("projects").select(COLS).order("company_name");
@@ -86,6 +89,18 @@ export const fetchCoordenadorImplantacao = () => nomeNaFuncao(PAPEL_COORDENADOR_
 /** Nome da Assistente de Projetos (responsável por atividades do módulo 01 no TAP). */
 export const fetchAssistenteProjetos = () => nomeNaFuncao(PAPEL_ASSISTENTE_PROJETOS);
 
+/**
+ * Coordenador de Implantação com o e-mail (o responsável técnico da Transdata na apresentação da
+ * solução). O e-mail só vem para quem pode ler os e-mails da Equipe; null se ninguém na função.
+ */
+export async function fetchCoordenadorContato(): Promise<{ nome: string; email: string | null } | null> {
+  const { data, error } = await supabase.from("team_members").select("id, full_name")
+    .eq("role", PAPEL_COORDENADOR_IMPLANTACAO).eq("active", true);
+  if (error) throw error;
+  if (data?.length !== 1) return null;
+  return { nome: data[0].full_name, email: await fetchEmailDaEquipe(data[0].id) };
+}
+
 const p2 = (n: number) => String(n).padStart(2, "0");
 /** ISO ou AAAA-MM-DD → dd/mm/aaaa */
 export const dataBr = (v: string | null | undefined) => {
@@ -114,6 +129,10 @@ export function fimDoContrato(p: Pick<GerProject, "contract_date" | "contractual
 }
 
 export const solutionsOf = (p: GerProject) => p.project_solutions.map(ps => ps.solution?.name).filter((n): n is string => !!n);
+/** Equipamentos do projeto com quantidade ("AB FULL", 120). */
+export const equipamentosOf = (p: GerProject) => (p.project_equipments ?? [])
+  .filter(e => e.equipment_type?.name && (e.quantity ?? 0) > 0)
+  .map(e => ({ nome: e.equipment_type!.name, qtd: e.quantity ?? 0 }));
 /** Soluções que dependem do sinal de celular: entra a atividade do mapa de calor das operadoras. */
 const SOLUCOES_COBERTURA = /carrier|\bits\b|gest[aã]o de frota/i;
 /** Projeto com Carrier, ITS ou Gestão de Frota. */

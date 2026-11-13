@@ -12,6 +12,8 @@
 //   --formato   longo (16:9, padrão) ou short (9:16)
 //   --segundos  duração, padrão 5
 //   --modelo    gen4.5 (padrão, ~US$0,12/s) ou gen4_turbo (só com imagem, ~US$0,05/s)
+//   --proporcao largura:altura aceita pelo modelo (ex.: 832:1104 para foto em pé); substitui --formato
+//   --nome      nome do arquivo de saída (sem extensão), no lugar da data e hora
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -48,7 +50,7 @@ if (!o.prompt) {
   process.exit(1);
 }
 
-const ratio = o.formato === 'short' ? '720:1280' : '1280:720';
+const ratio = o.proporcao || (o.formato === 'short' ? '720:1280' : '1280:720');
 const duration = Number(o.segundos || 5);
 const model = o.modelo || 'gen4.5';
 const client = new RunwayML();
@@ -70,7 +72,7 @@ try {
 
   const outDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'videos');
   fs.mkdirSync(outDir, { recursive: true });
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const stamp = o.nome || new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const saved = [];
   for (const [i, url] of (task.output || []).entries()) {
     const file = path.join(outDir, `${stamp}${i ? '-' + i : ''}.mp4`);

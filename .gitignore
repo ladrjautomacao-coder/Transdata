@@ -37,3 +37,6 @@ scripts/cobertura/.cache
 
 # Temporarios do Word/Excel enquanto o arquivo esta aberto
 ~$*
+
+# Apresentações das visitas dos GPs (PowerPoint originais, material interno): só local
+/Apresentações visitas GP/

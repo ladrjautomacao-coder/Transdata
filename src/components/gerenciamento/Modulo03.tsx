@@ -1,15 +1,16 @@
 import type { ReactNode } from "react";
-import { Building2, CalendarDays, Check, CheckCircle2, Circle, ClipboardCheck, KeyRound, Lock, MapPin, Plus, Presentation, Store, Trash2, Warehouse } from "lucide-react";
+import { Building2, CalendarDays, Check, CheckCircle2, Circle, ClipboardCheck, KeyRound, Lock, MapPin, Plus, Store, Trash2, Warehouse } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { agora, dataBr, quando, solutionsOf, type GerProject, type SituacaoAtividade } from "@/lib/gerenciamento";
+import { agora, dataBr, quando, type GerProject, type SituacaoAtividade } from "@/lib/gerenciamento";
 import {
   CAMPOS_ENCERRAMENTO, CARTOES_OPERACIONAIS, MODULO_03, TIPOS_VISITA, bloqueio03, nomeTipoVisita, situacao03, visitaCompleta, visitasOrdenadas,
   type AtividadeId03, type Modulo03Estado, type TipoVisita, type VisitaTecnica,
 } from "@/lib/modulo03";
 import { Etapa, Lembrete, Registro, Rodape } from "./Etapa";
+import { ApresentacaoSolucao } from "./apresentacao/ApresentacaoSolucao";
 
 const p2 = (n: number) => String(n).padStart(2, "0");
 /** Hoje em AAAA-MM-DD (data local). */
@@ -59,56 +60,26 @@ function Textos({ itens }: { itens: { label: string; texto: string }[] }) {
  * Módulo 03 · Atividades presenciais (in loco): o que o GP faz na visita ao cliente, da apresentação
  * da solução ao encerramento da visita técnica. O estado vem de quem chama, que o grava no banco.
  */
-export function Modulo03({ project, estado, onChange, userName, cartoesLevados }: {
+export function Modulo03({ project, estado, onChange, userName, cartoesLevados, reuniaoPe, logoCliente }: {
   project: GerProject;
   estado: Modulo03Estado;
   onChange: (update: (e: Modulo03Estado) => Modulo03Estado) => void;
   userName: string;
   /** Os cartões separados no módulo 02 ("01 Chave · 05 Senha · …"), se já foram separados. */
   cartoesLevados?: string;
+  /** Reunião de PE agendada no módulo 02 (AAAA-MM-DDThh:mm), para o cronograma da apresentação. */
+  reuniaoPe?: string | null;
+  /** Logo do cliente enviado no e-mail ao Data Center (módulo 01), para a capa da apresentação. */
+  logoCliente?: string | null;
 }) {
   const set = <K extends keyof Modulo03Estado>(k: K, patch: Partial<Modulo03Estado[K]>) =>
     onChange(e => ({ ...e, [k]: { ...e[k], ...patch } }));
   const setVisitas = (f: (v: VisitaTecnica[]) => VisitaTecnica[]) =>
     onChange(e => ({ ...e, cronograma: { ...e.cronograma, visitas: f(e.cronograma.visitas) } }));
 
-  const apresentacao = () => {
-    const a = estado.apresentacao;
-    if (a.registradoEm) {
-      return (
-        <Registro texto={`Apresentação feita em ${dataBr(a.data)} por ${a.por || userName}`} rotulo="Alterar" onDesfazer={() => set("apresentacao", { registradoEm: null })}>
-          {a.participantes.trim() && <> · com {a.participantes.trim()}</>}
-        </Registro>
-      );
-    }
-    const solucoes = solutionsOf(project);
-    const data = a.data || hoje();
-    return (
-      <div className="space-y-3">
-        {solucoes.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
-            <Presentation className="h-4 w-4 shrink-0" aria-hidden />Solução contratada:
-            {solucoes.map(s => <span key={s} className="rounded-full border border-border/70 bg-background px-2 py-0.5 text-[11px] font-medium text-foreground">{s}</span>)}
-          </div>
-        )}
-        <div className="grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
-          <div>
-            <Label className="text-xs" htmlFor="m3-apr-data">Data da apresentação</Label>
-            <Input id="m3-apr-data" type="date" className="mt-1.5 h-9" value={data} onChange={ev => set("apresentacao", { data: ev.target.value })} />
-          </div>
-          <div>
-            <Label className="text-xs" htmlFor="m3-apr-part">Participantes do cliente (opcional)</Label>
-            <Input id="m3-apr-part" className="mt-1.5 h-9" placeholder="Ex.: Carla (gerente de operações), equipe da garagem" value={a.participantes} onChange={ev => set("apresentacao", { participantes: ev.target.value })} />
-          </div>
-        </div>
-        <Rodape falta={[]} dica="Apresente os principais módulos, as funcionalidades e os fluxos operacionais da solução contratada.">
-          <Button className="h-9" onClick={() => set("apresentacao", { data, participantes: a.participantes.trim(), registradoEm: agora(), por: userName })}>
-            <Check className="mr-1.5 h-4 w-4" />Registrar apresentação
-          </Button>
-        </Rodape>
-      </div>
-    );
-  };
+  const apresentacao = () => (
+    <ApresentacaoSolucao project={project} estado={estado} reuniaoPe={reuniaoPe ?? null} logoModulo01={logoCliente ?? null} userName={userName} onChange={onChange} />
+  );
 
   const cartoes = () => {
     const c = estado.cartoes;

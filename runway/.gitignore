@@ -2,3 +2,5 @@ node_modules/
 videos/
 .env
 chave-runway.txt
+# modelos de apresentação (PowerPoint e fotos dos produtos): material interno, fica só na máquina
+apresentacoes/

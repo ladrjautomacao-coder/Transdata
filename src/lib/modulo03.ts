@@ -2,6 +2,10 @@
 // apresentação da solução até o encerramento da visita técnica, com pendências e próximos passos.
 import { supabase } from "@/integrations/supabase/client";
 import type { Atividade, SituacaoAtividade } from "@/lib/gerenciamento";
+import type { LogoCliente } from "@/lib/logoCliente";
+
+/** O que o GP completa para os slides: telefone do GP, cliente no IGRE e câmeras da biometria. */
+export type CampoApresentacao = "gpTelefone" | "igre" | "cameras";
 
 export type AtividadeId03 = "apresentacao" | "cartoes" | "cronograma" | "visitas" | "regras" | "encerramento";
 
@@ -51,8 +55,17 @@ export type CampoEncerramento = (typeof CAMPOS_ENCERRAMENTO)[number]["k"];
 
 /** Estado do módulo 03 de um projeto (gravado inteiro em gerenciamento_modulo03.estado). */
 export interface Modulo03Estado {
-  /** `data`: AAAA-MM-DD da apresentação; `participantes`: quem assistiu, do lado do cliente. */
-  apresentacao: { data: string; participantes: string; registradoEm: string | null; por: string };
+  /**
+   * `data`: AAAA-MM-DD da apresentação; `participantes`: quem assistiu, do lado do cliente;
+   * `slides`: o que o GP ligou ou desligou no roteiro (id do slide → mostrar), o resto segue o modelo;
+   * `campos`: o que o GP completou para os slides (sem a chave: vale o sugerido); `logo`: logo do
+   * cliente enviado aqui (sem ele, vale o do e-mail ao Data Center, no módulo 01).
+   */
+  apresentacao: {
+    data: string; participantes: string; slides: Record<string, boolean>;
+    campos: Partial<Record<CampoApresentacao, string>>; logo: LogoCliente | null;
+    registradoEm: string | null; por: string;
+  };
   /** Quando cada cartão operacional foi gravado e configurado. */
   cartoes: Record<CartaoOperacionalId, string | null> & { por: string };
   /** As visitas planejadas; `registradoEm`: cronograma definido (libera as visitas). */
@@ -64,7 +77,7 @@ export interface Modulo03Estado {
 }
 
 export const modulo03Vazio = (): Modulo03Estado => ({
-  apresentacao: { data: "", participantes: "", registradoEm: null, por: "" },
+  apresentacao: { data: "", participantes: "", slides: {}, campos: {}, logo: null, registradoEm: null, por: "" },
   cartoes: { chave: null, senha: null, sam: null, por: "" },
   cronograma: { visitas: [], registradoEm: null, por: "" },
   regras: { regras: "", particularidades: "", necessidades: "", registradoEm: null, por: "" },

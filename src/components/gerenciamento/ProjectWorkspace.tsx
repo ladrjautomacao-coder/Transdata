@@ -362,7 +362,9 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
             <DestaqueModulo numero={MODULO_03.numero} nome={MODULO_03.nome} resumo={MODULO_03.resumo} proxima={and03.proxima?.titulo} feitas={and03.feitas} total={and03.total}>
               <ReuniaoPe reuniaoPe={reuniaoPe} />
             </DestaqueModulo>
-            <Modulo03 project={project} estado={m3.estado} onChange={u => m3.setEstado(u)} userName={userName} cartoesLevados={cartoesLevados} />
+            <Modulo03 project={project} estado={m3.estado} onChange={u => m3.setEstado(u)} userName={userName} cartoesLevados={cartoesLevados}
+              reuniaoPe={m2.estado.contato.registradoEm ? m2.estado.contato.reuniaoPe || null : null}
+              logoCliente={m1.estado.datacenter.email?.logo?.url ?? null} />
           </div>
         )}
       </div>
