@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef } from "react";
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, Clock3, Flag, Gauge, Layers, Lock, MapPin, Minus, UserRound, X, type LucideIcon } from "lucide-react";
-import { RESPONSAVEL_LABEL, type Atividade, type Responsavel, type SituacaoAtividade } from "@/lib/gerenciamento";
+import { RESPONSAVEL_LABEL, type Responsavel, type SituacaoAtividade } from "@/lib/gerenciamento";
 import { cn } from "@/lib/utils";
+import { avisosDoProjeto, contaModulo, proximaDe, type AvisoProjeto, type ModuloProgresso } from "./progresso";
 
 /**
  * Como cada situação aparece: a bolinha na trilha, o ponto no número do cabeçalho e o anel quando
@@ -16,28 +17,8 @@ const SIT: Record<SituacaoAtividade, { rotulo: string; bolinha: string; ponto: s
 };
 const PROXIMA = "bg-gradient-to-br from-marca-laranja to-marca-rosa text-white shadow-[0_0_0_5px_hsl(var(--marca-laranja)/0.18)]";
 
-/** Um módulo no progresso do projeto, com as atividades na ordem atual e a situação de cada uma. */
-export interface ModuloProgresso {
-  numero: string;
-  nome: string;
-  atividades: { a: Atividade<string>; sit: SituacaoAtividade }[];
-  /** Como chamar as atividades bloqueadas deste módulo (o padrão é "Esperando outra etapa"). */
-  rotuloBloqueado?: string;
-  /** No rodapé do módulo (ex.: o documento TAP no 01, a reunião de PE no 02). */
-  extra?: ReactNode;
-}
-
-/** Um ponto de atenção do projeto, na coluna ao lado dos módulos. */
-export interface AvisoProjeto {
-  icone: LucideIcon;
-  titulo: string;
-  texto: string;
-  /** "ambar" pede ação; "neutro" só informa. */
-  tom: "ambar" | "neutro";
-  /** Tocar no aviso abre este módulo (e a atividade, se houver). */
-  modulo?: string;
-  atividade?: string;
-}
+// tipos e contas do progresso ficam em progresso.ts (arquivo sem componentes)
+export type { AvisoProjeto, ModuloProgresso } from "./progresso";
 
 /** Feitas e aplicáveis de todos os módulos juntos: as que não se aplicam ficam fora da conta. */
 export function contaProjeto(modulos: ModuloProgresso[]) {
@@ -46,14 +27,6 @@ export function contaProjeto(modulos: ModuloProgresso[]) {
   const total = aplicaveis.length;
   return { feitas, total, pct: total ? Math.round((feitas / total) * 100) : 100 };
 }
-/** Feitas e aplicáveis de um módulo. */
-function contaModulo(m: ModuloProgresso) {
-  const aplicaveis = m.atividades.filter(x => x.sit !== "naoaplica");
-  const feitas = aplicaveis.filter(x => x.sit === "feito").length;
-  return { feitas, total: aplicaveis.length, completo: aplicaveis.length > 0 && feitas === aplicaveis.length };
-}
-/** A próxima atividade do módulo: a primeira que se aplica e ainda não está feita. */
-const proximaDe = (m: ModuloProgresso) => m.atividades.find(x => x.sit !== "naoaplica" && x.sit !== "feito");
 /** Quantas atividades há em cada situação (Feitas sempre aparece). */
 function contagemDe(modulos: ModuloProgresso[]) {
   const todas = modulos.flatMap(m => m.atividades);
@@ -309,12 +282,7 @@ export function ProgressoProjeto({ modulos, onAbrir, destaque, onLimparDestaque,
   const proximos = modulos.map(m => ({ m, x: proximaDe(m) })).filter(p => p.x);
   const qtdDestaque = destaque ? modulos.flatMap(m => m.atividades).filter(x => x.sit === destaque).length : 0;
   // atividades esperando retorno de alguém também pedem atenção
-  const todosAvisos: AvisoProjeto[] = [
-    ...avisos,
-    ...modulos.flatMap(m => m.atividades.filter(x => x.sit === "aguardando").map(x => ({
-      icone: Clock3, titulo: x.a.titulo, texto: `Aguardando retorno · módulo ${m.numero}`, tom: "ambar" as const, modulo: m.numero, atividade: x.a.id,
-    }))),
-  ];
+  const todosAvisos = avisosDoProjeto(avisos, modulos);
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">

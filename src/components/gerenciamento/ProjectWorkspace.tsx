@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowLeft, ArrowUpDown, CalendarX, CheckCircle2, FileText, Loader2, Lock, LockOpen, RefreshCw, Rocket, RotateCcw } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowUpDown, CalendarX, CheckCircle2, ChevronRight, FileText, Loader2, Lock, LockOpen, RefreshCw, Rocket, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,6 +22,8 @@ import { Modulo04, ResumoModulo04 } from "./Modulo04";
 import { cartoesDoTermo, qtdTermo } from "@/lib/termoCartoes";
 import { montarTap, type DadosTap } from "@/lib/tap";
 import { CabecalhoProjeto, NavModulos, NumeroModulo, ProgressoProjeto, destaqueValido, type AvisoProjeto, type ModuloProgresso } from "./ProgressoProjeto";
+import { avisosDoProjeto } from "./progresso";
+import { InicioProjeto } from "./InicioProjeto";
 // a cidade da entrada do portal (vídeo da Runway), parada, ao fundo do cabeçalho do projeto
 import imagemCidade from "@/assets/entrada/entrada-login.jpg";
 import { TapDialog } from "./TapDialog";
@@ -135,14 +137,17 @@ function andamento<Id extends string>(lista: { a: Atividade<Id>; sit: SituacaoAt
 }
 
 /**
- * O projeto escolhido: cabeçalho, módulos ao lado e o progresso do projeto (um medidor com todos os
- * módulos); com ?modulo=01, 02 ou 03, as atividades daquele módulo.
+ * O projeto escolhido: o cabeçalho e, abaixo, o início do projeto com os dois quadrantes (Módulos de
+ * gerenciamento e Gestão à Vista). Com ?area=modulos, o progresso do projeto (todos os módulos); com
+ * ?modulo=01 a 04, as atividades daquele módulo.
  */
 export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => void }) {
   const { profile, isSuperAdmin, managerId } = useAuth();
   const [params, setParams] = useSearchParams();
   const qual = params.get("modulo");
   const modulo: ModuloNum | null = MODULOS.find(m => m === qual) ?? null;
+  // fora dos módulos (sem ?area=modulos nem ?modulo), o início do projeto com os quadrantes
+  const emModulos = modulo !== null || params.get("area") === "modulos";
   const [project, setProject] = useState<GerProject | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   // cada módulo é gravado sozinho no banco a cada mudança
@@ -184,9 +189,9 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
       .catch(err => { setError(errorMessage(err)); setProject(null); });
   }, [id, carregar1, descarregar1, carregar2, descarregar2, carregar3, descarregar3, carregar4, descarregar4]);
   useEffect(load, [load]);
-  // ao abrir o projeto, o progresso do projeto; as atividades de um módulo só abrem quando o GP pede.
-  // foco: até onde rolar depois de abrir (a atividade ou o início do módulo), um objeto novo a cada pedido
-  const [foco, setFoco] = useState<{ atividade: string | null } | null>(null);
+  // ao abrir o projeto, o início com os quadrantes; os módulos e as atividades só abrem quando o GP pede.
+  // foco: até onde rolar depois de abrir (o id da atividade, do início do módulo ou do topo), um objeto novo a cada pedido
+  const [foco, setFoco] = useState<{ alvo: string } | null>(null);
   // TAP: foto do módulo no clique em "Gerar documento TAP" (o diálogo gera o PDF)
   const [tap, setTap] = useState<DadosTap | null>(null);
   // número do cabeçalho tocado: acende nas trilhas as atividades daquela situação
@@ -194,19 +199,28 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   useEffect(() => {
     if (!foco) return;
     const t = setTimeout(() => {
-      const alvo = foco.atividade ? document.getElementById(`ger-atv-${foco.atividade}`) : document.getElementById("ger-mod-titulo");
-      alvo?.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.getElementById(foco.alvo)?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 60);
     return () => clearTimeout(t);
   }, [foco]);
-  /** Abre as atividades do módulo (com a atividade, rola até ela); sem módulo, volta ao progresso do projeto. */
+  const mudarParams = (mudar: (n: URLSearchParams) => void) => {
+    const n = new URLSearchParams(params);
+    mudar(n);
+    if (n.toString() !== params.toString()) setParams(n);
+  };
+  /** Abre as atividades do módulo (com a atividade, rola até ela); sem módulo, o progresso do projeto. */
   const irPara = (m: ModuloNum | null, atividade?: string) => {
-    if (m !== modulo) {
-      const n = new URLSearchParams(params);
-      if (m) n.set("modulo", m); else n.delete("modulo");
-      setParams(n);
-    }
-    setFoco(m ? { atividade: atividade ?? null } : null);
+    mudarParams(n => {
+      if (m) { n.set("modulo", m); n.delete("area"); } else { n.delete("modulo"); n.set("area", "modulos"); }
+    });
+    setFoco(m ? { alvo: atividade ? `ger-atv-${atividade}` : "ger-mod-titulo" } : null);
+  };
+  /** Do início do projeto para o progresso dos módulos, ou de volta ao início (os dois a partir do topo). */
+  const abrirModulos = () => { irPara(null); setFoco({ alvo: "ger-topo" }); };
+  const irInicio = () => {
+    mudarParams(n => { n.delete("modulo"); n.delete("area"); });
+    setEscolhido(null);
+    setFoco({ alvo: "ger-topo" });
   };
   // sem esqueleto: a tela e o que o GP preencheu continuam onde estão
   const reler = () => fetchGerProject(id).then(p => { if (p) setProject(p); });
@@ -306,14 +320,15 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
     })),
   ];
   const destaque = destaqueValido(modulos, escolhido);
-  /** Número do cabeçalho tocado: destaca (ou tira o destaque) e, com um módulo aberto, volta ao progresso. */
+  /** Número do cabeçalho tocado: destaca (ou tira o destaque) no progresso dos módulos, abrindo-o se preciso. */
   const destacar = (s: SituacaoAtividade) => {
-    setEscolhido(atual => (atual === s && modulo === null ? null : s));
-    if (modulo !== null) irPara(null);
+    setEscolhido(atual => (atual === s && modulo === null && emModulos ? null : s));
+    if (modulo !== null || !emModulos) irPara(null);
   };
 
   return (
-    <div className="flex flex-col gap-5">
+    // scroll-mt maior que a faixa fixa do portal: ao voltar ao topo, o cabeçalho do projeto não fica embaixo dela
+    <div id="ger-topo" className="flex scroll-mt-24 flex-col gap-5">
       <CabecalhoProjeto
         nome={project.company_name}
         fase={phase ?? statusNome}
@@ -323,19 +338,34 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
         solucoes={solucoes}
         imagem={imagemCidade}
         modulos={modulos}
-        destaque={modulo === null ? destaque : null}
+        destaque={modulo === null && emModulos ? destaque : null}
         onDestacar={destacar}
         onBack={onBack}
       />
 
-      {/* abas inteiras na linha; o "Salvo no banco" desce quando não couber ao lado */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="min-w-0 max-w-full"><NavModulos modulos={modulos} ativo={modulo} onIr={m => irPara(m as ModuloNum | null)} /></div>
-        <div className="ml-auto"><SituacaoGravacao g={juntarGravacoes([m1.gravacao, m2.gravacao, m3.gravacao, m4.gravacao])} onTentar={() => { m1.salvarAgora(); m2.salvarAgora(); m3.salvarAgora(); m4.salvarAgora(); }} /></div>
-      </div>
+      {emModulos && (
+        <div className="flex flex-col gap-3">
+          {/* caminho de volta ao início do projeto; o "Salvo no banco" desce quando não couber ao lado */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <nav aria-label="Caminho" className="flex flex-wrap items-center gap-1.5 text-[13px]">
+              <button type="button" onClick={irInicio}
+                className="inline-flex items-center gap-1 rounded-md font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <ArrowLeft className="h-3.5 w-3.5" aria-hidden />Início do projeto
+              </button>
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+              <span aria-current="page" className="font-semibold">Módulos de gerenciamento</span>
+            </nav>
+            <div className="ml-auto"><SituacaoGravacao g={juntarGravacoes([m1.gravacao, m2.gravacao, m3.gravacao, m4.gravacao])} onTentar={() => { m1.salvarAgora(); m2.salvarAgora(); m3.salvarAgora(); m4.salvarAgora(); }} /></div>
+          </div>
+          <div className="min-w-0 max-w-full"><NavModulos modulos={modulos} ativo={modulo} onIr={m => irPara(m as ModuloNum | null)} /></div>
+        </div>
+      )}
 
       <div className="min-w-0">
-        {modulo === null ? (
+        {!emModulos ? (
+          <InicioProjeto modulos={modulos} atencao={avisosDoProjeto(avisos, modulos).length}
+            onAbrirModulos={abrirModulos} onAbrirModulo={m => irPara(m as ModuloNum)} />
+        ) : modulo === null ? (
           <ProgressoProjeto modulos={modulos} onAbrir={(m, atividade) => irPara(m as ModuloNum, atividade)}
             destaque={destaque} onLimparDestaque={() => setEscolhido(null)} avisos={avisos} nomeGp={project.manager?.full_name ?? null} />
         ) : modulo === "01" ? (
