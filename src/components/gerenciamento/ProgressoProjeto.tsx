@@ -173,7 +173,8 @@ export function NavModulos({ modulos, ativo, onIr }: { modulos: ModuloProgresso[
     on ? "border-primary bg-primary text-primary-foreground shadow-sm" : "border-border/70 bg-card text-foreground hover:border-primary/40 hover:bg-primary/[0.04]",
   );
   return (
-    <nav aria-label="Progresso e módulos do projeto" className="-mx-1 flex max-w-full gap-1.5 overflow-x-auto px-1 py-0.5">
+    // no celular as abas rolam para o lado; do tablet para cima, quebram linha (nenhum módulo fica escondido)
+    <nav aria-label="Progresso e módulos do projeto" className="-mx-1 flex max-w-full gap-1.5 overflow-x-auto px-1 py-0.5 sm:flex-wrap sm:overflow-visible">
       <button type="button" aria-current={ativo === null ? "page" : undefined} onClick={() => onIr(null)} className={aba(ativo === null)}>
         <Gauge className="h-4 w-4" aria-hidden />Progresso
         <b className={cn("font-display text-[15px] tabular-nums", ativo === null ? "text-primary-foreground" : "text-primary")}>{pct}%</b>
@@ -281,13 +282,13 @@ function CartaoTrilha({ m, destaque, onAbrir }: {
   );
 }
 
-/** Quem faz a atividade: a sigla num círculo da marca e o nome (o do GP, quando é com ele). */
-function QuemFaz({ r, nomeGp }: { r: Responsavel; nomeGp: string | null }) {
-  const sigla = r === "gp" ? "GP" : r === "assistente" ? "AP" : "A";
+/** Quem faz a atividade: a sigla num círculo da marca e o nome (o do GP, quando é com ele; a área, quando é outra). */
+function QuemFaz({ r, nomeGp, executante }: { r: Responsavel; nomeGp: string | null; executante?: string }) {
+  const sigla = r === "gp" ? "GP" : r === "assistente" ? "AP" : r === "area" ? (executante ?? "").replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase() || "Á" : "A";
   return (
     <span className="mt-0.5 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
       <span aria-hidden className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-gradient-to-br from-marca-laranja to-marca-rosa text-[9px] font-bold text-white">{sigla}</span>
-      {r === "gp" && nomeGp ? `GP · ${nomeGp.split(" ").filter(Boolean).slice(0, 2).join(" ")}` : RESPONSAVEL_LABEL[r]}
+      {r === "gp" && nomeGp ? `GP · ${nomeGp.split(" ").filter(Boolean).slice(0, 2).join(" ")}` : r === "area" && executante ? `Executa: ${executante} · GP acompanha` : RESPONSAVEL_LABEL[r]}
     </span>
   );
 }
@@ -338,7 +339,7 @@ export function ProgressoProjeto({ modulos, onAbrir, destaque, onLimparDestaque,
                     <NumeroModulo numero={m.numero} tamanho="sm" />
                     <span className="min-w-0 flex-1">
                       <b className="block text-sm font-semibold leading-snug">{x!.a.titulo}</b>
-                      <QuemFaz r={x!.a.responsavel} nomeGp={nomeGp} />
+                      <QuemFaz r={x!.a.responsavel} nomeGp={nomeGp} executante={x!.a.executante} />
                     </span>
                     <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition-transform group-hover:translate-x-0.5">
                       <ArrowRight className="h-4 w-4" />

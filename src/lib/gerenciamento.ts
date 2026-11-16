@@ -141,8 +141,9 @@ export const precisaCobertura = (p: GerProject) => solutionsOf(p).some(n => SOLU
 export const temItsGestaoFrota = (p: GerProject) => solutionsOf(p).some(n => /\bits\b|gest[aã]o de frota/i.test(n));
 
 /* ─── Módulo 01 ─── */
-export type Responsavel = "portal" | "gp" | "assistente";
-export const RESPONSAVEL_LABEL: Record<Responsavel, string> = { portal: "Automático", gp: "GP", assistente: "Assistente de Projetos" };
+/** Quem executa: o portal, o GP, a Assistente de Projetos ou outra área (no módulo 04, AP e AT). */
+export type Responsavel = "portal" | "gp" | "assistente" | "area";
+export const RESPONSAVEL_LABEL: Record<Responsavel, string> = { portal: "Automático", gp: "GP", assistente: "Assistente de Projetos", area: "Outra área" };
 
 export type AtividadeId = "portal" | "pedidos" | "totvs" | "drive" | "codigobd" | "codigoits" | "checklist" | "datacenter" | "handover" | "carrier";
 
@@ -152,6 +153,8 @@ export interface Atividade<Id extends string = AtividadeId> {
   titulo: string;
   descricao: string;
   responsavel: Responsavel;
+  /** Nome de quem executa, quando é outra área (ex.: "AP"); o GP só acompanha. */
+  executante?: string;
   /**
    * Campo de registro da tarefa simples (o que o GP anota ao concluir). `url`: é um link, com
    * botão para abrir em outra aba; `abrir`: texto desse link ("Abrir pasta").

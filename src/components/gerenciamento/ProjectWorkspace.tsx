@@ -10,11 +10,15 @@ import { formatLocation } from "@/lib/location";
 import { subPhasesByStatus } from "@/pages/ProjectManagement";
 import { errorMessage } from "@/lib/implantationScheduling";
 import {
-  MODULO_01, ORDEM_PADRAO, dataHoraBr, fetchAssistenteProjetos, fetchCoordenadorImplantacao, fetchGerProject, fetchModulo01, modulo01Vazio, salvarModulo01, situacao, solutionsOf,
+  MODULO_01, ORDEM_PADRAO, dataHoraBr, fetchAssistenteProjetos, linkExterno, fetchCoordenadorImplantacao, fetchGerProject, fetchModulo01, modulo01Vazio, salvarModulo01, situacao, solutionsOf,
   type Atividade, type AtividadeId, type GerProject, type Modulo01Estado, type SituacaoAtividade,
 } from "@/lib/gerenciamento";
 import { MODULO_02, fetchModulo02, modulo02Vazio, salvarModulo02, situacao02, type Modulo02Estado } from "@/lib/modulo02";
 import { MODULO_03, fetchModulo03, modulo03Vazio, salvarModulo03, situacao03, type Modulo03Estado } from "@/lib/modulo03";
+import {
+  ETAPAS_04, MODULO_04, diasAtraso, fetchModulo04, modulo04Vazio, salvarModulo04, situacao04, tituloEtapa, type Modulo04Estado,
+} from "@/lib/modulo04";
+import { Modulo04, ResumoModulo04 } from "./Modulo04";
 import { cartoesDoTermo, qtdTermo } from "@/lib/termoCartoes";
 import { montarTap, type DadosTap } from "@/lib/tap";
 import { CabecalhoProjeto, NavModulos, NumeroModulo, ProgressoProjeto, destaqueValido, type AvisoProjeto, type ModuloProgresso } from "./ProgressoProjeto";
@@ -89,7 +93,7 @@ function SituacaoGravacao({ g, onTentar }: { g: Gravacao; onTentar: () => void }
  * Módulos prontos, na ordem do projeto. Módulo novo: entra aqui, na lista do progresso do projeto
  * (`modulos`, abaixo) e no conteúdo do módulo aberto.
  */
-const MODULOS = ["01", "02", "03"] as const;
+const MODULOS = ["01", "02", "03", "04"] as const;
 type ModuloNum = (typeof MODULOS)[number];
 
 /** Destaque do módulo aberto: número, nome, próximo passo (no laranja do logo) e o anel de progresso. */
@@ -145,6 +149,7 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   const m1 = useModuloGravado<Modulo01Estado>(e => salvarModulo01(id, e), modulo01Vazio);
   const m2 = useModuloGravado<Modulo02Estado>(e => salvarModulo02(id, e), modulo02Vazio);
   const m3 = useModuloGravado<Modulo03Estado>(e => salvarModulo03(id, e), modulo03Vazio);
+  const m4 = useModuloGravado<Modulo04Estado>(e => salvarModulo04(id, e), modulo04Vazio);
   const estado = m1.estado;
 
   const [ordem, setOrdem] = useState<AtividadeId[]>(lerOrdem);
@@ -163,19 +168,21 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   const { carregar: carregar1, descarregar: descarregar1 } = m1;
   const { carregar: carregar2, descarregar: descarregar2 } = m2;
   const { carregar: carregar3, descarregar: descarregar3 } = m3;
+  const { carregar: carregar4, descarregar: descarregar4 } = m4;
   const load = useCallback(() => {
-    setProject(undefined); setError(null); descarregar1(); descarregar2(); descarregar3();
+    setProject(undefined); setError(null); descarregar1(); descarregar2(); descarregar3(); descarregar4();
     // o projeto e o que já foi marcado nos módulos chegam juntos: sem os módulos, a tela não abre
     // (evita gravar um módulo vazio por cima do que está no banco)
-    Promise.all([fetchGerProject(id), fetchModulo01(id), fetchModulo02(id), fetchModulo03(id)])
-      .then(([p, a, b, c]) => {
+    Promise.all([fetchGerProject(id), fetchModulo01(id), fetchModulo02(id), fetchModulo03(id), fetchModulo04(id)])
+      .then(([p, a, b, c, d]) => {
         carregar1(a.estado, a.salvoEm);
         carregar2(b.estado, b.salvoEm);
         carregar3(c.estado, c.salvoEm);
+        carregar4(d.estado, d.salvoEm);
         setProject(p);
       })
       .catch(err => { setError(errorMessage(err)); setProject(null); });
-  }, [id, carregar1, descarregar1, carregar2, descarregar2, carregar3, descarregar3]);
+  }, [id, carregar1, descarregar1, carregar2, descarregar2, carregar3, descarregar3, carregar4, descarregar4]);
   useEffect(load, [load]);
   // ao abrir o projeto, o progresso do projeto; as atividades de um módulo só abrem quando o GP pede.
   // foco: até onde rolar depois de abrir (a atividade ou o início do módulo), um objeto novo a cada pedido
@@ -241,6 +248,8 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   const and02 = andamento(lista02);
   const lista03 = MODULO_03.atividades.map(a => ({ a, sit: situacao03(a.id, m3.estado) }));
   const and03 = andamento(lista03);
+  const lista04 = MODULO_04.atividades.map(a => ({ a, sit: situacao04(a.id, m4.estado) }));
+  const and04 = andamento(lista04);
   const phase = project.sub_phase ? subPhasesByStatus[project.status as keyof typeof subPhasesByStatus]?.find(s => s.id === project.sub_phase)?.label : null;
   const solucoes = solutionsOf(project);
   const statusNome = statusLabels[project.status as keyof typeof statusLabels] ?? project.status;
@@ -278,6 +287,10 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
     },
     { numero: "02", nome: MODULO_02.nome, atividades: lista02, extra: <ReuniaoPe reuniaoPe={reuniaoPe} /> },
     { numero: "03", nome: MODULO_03.nome, atividades: lista03, rotuloBloqueado: "Esperando outra atividade" },
+    {
+      numero: "04", nome: MODULO_04.nome, atividades: lista04, rotuloBloqueado: "Aguardando etapa anterior",
+      extra: <ResumoModulo04 estado={m4.estado} gp={project.manager?.full_name ?? null} />,
+    },
   ];
   // os cartões separados no módulo 02, para a gravação no módulo 03 ("01 Chave · 05 Senha · …")
   const cartoesLevados = m2.estado.cartoes.registradoEm
@@ -287,6 +300,10 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   const avisos: AvisoProjeto[] = [
     ...(!reuniaoPe ? [{ icone: CalendarX, titulo: "Reunião de PE sem data", texto: "Agende com o cliente no módulo 02.", tom: "ambar" as const, modulo: "02", atividade: "contato" }] : []),
     ...(and01.proxima ? [{ icone: Lock, titulo: "TAP bloqueado", texto: "Libera quando o módulo 01 chegar a 100%.", tom: "neutro" as const, modulo: "01" }] : []),
+    // etapas do módulo 04 com o prazo vencido
+    ...ETAPAS_04.map(e => ({ e, d: diasAtraso(e, m4.estado) })).filter(x => x.d > 0).map(x => ({
+      icone: CalendarX, titulo: `${tituloEtapa(x.e)}: atrasada`, texto: `${x.d} ${x.d === 1 ? "dia" : "dias"} de atraso · módulo 04`, tom: "ambar" as const, modulo: "04", atividade: x.e,
+    })),
   ];
   const destaque = destaqueValido(modulos, escolhido);
   /** Número do cabeçalho tocado: destaca (ou tira o destaque) e, com um módulo aberto, volta ao progresso. */
@@ -314,7 +331,7 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
       {/* abas inteiras na linha; o "Salvo no banco" desce quando não couber ao lado */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="min-w-0 max-w-full"><NavModulos modulos={modulos} ativo={modulo} onIr={m => irPara(m as ModuloNum | null)} /></div>
-        <div className="ml-auto"><SituacaoGravacao g={juntarGravacoes([m1.gravacao, m2.gravacao, m3.gravacao])} onTentar={() => { m1.salvarAgora(); m2.salvarAgora(); m3.salvarAgora(); }} /></div>
+        <div className="ml-auto"><SituacaoGravacao g={juntarGravacoes([m1.gravacao, m2.gravacao, m3.gravacao, m4.gravacao])} onTentar={() => { m1.salvarAgora(); m2.salvarAgora(); m3.salvarAgora(); m4.salvarAgora(); }} /></div>
       </div>
 
       <div className="min-w-0">
@@ -356,6 +373,12 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
               <ReuniaoPe reuniaoPe={reuniaoPe} />
             </DestaqueModulo>
             <Modulo02 project={project} estado={m2.estado} onChange={u => m2.setEstado(u)} userName={userName} emailCliente={estado.carrier.para} />
+          </div>
+        ) : modulo === "04" ? (
+          <div className="flex min-w-0 flex-col gap-4">
+            <DestaqueModulo numero={MODULO_04.numero} nome={MODULO_04.nome} resumo={MODULO_04.resumo} proxima={and04.proxima?.titulo} feitas={and04.feitas} total={and04.total} />
+            <Modulo04 project={project} estado={m4.estado} onChange={u => m4.setEstado(u)} userName={userName}
+              linkPedidos={linkExterno(m1.estado.feitos.pedidos?.valor)} />
           </div>
         ) : (
           <div className="flex min-w-0 flex-col gap-4">
