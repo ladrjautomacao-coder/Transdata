@@ -232,7 +232,8 @@ export default function ProjectManagement() {
     }
   }, [projectById]);
 
-  const columns = Constants.public.Enums.project_status;
+  // ordem das colunas no quadro (só a exibição; os status no banco não mudam): Implementado por último
+  const columns: ProjectStatus[] = [...Constants.public.Enums.project_status.filter(s => s !== "encerrado"), "encerrado"];
 
   const grouped = useMemo(() => {
     const map: Record<ProjectStatus, ProjectRow[]> = {
@@ -424,8 +425,8 @@ export default function ProjectManagement() {
                     childSubPhase="cancelado"
                     projectsById={projectById}
                   />
-                  {/* cards filhos logo depois de Implementado */}
-                  {status === "encerrado" && (
+                  {/* cards filhos logo depois de Implantação */}
+                  {status === "implantacao" && (
                     <PendencyColumn items={childCards.open} projects={projectById} canEditProject={canEditProject} onAction={onPendencyAction} />
                   )}
                 </Fragment>
