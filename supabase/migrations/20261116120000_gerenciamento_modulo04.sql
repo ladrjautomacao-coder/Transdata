@@ -36,7 +36,11 @@ CREATE TRIGGER trg_gerenciamento_modulo04_before_write
   BEFORE INSERT OR UPDATE ON public.gerenciamento_modulo04
   FOR EACH ROW EXECUTE FUNCTION public.gerenciamento_modulo04_before_write();
 
--- sem DELETE para quem usa o portal: o histórico não some junto com o registro
+-- sem DELETE para quem usa o portal: o histórico não some junto com o registro. As permissões
+-- padrão do schema dão tudo a anon e authenticated em toda tabela nova; aqui ficam só as que o
+-- portal usa (ler e gravar com upsert) e nada para quem não está logado.
+REVOKE ALL ON public.gerenciamento_modulo04 FROM anon;
+REVOKE DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.gerenciamento_modulo04 FROM authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.gerenciamento_modulo04 TO authenticated;
 GRANT ALL ON public.gerenciamento_modulo04 TO service_role;
 ALTER TABLE public.gerenciamento_modulo04 ENABLE ROW LEVEL SECURITY;
