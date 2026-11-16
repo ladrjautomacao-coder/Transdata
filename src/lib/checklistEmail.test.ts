@@ -4,7 +4,7 @@ import { assuntoChecklist, emailHtmlChecklist, emailTextoChecklist, itensCheckli
 
 const projeto = {
   company_name: "Empresa Teste Ltda", project_code: "TUBSCASUPG0002-EMPRESATESTELTDA", city: "TUBARÃO", state: "SC",
-  project_type: { name: "Alocação de equipamentos (SIGO)" }, executive: { full_name: "Romano Garcia" }, manager: { full_name: "Luiz Alves dos Reis Junior" },
+  project_type: { name: "Locação de equipamentos (SIGO)" }, executive: { full_name: "Romano Garcia" }, manager: { full_name: "Luiz Alves dos Reis Junior" },
 } as unknown as GerProject;
 
 const atendido = (): Modulo01Estado => {

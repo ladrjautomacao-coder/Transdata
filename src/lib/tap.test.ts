@@ -8,7 +8,7 @@ const projeto = (extra: Partial<GerProject> = {}) => ({
   manager: { full_name: "Luiz Alves" }, executive: { full_name: "Romano Garcia" }, fleet_size: 20, fleet_urbano: 14, fleet_seccionado: 6,
   reserve_fleet: 2, contract_date: "2026-09-15", contractual_deadline_days: 365, d_zero_date: "2026-10-20", handover_date: null,
   project_segment: null, cnpj: "11.111.111/1111-11", client_manager_name: "Carla Souza", atlas_pay: false,
-  project_type: { name: "Alocação de equipamentos (SIGO)" }, project_solutions: [{ solution: { name: "Bilhetagem" } }],
+  project_type: { name: "Locação de equipamentos (SIGO)" }, project_solutions: [{ solution: { name: "Bilhetagem" } }],
   ...extra,
 }) as GerProject;
 
