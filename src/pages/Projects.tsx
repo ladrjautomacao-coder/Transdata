@@ -5,7 +5,6 @@ import { ArrowRight, CalendarRange, Kanban, List, ListChecks, Pause, Play, Plus,
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenantBranding } from "@/contexts/TenantBrandingContext";
 import { supabase } from "@/integrations/supabase/client";
-import { statusLabels } from "@/lib/statusLabels";
 import { cn } from "@/lib/utils";
 // vídeos de ambiente gerados na Runway (ver runway/LEIA-ME.md); o .jpg é o primeiro quadro
 import videoHero from "@/assets/projetos/hub-hero.mp4";
@@ -18,15 +17,6 @@ import videoLista from "@/assets/projetos/hub-lista.mp4";
 import posterLista from "@/assets/projetos/hub-lista.jpg";
 import videoGerenciamento from "@/assets/projetos/hub-gerenciamento.mp4";
 import posterGerenciamento from "@/assets/projetos/hub-gerenciamento.jpg";
-
-/** As fases do Kanban, na ordem do quadro, com a cor do ponto de cada uma. */
-const FASES = [
-  { id: "comercial", ponto: "bg-sky-400" },
-  { id: "planejamento", ponto: "bg-purple-300" },
-  { id: "implantacao", ponto: "bg-orange-400" },
-  { id: "suspenso", ponto: "bg-rose-400" },
-  { id: "encerrado", ponto: "bg-emerald-400" },
-] as const;
 
 const semMovimento = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const saudacao = (h: number) => (h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite");
@@ -78,7 +68,7 @@ function CartaoAtalho({ a, onAbrir }: { a: Atalho; onAbrir: () => void }) {
   );
 }
 
-/** Central de Projetos: abertura com vídeo, os números dos projetos por fase e os atalhos do módulo. */
+/** Central de Projetos: abertura com vídeo e os atalhos do módulo (cada um com um número ao vivo). */
 export default function Projects() {
   const navigate = useNavigate();
   const { isAdmin, isSuperAdmin, managerId, loading, profile } = useAuth();
@@ -143,7 +133,7 @@ export default function Projects() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-5">
-      {/* Abertura: o vídeo ao fundo, a saudação e os projetos por fase */}
+      {/* Abertura: o vídeo ao fundo e a saudação */}
       <section aria-labelledby="central-titulo" className="relative isolate overflow-hidden rounded-3xl text-white shadow-[0_18px_44px_-22px_hsl(var(--marca-fundo)/0.8)]">
         <img src={posterHero} alt="" aria-hidden className="absolute inset-0 -z-30 h-full w-full object-cover" />
         <video ref={heroRef} src={videoHero} poster={posterHero} muted loop playsInline preload="metadata" aria-hidden tabIndex={-1}
@@ -151,7 +141,7 @@ export default function Projects() {
         <span aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-r from-marca-fundo/95 via-marca-logo/75 to-marca-logo/20" />
         <span aria-hidden className="absolute inset-x-0 bottom-0 -z-10 h-2/3 bg-gradient-to-t from-marca-fundo/90 to-transparent" />
 
-        <div className="flex min-h-[300px] flex-col gap-8 p-6 sm:min-h-[340px] sm:p-9 lg:p-11">
+        <div className="flex min-h-[240px] flex-col gap-8 p-6 sm:min-h-[280px] sm:p-9 lg:p-11">
           <div className="flex items-start gap-3">
             <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] backdrop-blur-sm">
               <Signal className="h-3.5 w-3.5 text-orange-300" aria-hidden />Módulo de Projetos
@@ -174,25 +164,6 @@ export default function Projects() {
               {branding.slug === "transdata" ? "Gerencie, monitore e analise seus projetos de bilhetagem" : "Gerencie, monitore e analise seus projetos"}, do cadastro à entrega.
             </p>
           </div>
-
-          {/* projetos por fase, ao vivo: tocar abre o Kanban */}
-          <ul className="mt-auto grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6" aria-label="Projetos por fase">
-            <li>
-              <div className="flex h-full flex-col justify-center rounded-xl bg-gradient-to-br from-marca-laranja to-marca-rosa px-4 py-3">
-                <b className="font-display text-4xl font-bold leading-none tabular-nums">{total ?? "–"}</b>
-                <span className="mt-1 text-xs font-semibold text-white/90">Projetos no portal</span>
-              </div>
-            </li>
-            {FASES.map(f => (
-              <li key={f.id}>
-                <button type="button" onClick={() => navigate("/projetos/gestao")} title={`Ver ${statusLabels[f.id]} no Kanban`}
-                  className="flex h-full w-full flex-col justify-center rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-left backdrop-blur-md transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
-                  <b className="font-display text-4xl font-bold leading-none tabular-nums">{porFase ? de(f.id) : "–"}</b>
-                  <span className="mt-1 flex items-center gap-1.5 text-xs text-white/85"><span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", f.ponto)} />{statusLabels[f.id]}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
         </div>
       </section>
 
