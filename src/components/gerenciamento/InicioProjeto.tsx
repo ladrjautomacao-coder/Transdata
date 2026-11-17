@@ -1,18 +1,26 @@
-import { AlertTriangle, ArrowRight, CheckCircle2, Construction, Layers, Presentation, Rocket } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarCheck2, CheckCircle2, Layers, Presentation, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { SituacaoAtividade } from "@/lib/gerenciamento";
+import { periodoDaVisita, resumoVisitas, type SituacaoVisita } from "@/lib/gestaoVisitas";
+import { VISIT_FORMAT_LABEL } from "@/lib/implantationScheduling";
+import { cn } from "@/lib/utils";
 import { LegendaTrilha, NumeroModulo, TrilhaCompacta, contaProjeto } from "./ProgressoProjeto";
 import { contaModulo, proximaDe, type ModuloProgresso } from "./progresso";
+import { BolinhaVisita, EstadoVisitas, TrilhaVisitas, type ConsultaVisitas } from "./gestao/VisitasDoProjeto";
 
-/** Alturas das barras do painel em construção (só a silhueta). */
-const BARRAS = [38, 62, 48, 80, 56, 70, 44];
+/** Os três contadores das visitas no quadrante Gestão de cronograma. */
+const CONTADORES: { s: SituacaoVisita; chave: "realizadas" | "acontecendo" | "proximas"; rotulo: string; cls: string }[] = [
+  { s: "realizada", chave: "realizadas", rotulo: "Realizadas", cls: "border-emerald-500/30 bg-emerald-500/[0.07]" },
+  { s: "acontecendo", chave: "acontecendo", rotulo: "Acontecendo agora", cls: "border-marca-laranja/30 bg-orange-500/[0.06]" },
+  { s: "proxima", chave: "proximas", rotulo: "Próximas", cls: "border-dashed border-border" },
+];
 
 /**
  * Início do projeto (ao escolher o projeto): dois quadrantes. "Módulos de gerenciamento" traz cada
  * módulo com a trilha de bolinhas, atividade por atividade (tocar no nome abre o módulo; na bolinha,
- * a atividade); "Gestão à Vista" está em construção.
+ * a atividade); "Gestão de cronograma" traz o resumo das visitas aprovadas na Agenda Técnica.
  */
-export function InicioProjeto({ modulos, atencao, destaque, onAbrirModulos, onAbrirModulo }: {
+export function InicioProjeto({ modulos, atencao, destaque, onAbrirModulos, onAbrirModulo, visitas, onAbrirGestao }: {
   modulos: ModuloProgresso[];
   /** Quantos pontos pedem atenção no projeto (avisos e atividades aguardando retorno). */
   atencao: number;
@@ -22,9 +30,15 @@ export function InicioProjeto({ modulos, atencao, destaque, onAbrirModulos, onAb
   onAbrirModulos: () => void;
   /** Abre o módulo; com a atividade, rola até ela. */
   onAbrirModulo: (numero: string, atividadeId?: string) => void;
+  /** As visitas do projeto na Agenda Técnica (Gestão de cronograma). */
+  visitas: ConsultaVisitas;
+  /** Abre a Gestão de cronograma do projeto. */
+  onAbrirGestao: () => void;
 }) {
   const { feitas, total, pct } = contaProjeto(modulos);
   const proximo = modulos.map(m => ({ m, x: proximaDe(m) })).find(p => p.x);
+  const listaVisitas = visitas.visitas ?? [];
+  const resumo = resumoVisitas(listaVisitas);
 
   return (
     <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch">
@@ -85,34 +99,54 @@ export function InicioProjeto({ modulos, atencao, destaque, onAbrirModulos, onAb
         </div>
       </section>
 
-      {/* Gestão à Vista: o quadrante existe; o conteúdo vem na próxima etapa */}
-      <section aria-labelledby="ger-q-gestao" className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-dashed border-border bg-card/60">
-        <span aria-hidden className="block h-1 bg-border" />
+      {/* Gestão de cronograma: por enquanto, as visitas do projeto na Agenda Técnica */}
+      <section aria-labelledby="ger-q-gestao" className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
+        <span aria-hidden className="block h-1 bg-gradient-to-r from-emerald-500 via-marca-laranja to-purple-600" />
         <div className="flex flex-wrap items-start gap-4 px-5 pb-4 pt-5 sm:px-6">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground"><Presentation className="h-6 w-6" aria-hidden /></span>
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Presentation className="h-6 w-6" aria-hidden /></span>
           <div className="min-w-0 flex-1 basis-48">
-            <h2 id="ger-q-gestao" className="text-xl font-bold leading-tight">Gestão à Vista</h2>
-            <p className="mt-1 text-[13px] text-muted-foreground">O conteúdo deste quadrante será montado na próxima etapa.</p>
+            <h2 id="ger-q-gestao" className="text-xl font-bold leading-tight">Gestão de cronograma</h2>
+            <p className="mt-1 text-[13px] text-muted-foreground">O cronograma do projeto · visitas da Agenda Técnica</p>
           </div>
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:text-amber-200">
-            <Construction className="h-3.5 w-3.5" aria-hidden />Em construção
-          </span>
         </div>
 
-        {/* silhueta de um painel, só para marcar o espaço */}
-        <div aria-hidden className="mx-5 mb-5 grid flex-1 grid-cols-3 content-start gap-2.5 rounded-xl border border-dashed border-border/80 p-3 sm:mx-6">
-          {[0, 1, 2].map(i => (
-            <div key={i} className="flex h-16 flex-col justify-center gap-2 rounded-lg bg-muted/60 px-3">
-              <span className="h-2 w-1/2 rounded-full bg-muted-foreground/15" />
-              <span className="h-3.5 w-3/4 rounded-full bg-muted-foreground/20" />
-            </div>
-          ))}
-          <div className="col-span-2 flex h-32 items-end gap-2 rounded-lg bg-muted/40 p-3">
-            {BARRAS.map((h, i) => <span key={i} className="flex-1 rounded-t bg-muted-foreground/15" style={{ height: `${h}%` }} />)}
-          </div>
-          <div className="flex h-32 items-center justify-center rounded-lg bg-muted/40">
-            <span className="h-16 w-16 rounded-full border-[10px] border-muted-foreground/15 border-t-muted-foreground/30" />
-          </div>
+        <div className="flex flex-1 flex-col gap-4 border-t px-5 py-4 sm:px-6">
+          <h3 className="flex items-center gap-2 text-sm font-semibold"><CalendarCheck2 className="h-4 w-4 text-primary" aria-hidden />Visitas do projeto</h3>
+          {visitas.carregando || visitas.erro || listaVisitas.length === 0 ? <EstadoVisitas consulta={visitas} compacto /> : (
+            <>
+              <ul className="grid grid-cols-3 gap-2.5" aria-label="Visitas por situação">
+                {CONTADORES.map(c => (
+                  <li key={c.s} className={cn("flex min-w-0 flex-col gap-1.5 rounded-xl border p-3", c.cls, resumo[c.chave] === 0 && "opacity-60")}>
+                    <span className="flex items-center gap-2"><BolinhaVisita situacao={c.s} tamanho="sm" /><b className="font-display text-2xl font-bold leading-none tabular-nums">{resumo[c.chave]}</b></span>
+                    <span className="text-xs leading-tight text-muted-foreground">{c.rotulo}</span>
+                  </li>
+                ))}
+              </ul>
+              {/* uma bolinha por visita, como a trilha dos módulos */}
+              <TrilhaVisitas lista={listaVisitas} onAbrir={onAbrirGestao} />
+              {resumo.proxima ? (
+                <div className={cn("rounded-xl border-2 p-3", resumo.proxima.situacao === "acontecendo" ? "border-marca-laranja/60 bg-orange-500/[0.05]" : "border-dashed border-border")}>
+                  <p className={cn("text-[11.5px] font-semibold uppercase tracking-wide", resumo.proxima.situacao === "acontecendo" ? "text-orange-700 dark:text-orange-300" : "text-muted-foreground")}>
+                    {resumo.proxima.situacao === "acontecendo" ? "Acontecendo agora" : "Próxima visita"}
+                  </p>
+                  <p className="mt-0.5 text-sm font-bold leading-snug">{resumo.proxima.tipo}</p>
+                  <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+                    {[periodoDaVisita(resumo.proxima.inicio, resumo.proxima.fim).curto, resumo.proxima.formato && VISIT_FORMAT_LABEL[resumo.proxima.formato],
+                      resumo.proxima.tecnicos.map(t => t.full_name).join(", ")].filter(Boolean).join(" · ")}
+                  </p>
+                </div>
+              ) : (
+                <p className="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-2.5 py-1.5 text-[13px] font-medium text-emerald-800 dark:text-emerald-200">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />Todas as visitas aprovadas já foram realizadas
+                </p>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-2 border-t bg-muted/30 px-5 py-3.5 sm:px-6">
+          <span className="text-[12.5px] text-muted-foreground">Só visitas aprovadas pela coordenação de implantação</span>
+          <Button size="sm" className="ml-auto h-9" onClick={onAbrirGestao}>Abrir Gestão de cronograma<ArrowRight className="ml-1.5 h-4 w-4" aria-hidden /></Button>
         </div>
       </section>
     </div>

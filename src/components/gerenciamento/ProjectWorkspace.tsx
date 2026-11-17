@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AlertTriangle, ArrowLeft, ArrowUpDown, CalendarX, CheckCircle2, ChevronRight, FileText, Loader2, Lock, LockOpen, RefreshCw, Rocket, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,8 @@ import { montarTap, type DadosTap } from "@/lib/tap";
 import { CabecalhoProjeto, NavModulos, NumeroModulo, ProgressoProjeto, destaqueValido, type AvisoProjeto, type ModuloProgresso } from "./ProgressoProjeto";
 import { avisosDoProjeto } from "./progresso";
 import { InicioProjeto } from "./InicioProjeto";
+import { VisitasDoProjeto, type ConsultaVisitas } from "./gestao/VisitasDoProjeto";
+import { fetchVisitasDoProjeto, visitasDoProjeto } from "@/lib/gestaoVisitas";
 // a cidade da entrada do portal (vídeo da Runway), parada, ao fundo do cabeçalho do projeto
 import imagemCidade from "@/assets/entrada/entrada-login.jpg";
 import { TapDialog } from "./TapDialog";
@@ -138,8 +141,8 @@ function andamento<Id extends string>(lista: { a: Atividade<Id>; sit: SituacaoAt
 
 /**
  * O projeto escolhido: o cabeçalho e, abaixo, o início do projeto com os dois quadrantes (Módulos de
- * gerenciamento e Gestão à Vista). Com ?area=modulos, o progresso do projeto (todos os módulos); com
- * ?modulo=01 a 04, as atividades daquele módulo.
+ * gerenciamento e Gestão de cronograma). Com ?area=modulos, o progresso do projeto (todos os módulos); com
+ * ?modulo=01 a 04, as atividades daquele módulo; com ?area=gestao, a Gestão de cronograma (visitas da Agenda).
  */
 export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => void }) {
   const { profile, isSuperAdmin, managerId } = useAuth();
@@ -148,6 +151,7 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   const modulo: ModuloNum | null = MODULOS.find(m => m === qual) ?? null;
   // fora dos módulos (sem ?area=modulos nem ?modulo), o início do projeto com os quadrantes
   const emModulos = modulo !== null || params.get("area") === "modulos";
+  const emGestao = modulo === null && params.get("area") === "gestao";
   const [project, setProject] = useState<GerProject | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   // cada módulo é gravado sozinho no banco a cada mudança
@@ -156,6 +160,18 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   const m3 = useModuloGravado<Modulo03Estado>(e => salvarModulo03(id, e), modulo03Vazio);
   const m4 = useModuloGravado<Modulo04Estado>(e => salvarModulo04(id, e), modulo04Vazio);
   const estado = m1.estado;
+  // Gestão de cronograma: as visitas do projeto na Agenda Técnica (o início do projeto mostra o resumo);
+  // a situação de cada visita (realizada, acontecendo, próxima) é calculada na hora de mostrar
+  // (uma nova tentativa só: com a Agenda fora do ar, o aviso aparece logo, com o "Tentar de novo")
+  const agenda = useQuery({ queryKey: ["gestao-visitas", id], queryFn: () => fetchVisitasDoProjeto(id), staleTime: 60_000, retry: 1 });
+  const agora = new Date();
+  const consultaVisitas: ConsultaVisitas = {
+    visitas: agenda.data ? visitasDoProjeto(agenda.data, agora) : undefined,
+    carregando: agenda.isLoading,
+    erro: agenda.error ? errorMessage(agenda.error) : null,
+    tentar: () => { void agenda.refetch(); },
+    agora,
+  };
 
   const [ordem, setOrdem] = useState<AtividadeId[]>(lerOrdem);
   const [travada, setTravada] = useState<boolean>(() => { try { return localStorage.getItem(TRAVA_KEY) === "true"; } catch { return false; } });
@@ -217,6 +233,10 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   };
   /** Do início do projeto para o progresso dos módulos, ou de volta ao início (os dois a partir do topo). */
   const abrirModulos = () => { irPara(null); setFoco({ alvo: "ger-topo" }); };
+  const abrirGestao = () => {
+    mudarParams(n => { n.delete("modulo"); n.set("area", "gestao"); });
+    setFoco({ alvo: "ger-topo" });
+  };
   const irInicio = () => {
     mudarParams(n => { n.delete("modulo"); n.delete("area"); });
     setFoco({ alvo: "ger-topo" });
@@ -321,12 +341,23 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   const destaque = destaqueValido(modulos, escolhido);
   /**
    * Número do cabeçalho tocado: destaca (ou tira o destaque) nas trilhas, ali mesmo no início do
-   * projeto ou no progresso; com um módulo aberto, volta ao progresso.
+   * projeto ou no progresso; com um módulo ou a Gestão de cronograma aberta, vai ao progresso.
    */
   const destacar = (s: SituacaoAtividade) => {
-    setEscolhido(atual => (atual === s && modulo === null ? null : s));
-    if (modulo !== null) irPara(null);
+    setEscolhido(atual => (atual === s && modulo === null && !emGestao ? null : s));
+    if (modulo !== null || emGestao) irPara(null);
   };
+  /** Caminho de volta ao início do projeto, nas áreas abertas a partir dos quadrantes. */
+  const caminho = (atual: string) => (
+    <nav aria-label="Caminho" className="flex flex-wrap items-center gap-1.5 text-[13px]">
+      <button type="button" onClick={irInicio}
+        className="inline-flex items-center gap-1 rounded-md font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <ArrowLeft className="h-3.5 w-3.5" aria-hidden />Início do projeto
+      </button>
+      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+      <span aria-current="page" className="font-semibold">{atual}</span>
+    </nav>
+  );
 
   return (
     // scroll-mt maior que a faixa fixa do portal: ao voltar ao topo, o cabeçalho do projeto não fica embaixo dela
@@ -340,7 +371,7 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
         solucoes={solucoes}
         imagem={imagemCidade}
         modulos={modulos}
-        destaque={modulo === null ? destaque : null}
+        destaque={modulo === null && !emGestao ? destaque : null}
         onDestacar={destacar}
         onBack={onBack}
       />
@@ -349,24 +380,22 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
         <div className="flex flex-col gap-3">
           {/* caminho de volta ao início do projeto; o "Salvo no banco" desce quando não couber ao lado */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <nav aria-label="Caminho" className="flex flex-wrap items-center gap-1.5 text-[13px]">
-              <button type="button" onClick={irInicio}
-                className="inline-flex items-center gap-1 rounded-md font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <ArrowLeft className="h-3.5 w-3.5" aria-hidden />Início do projeto
-              </button>
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-              <span aria-current="page" className="font-semibold">Módulos de gerenciamento</span>
-            </nav>
+            {caminho("Módulos de gerenciamento")}
             <div className="ml-auto"><SituacaoGravacao g={juntarGravacoes([m1.gravacao, m2.gravacao, m3.gravacao, m4.gravacao])} onTentar={() => { m1.salvarAgora(); m2.salvarAgora(); m3.salvarAgora(); m4.salvarAgora(); }} /></div>
           </div>
           <div className="min-w-0 max-w-full"><NavModulos modulos={modulos} ativo={modulo} onIr={m => irPara(m as ModuloNum | null)} /></div>
         </div>
       )}
 
+      {emGestao && caminho("Gestão de cronograma")}
+
       <div className="min-w-0">
-        {!emModulos ? (
+        {emGestao ? (
+          <VisitasDoProjeto consulta={consultaVisitas} />
+        ) : !emModulos ? (
           <InicioProjeto modulos={modulos} atencao={avisosDoProjeto(avisos, modulos).length} destaque={destaque}
-            onAbrirModulos={abrirModulos} onAbrirModulo={(m, atividade) => irPara(m as ModuloNum, atividade)} />
+            onAbrirModulos={abrirModulos} onAbrirModulo={(m, atividade) => irPara(m as ModuloNum, atividade)}
+            visitas={consultaVisitas} onAbrirGestao={abrirGestao} />
         ) : modulo === null ? (
           <ProgressoProjeto modulos={modulos} onAbrir={(m, atividade) => irPara(m as ModuloNum, atividade)}
             destaque={destaque} onLimparDestaque={() => setEscolhido(null)} avisos={avisos} nomeGp={project.manager?.full_name ?? null} />
