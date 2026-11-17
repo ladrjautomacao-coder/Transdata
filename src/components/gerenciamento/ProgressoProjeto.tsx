@@ -91,8 +91,9 @@ export function CabecalhoProjeto({ nome, fase, local, gp, codigo, solucoes, imag
       <div className="grid gap-6 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 rounded-md text-[13px] text-white/70 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
-              <ArrowLeft className="h-3.5 w-3.5" />Trocar projeto
+            <button type="button" onClick={onBack} title="Voltar à lista de projetos"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/30 bg-white/15 px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
+              <ArrowLeft className="h-4 w-4" aria-hidden />Voltar aos projetos
             </button>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-marca-laranja to-marca-rosa px-2.5 py-0.5 text-xs font-semibold">
               <Flag className="h-3.5 w-3.5" aria-hidden />{fase}
@@ -247,8 +248,9 @@ function CartaoTrilha({ m, destaque, onAbrir }: {
 
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-dashed pt-3 text-[12.5px] text-muted-foreground">
         {m.extra ?? (proxima ? null : <span>Todas as atividades do módulo estão feitas.</span>)}
-        <button type="button" onClick={() => onAbrir(m.numero)} className="ml-auto inline-flex items-center gap-1 rounded-md text-[13px] font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          Abrir módulo<ArrowRight className="h-3.5 w-3.5" aria-hidden />
+        <button type="button" onClick={() => onAbrir(m.numero)} title={`Abrir as atividades do módulo ${m.numero}`}
+          className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/[0.04] px-3.5 text-[13px] font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          Abrir módulo<ArrowRight className="h-4 w-4" aria-hidden />
         </button>
       </div>
     </article>

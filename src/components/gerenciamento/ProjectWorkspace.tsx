@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowLeft, ArrowUpDown, CalendarX, CheckCircle2, ChevronRight, FileText, Loader2, Lock, LockOpen, RefreshCw, Rocket, RotateCcw } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowUpDown, CalendarX, CheckCircle2, FileText, Loader2, Lock, LockOpen, RefreshCw, Rocket, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,6 +25,7 @@ import { montarTap, type DadosTap } from "@/lib/tap";
 import { CabecalhoProjeto, NavModulos, NumeroModulo, ProgressoProjeto, destaqueValido, type AvisoProjeto, type ModuloProgresso } from "./ProgressoProjeto";
 import { avisosDoProjeto } from "./progresso";
 import { InicioProjeto } from "./InicioProjeto";
+import { NavProjeto, type AreaProjeto } from "./NavProjeto";
 import { VisitasDoProjeto, type ConsultaVisitas } from "./gestao/VisitasDoProjeto";
 import { fetchVisitasDoProjeto, visitasDoProjeto } from "@/lib/gestaoVisitas";
 // a cidade da entrada do portal (vídeo da Runway), parada, ao fundo do cabeçalho do projeto
@@ -244,7 +245,7 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   // sem esqueleto: a tela e o que o GP preencheu continuam onde estão
   const reler = () => fetchGerProject(id).then(p => { if (p) setProject(p); });
 
-  const back = <Button variant="ghost" size="sm" className="-ml-2 h-8 w-fit text-muted-foreground" onClick={onBack}><ArrowLeft className="mr-1.5 h-4 w-4" />Trocar projeto</Button>;
+  const back = <Button variant="outline" className="h-10 w-fit font-semibold" onClick={onBack}><ArrowLeft className="mr-1.5 h-4 w-4" />Voltar aos projetos</Button>;
 
   if (project === undefined) {
     return <div className="flex flex-col gap-5">{back}<Skeleton className="h-20 rounded-xl" /><Skeleton className="h-36 rounded-2xl" /><Skeleton className="h-96 rounded-xl" /></div>;
@@ -347,17 +348,8 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
     setEscolhido(atual => (atual === s && modulo === null && !emGestao ? null : s));
     if (modulo !== null || emGestao) irPara(null);
   };
-  /** Caminho de volta ao início do projeto, nas áreas abertas a partir dos quadrantes. */
-  const caminho = (atual: string) => (
-    <nav aria-label="Caminho" className="flex flex-wrap items-center gap-1.5 text-[13px]">
-      <button type="button" onClick={irInicio}
-        className="inline-flex items-center gap-1 rounded-md font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        <ArrowLeft className="h-3.5 w-3.5" aria-hidden />Início do projeto
-      </button>
-      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-      <span aria-current="page" className="font-semibold">{atual}</span>
-    </nav>
-  );
+  const area: AreaProjeto = emGestao ? "gestao" : emModulos ? "modulos" : "inicio";
+  const irArea = (a: AreaProjeto) => (a === "inicio" ? irInicio() : a === "modulos" ? abrirModulos() : abrirGestao());
 
   return (
     // scroll-mt maior que a faixa fixa do portal: ao voltar ao topo, o cabeçalho do projeto não fica embaixo dela
@@ -376,18 +368,12 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
         onBack={onBack}
       />
 
-      {emModulos && (
-        <div className="flex flex-col gap-3">
-          {/* caminho de volta ao início do projeto; o "Salvo no banco" desce quando não couber ao lado */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            {caminho("Módulos de gerenciamento")}
-            <div className="ml-auto"><SituacaoGravacao g={juntarGravacoes([m1.gravacao, m2.gravacao, m3.gravacao, m4.gravacao])} onTentar={() => { m1.salvarAgora(); m2.salvarAgora(); m3.salvarAgora(); m4.salvarAgora(); }} /></div>
-          </div>
-          <div className="min-w-0 max-w-full"><NavModulos modulos={modulos} ativo={modulo} onIr={m => irPara(m as ModuloNum | null)} /></div>
-        </div>
-      )}
+      {/* as três áreas do projeto em botões grandes; ao rolar, a barra fica presa no topo com o "← Projetos".
+          Nos módulos, o "Salvo no banco" fica à direita (desce quando não couber) */}
+      <NavProjeto area={area} nomeProjeto={project.company_name} onIr={irArea} onVoltar={onBack}
+        direita={emModulos ? <SituacaoGravacao g={juntarGravacoes([m1.gravacao, m2.gravacao, m3.gravacao, m4.gravacao])} onTentar={() => { m1.salvarAgora(); m2.salvarAgora(); m3.salvarAgora(); m4.salvarAgora(); }} /> : undefined} />
 
-      {emGestao && caminho("Gestão de cronograma")}
+      {emModulos && <div className="min-w-0 max-w-full"><NavModulos modulos={modulos} ativo={modulo} onIr={m => irPara(m as ModuloNum | null)} /></div>}
 
       <div className="min-w-0">
         {emGestao ? (
