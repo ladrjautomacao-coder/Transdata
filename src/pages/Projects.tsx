@@ -1,13 +1,107 @@
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowRight, CalendarRange, Kanban, List, ListChecks, Pause, Play, Plus, Signal, type LucideIcon } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenantBranding } from "@/contexts/TenantBrandingContext";
-import { Card, CardContent } from "@/components/ui/card";
-import { Plus, List, Signal, Kanban, CalendarRange, ListChecks } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { statusLabels } from "@/lib/statusLabels";
+import { cn } from "@/lib/utils";
+// vídeos de ambiente gerados na Runway (ver runway/LEIA-ME.md); o .jpg é o primeiro quadro
+import videoHero from "@/assets/projetos/hub-hero.mp4";
+import posterHero from "@/assets/projetos/hub-hero.jpg";
+import videoNovo from "@/assets/projetos/hub-novo.mp4";
+import posterNovo from "@/assets/projetos/hub-novo.jpg";
+import videoKanban from "@/assets/projetos/hub-kanban.mp4";
+import posterKanban from "@/assets/projetos/hub-kanban.jpg";
+import videoLista from "@/assets/projetos/hub-lista.mp4";
+import posterLista from "@/assets/projetos/hub-lista.jpg";
+import videoGerenciamento from "@/assets/projetos/hub-gerenciamento.mp4";
+import posterGerenciamento from "@/assets/projetos/hub-gerenciamento.jpg";
 
+/** As fases do Kanban, na ordem do quadro, com a cor do ponto de cada uma. */
+const FASES = [
+  { id: "comercial", ponto: "bg-sky-400" },
+  { id: "planejamento", ponto: "bg-purple-300" },
+  { id: "implantacao", ponto: "bg-orange-400" },
+  { id: "suspenso", ponto: "bg-rose-400" },
+  { id: "encerrado", ponto: "bg-emerald-400" },
+] as const;
+
+const semMovimento = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const saudacao = (h: number) => (h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite");
+const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+
+interface Atalho {
+  titulo: string;
+  descricao: string;
+  icone: LucideIcon;
+  rota: string;
+  video?: string;
+  poster: string;
+  /** Número ao vivo no rodapé do cartão (some enquanto carrega). */
+  dado?: string | null;
+}
+
+/**
+ * Um atalho da central: cartão escuro da marca com um clipe de ambiente ao fundo. O clipe fica parado
+ * no primeiro quadro e só toca com o mouse em cima ou o foco do teclado (nunca para quem pede menos movimento).
+ */
+function CartaoAtalho({ a, onAbrir }: { a: Atalho; onAbrir: () => void }) {
+  const video = useRef<HTMLVideoElement>(null);
+  const tocar = () => { if (!semMovimento()) video.current?.play().catch(() => { /* fica no primeiro quadro */ }); };
+  const parar = () => video.current?.pause();
+  return (
+    <button type="button" onClick={onAbrir} onMouseEnter={tocar} onMouseLeave={parar} onFocus={tocar} onBlur={parar}
+      className="group relative isolate flex min-h-[132px] flex-col overflow-hidden rounded-2xl bg-marca-fundo p-5 text-left text-white shadow-[0_14px_34px_-20px_hsl(var(--marca-fundo)/0.9)] transition-transform duration-300 hover:-translate-y-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca-laranja focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none motion-reduce:hover:translate-y-0 sm:min-h-[300px] sm:p-6">
+      <img src={a.poster} alt="" aria-hidden className="absolute inset-0 -z-20 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105 motion-reduce:transition-none" />
+      {a.video && <video ref={video} src={a.video} muted loop playsInline preload="none" aria-hidden tabIndex={-1}
+        className="absolute inset-0 -z-20 h-full w-full object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100 group-focus-visible:opacity-100" />}
+      {/* véu: escurece embaixo, onde fica o texto */}
+      <span aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-t from-marca-fundo via-marca-fundo/75 to-marca-fundo/25 sm:via-marca-fundo/55 sm:to-transparent" />
+      <span aria-hidden className="absolute inset-x-0 top-0 h-1 origin-left scale-x-0 bg-gradient-to-r from-marca-laranja via-marca-rosa to-purple-500 transition-transform duration-500 group-hover:scale-x-100 group-focus-visible:scale-x-100" />
+
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/25 bg-white/15 backdrop-blur-sm transition-colors group-hover:border-marca-laranja/70 group-hover:bg-marca-laranja sm:h-14 sm:w-14 sm:rounded-2xl">
+        <a.icone className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />
+      </span>
+      <span className="mt-3 flex flex-1 flex-col sm:mt-auto sm:flex-none">
+        <span className="font-display text-[22px] font-bold leading-tight sm:text-[26px]">{a.titulo}</span>
+        <span className="mt-1 text-[13px] leading-snug text-white/75">{a.descricao}</span>
+        <span className="mt-3 flex items-center gap-3 border-t border-white/15 pt-3 sm:mt-4">
+          <span className="min-w-0 flex-1 truncate text-xs font-medium text-orange-200">{a.dado ?? " "}</span>
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-white/15 px-3 py-1.5 text-[13px] font-semibold transition-colors group-hover:bg-white group-hover:text-marca-fundo">
+            Acessar<ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
+          </span>
+        </span>
+      </span>
+    </button>
+  );
+}
+
+/** Central de Projetos: abertura com vídeo, os números dos projetos por fase e os atalhos do módulo. */
 export default function Projects() {
   const navigate = useNavigate();
-  const { isAdmin, isSuperAdmin, managerId, loading } = useAuth();
+  const { isAdmin, isSuperAdmin, managerId, loading, profile } = useAuth();
   const branding = useTenantBranding();
+  // quantos projetos em cada fase (os que o usuário pode ver)
+  const { data: porFase } = useQuery({
+    queryKey: ["central-projetos-fases"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("projects").select("status");
+      if (error) throw error;
+      const n: Record<string, number> = {};
+      for (const p of data ?? []) n[p.status] = (n[p.status] ?? 0) + 1;
+      return n;
+    },
+    staleTime: 60_000,
+  });
+  const heroRef = useRef<HTMLVideoElement>(null);
+  const [pausado, setPausado] = useState(semMovimento);
+  useEffect(() => {
+    const v = heroRef.current;
+    if (!v) return;
+    if (pausado) v.pause(); else v.play().catch(() => setPausado(true));
+  }, [pausado, loading]);
 
   if (loading) {
     return (
@@ -17,108 +111,96 @@ export default function Projects() {
     );
   }
 
-  const cards: { title: string; description: string; icon: typeof Plus; onClick: () => void; badge?: string }[] = [
+  const de = (s: string) => porFase?.[s] ?? 0;
+  const total = porFase ? Object.values(porFase).reduce((a, b) => a + b, 0) : null;
+  const emAndamento = porFase ? de("comercial") + de("planejamento") + de("implantacao") : null;
+  const atalhos: Atalho[] = [
     ...(isAdmin ? [{
-      title: "Cadastrar Novo Projeto",
-      description: "Crie um novo projeto no sistema",
-      icon: Plus,
-      onClick: () => navigate("/projetos/novo"),
+      titulo: "Cadastrar novo projeto", descricao: "Crie um novo projeto no sistema", icone: Plus, rota: "/projetos/novo",
+      video: videoNovo, poster: posterNovo, dado: "Novo cadastro",
     }] : []),
     {
-      title: "Gestão de Projetos",
-      description: "Kanban para gerentes de projetos",
-      icon: Kanban,
-      onClick: () => navigate("/projetos/gestao"),
+      titulo: "Gestão de Projetos", descricao: "Kanban para gerentes de projetos", icone: Kanban, rota: "/projetos/gestao",
+      video: videoKanban, poster: posterKanban, dado: emAndamento === null ? null : `${emAndamento} em andamento`,
     },
     {
-      title: "Visualizar Projetos",
-      description: "Veja e gerencie os projetos existentes",
-      icon: List,
-      onClick: () => navigate("/projetos/lista"),
+      titulo: "Visualizar projetos", descricao: "Veja e gerencie os projetos existentes", icone: List, rota: "/projetos/lista",
+      video: videoLista, poster: posterLista, dado: total === null ? null : plural(total, "projeto", "projetos"),
     },
     // Gerentes de Projetos (os projetos deles) e Super Admin (todos)
     ...(isSuperAdmin || managerId ? [{
-      title: "Gerenciamento",
-      description: "O roteiro do GP em cada fase do projeto",
-      icon: ListChecks,
-      onClick: () => navigate("/projetos/gerenciamento"),
+      titulo: "Gerenciamento", descricao: "O roteiro do GP em cada fase do projeto", icone: ListChecks, rota: "/projetos/gerenciamento",
+      video: videoGerenciamento, poster: posterGerenciamento, dado: porFase ? `${de("implantacao")} em implantação` : null,
     }] : []),
-    // Teste isolado: Cronograma só aparece pra este tenant enquanto validamos
-    // se vale a pena expor pra todo mundo.
+    // Teste isolado: Cronograma só aparece pra este tenant enquanto validamos se vale a pena expor pra todo mundo.
     ...(branding.slug === "empresateste" ? [{
-      title: "Cronograma",
-      description: "Linha do tempo dos projetos por atividade",
-      icon: CalendarRange,
-      onClick: () => navigate("/projetos/cronograma"),
+      titulo: "Cronograma", descricao: "Linha do tempo dos projetos por atividade", icone: CalendarRange, rota: "/projetos/cronograma",
+      poster: posterHero, dado: "Em teste",
     }] : []),
   ];
+  const primeiroNome = profile?.full_name?.trim().split(/\s+/)[0];
+  const hoje = new Date();
 
   return (
-    <div className="relative flex flex-col items-center justify-center min-h-[calc(100vh-8rem)] overflow-hidden">
-      {/* Grid overlay */}
-      <div className="absolute inset-0 pointer-events-none opacity-[0.02]" style={{
-        backgroundImage: `linear-gradient(hsl(28, 90%, 52%) 1px, transparent 1px), linear-gradient(90deg, hsl(28, 90%, 52%) 1px, transparent 1px)`,
-        backgroundSize: "60px 60px",
-      }} />
+    <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-5">
+      {/* Abertura: o vídeo ao fundo, a saudação e os projetos por fase */}
+      <section aria-labelledby="central-titulo" className="relative isolate overflow-hidden rounded-3xl text-white shadow-[0_18px_44px_-22px_hsl(var(--marca-fundo)/0.8)]">
+        <img src={posterHero} alt="" aria-hidden className="absolute inset-0 -z-30 h-full w-full object-cover" />
+        <video ref={heroRef} src={videoHero} poster={posterHero} muted loop playsInline preload="metadata" aria-hidden tabIndex={-1}
+          className="absolute inset-0 -z-20 h-full w-full object-cover" />
+        <span aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-r from-marca-fundo/95 via-marca-logo/75 to-marca-logo/20" />
+        <span aria-hidden className="absolute inset-x-0 bottom-0 -z-10 h-2/3 bg-gradient-to-t from-marca-fundo/90 to-transparent" />
 
-      {/* Header */}
-      <div className="relative z-10 mb-6 text-center sm:mb-10">
-        <div className="flex items-center justify-center gap-2 mb-3">
-          <Signal className="h-4 w-4 text-primary" />
-          <span className="text-xs uppercase tracking-[0.25em] text-primary font-semibold">
-            Módulo de Projetos
-          </span>
-          <Signal className="h-4 w-4 text-primary" />
+        <div className="flex min-h-[300px] flex-col gap-8 p-6 sm:min-h-[340px] sm:p-9 lg:p-11">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] backdrop-blur-sm">
+              <Signal className="h-3.5 w-3.5 text-orange-300" aria-hidden />Módulo de Projetos
+            </span>
+            <button type="button" onClick={() => setPausado(p => !p)} aria-pressed={pausado} title={pausado ? "Reproduzir o vídeo de fundo" : "Pausar o vídeo de fundo"}
+              className="ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/25 bg-white/10 backdrop-blur-sm transition-colors hover:bg-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
+              {pausado ? <Play className="h-4 w-4" aria-hidden /> : <Pause className="h-4 w-4" aria-hidden />}
+              <span className="sr-only">{pausado ? "Reproduzir o vídeo de fundo" : "Pausar o vídeo de fundo"}</span>
+            </button>
+          </div>
+
+          <div className="max-w-2xl">
+            <p className="text-sm text-white/75">
+              {saudacao(hoje.getHours())}{primeiroNome ? `, ${primeiroNome}` : ""} · {hoje.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}
+            </p>
+            <h1 id="central-titulo" className="mt-1 font-display text-5xl font-bold uppercase leading-[0.95] tracking-wide sm:text-6xl lg:text-7xl">
+              Central de <span className="bg-gradient-to-r from-marca-laranja to-marca-rosa bg-clip-text text-transparent">Projetos</span>
+            </h1>
+            <p className="mt-3 max-w-xl text-[15px] text-white/80">
+              {branding.slug === "transdata" ? "Gerencie, monitore e analise seus projetos de bilhetagem" : "Gerencie, monitore e analise seus projetos"}, do cadastro à entrega.
+            </p>
+          </div>
+
+          {/* projetos por fase, ao vivo: tocar abre o Kanban */}
+          <ul className="mt-auto grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6" aria-label="Projetos por fase">
+            <li>
+              <div className="flex h-full flex-col justify-center rounded-xl bg-gradient-to-br from-marca-laranja to-marca-rosa px-4 py-3">
+                <b className="font-display text-4xl font-bold leading-none tabular-nums">{total ?? "–"}</b>
+                <span className="mt-1 text-xs font-semibold text-white/90">Projetos no portal</span>
+              </div>
+            </li>
+            {FASES.map(f => (
+              <li key={f.id}>
+                <button type="button" onClick={() => navigate("/projetos/gestao")} title={`Ver ${statusLabels[f.id]} no Kanban`}
+                  className="flex h-full w-full flex-col justify-center rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-left backdrop-blur-md transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
+                  <b className="font-display text-4xl font-bold leading-none tabular-nums">{porFase ? de(f.id) : "–"}</b>
+                  <span className="mt-1 flex items-center gap-1.5 text-xs text-white/85"><span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", f.ponto)} />{statusLabels[f.id]}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
-        <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text text-transparent">
-          Projetos
-        </h1>
-        <p className="text-muted-foreground mt-2 text-sm max-w-md mx-auto">
-          {branding.slug === "transdata"
-            ? "Gerencie, monitore e analise seus projetos de bilhetagem"
-            : "Gerencie, monitore e analise seus projetos"}
-        </p>
-      </div>
+      </section>
 
-      {/* Cards */}
-      <div className={`relative z-10 grid gap-3 sm:gap-8 w-full max-w-5xl px-4 justify-center ${cards.length <= 2 ? 'sm:grid-cols-2 max-w-3xl mx-auto' : cards.length === 4 ? 'sm:grid-cols-2 max-w-4xl mx-auto' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
-        {cards.map((card) => (
-          <Card
-            key={card.title}
-            className="group cursor-pointer transition-all duration-300 hover:-translate-y-2 relative overflow-hidden border-border/50 bg-card shadow-none"
-            onClick={card.onClick}
-          >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary via-primary/80 to-primary/40" />
-            {card.badge && (
-              <span className="absolute right-3 top-3 z-20 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10.5px] font-semibold text-amber-800 dark:text-amber-200">{card.badge}</span>
-            )}
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/0 to-primary/0 group-hover:from-primary/5 group-hover:to-primary/10 transition-all duration-300" />
-
-            <CardContent className="relative z-10 flex flex-row items-center gap-4 p-5 text-left sm:flex-col sm:gap-5 sm:p-10 sm:text-center">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-all duration-300 group-hover:scale-110 group-hover:bg-primary/20 sm:h-16 sm:w-16 sm:rounded-2xl">
-                <card.icon className="h-6 w-6 sm:h-8 sm:w-8" />
-              </div>
-              <div>
-                <h2 className="mb-0.5 text-[17px] font-bold sm:mb-1.5 sm:text-xl">{card.title}</h2>
-                <p className="text-sm text-muted-foreground leading-relaxed">{card.description}</p>
-              </div>
-              <div className="hidden sm:flex items-center gap-1 text-xs text-primary font-semibold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
-                <span>Acessar</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Bottom decorative line */}
-      <div className="relative z-10 mt-6 sm:mt-12 flex items-center gap-3 text-muted-foreground/40">
-        <div className="w-16 h-px bg-gradient-to-r from-transparent to-primary/30" />
-        <Signal className="h-3 w-3 text-primary/40" />
-        <div className="w-16 h-px bg-gradient-to-l from-transparent to-primary/30" />
-      </div>
+      {/* Atalhos do módulo */}
+      <section aria-label="Atalhos do módulo de projetos"
+        className={cn("grid gap-4 sm:grid-cols-2", atalhos.length === 3 ? "xl:grid-cols-3" : atalhos.length >= 5 ? "xl:grid-cols-5" : atalhos.length === 4 && "xl:grid-cols-4")}>
+        {atalhos.map(a => <CartaoAtalho key={a.titulo} a={a} onAbrir={() => navigate(a.rota)} />)}
+      </section>
     </div>
   );
 }
