@@ -110,7 +110,7 @@ function DestaqueModulo({ numero, nome, resumo, proxima, feitas, total, children
     <section aria-labelledby="ger-mod-titulo" className="flex flex-wrap items-center gap-5 rounded-xl border border-border/70 bg-card p-5 shadow-sm sm:p-6">
       <NumeroModulo numero={numero} tamanho="lg" />
       <div className="min-w-0 flex-1 basis-64">
-        <h2 id="ger-mod-titulo" className="scroll-mt-28 text-2xl font-bold leading-tight">{nome}</h2>
+        <h2 id="ger-mod-titulo" className="scroll-mt-36 text-2xl font-bold leading-tight">{nome}</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{resumo}</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {proxima ? (

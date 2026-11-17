@@ -1,12 +1,15 @@
 // Gerenciamento · módulo 04: entrega de cartões e equipamentos. Três etapas em sequência
-// (cartões para AP → AP entrega para AT → despacho e entrega dos equipamentos), executadas por
-// outras áreas e acompanhadas pelo GP. Cada etapa tem a sua situação, prazo, evidências e
-// histórico (só de inclusão: nada é apagado nem sobrescrito).
+// (cartões para a Silvana → a Silvana entrega para AT → acompanhamento dos equipamentos, em
+// checklist), executadas por outras áreas e acompanhadas pelo GP. Cada etapa tem a sua situação,
+// prazo, evidências e histórico (só de inclusão: até o "Desfazer" acrescenta uma linha).
 import { supabase } from "@/integrations/supabase/client";
 import type { Atividade, SituacaoAtividade } from "@/lib/gerenciamento";
 
 export type EtapaId04 = "cartoesAp" | "apAt" | "equipamentos";
 export const ETAPAS_04: EtapaId04[] = ["cartoesAp", "apAt", "equipamentos"];
+
+/** Quem é "AP" no módulo: a Assistente de Projetos (troque aqui se mudar a pessoa). */
+export const NOME_AP = "Silvana";
 
 /** Cores das situações: cinza (não iniciado), azul (em andamento), amarelo (aguardando ação ou
  * confirmação), verde (concluído) e vermelho (atrasado, problema ou pendência). */
@@ -15,11 +18,11 @@ export type Cor = "cinza" | "azul" | "amarelo" | "verde" | "vermelho";
 export const MODULO_04 = {
   numero: "04",
   nome: "Entrega de cartões e equipamentos",
-  resumo: "Os cartões vão para AP, AP entrega para AT e os equipamentos são despachados. Quem executa são as áreas; o GP acompanha os prazos, as pendências e as evidências.",
+  resumo: `Os cartões vão para a ${NOME_AP}, a ${NOME_AP} entrega para AT e os equipamentos são acompanhados até a entrega. Quem executa são as áreas; o GP acompanha os prazos, as pendências e as evidências.`,
   atividades: [
-    { id: "cartoesAp", titulo: "Entrega dos cartões para AP", descricao: "Controle a preparação e a entrega dos cartões para AP.", responsavel: "assistente" },
-    { id: "apAt", titulo: "AP entrega os cartões para AT", descricao: "Confirme se AP entregou os cartões para AT, de preferência pelo Sistema de Pedidos.", responsavel: "area", executante: "AP" },
-    { id: "equipamentos", titulo: "Acompanhar entrega dos equipamentos", descricao: "Acompanhe o despacho e a entrega dos equipamentos necessários à continuidade do projeto.", responsavel: "area", executante: "AT / despacho" },
+    { id: "cartoesAp", titulo: `Entrega de cartões para ${NOME_AP}`, descricao: `Controle a preparação e a entrega dos cartões para a ${NOME_AP}.`, responsavel: "assistente" },
+    { id: "apAt", titulo: `${NOME_AP} entrega os cartões para AT`, descricao: `Confirme se a ${NOME_AP} entregou os cartões para AT, de preferência pelo Sistema de Pedidos.`, responsavel: "area", executante: NOME_AP },
+    { id: "equipamentos", titulo: "Acompanhar entrega dos equipamentos", descricao: "Acompanhe, em checklist, o pedido, a separação, o despacho e a entrega dos equipamentos.", responsavel: "area", executante: "AT / despacho" },
   ] as Atividade<EtapaId04>[],
 };
 export const tituloEtapa = (id: EtapaId04) => MODULO_04.atividades.find(a => a.id === id)!.titulo;
@@ -32,11 +35,11 @@ export const STATUS_04: Record<EtapaId04, StatusDef[]> = {
     { id: "naoiniciado", nome: "Não iniciado", cor: "cinza" },
     { id: "preparacao", nome: "Em preparação", cor: "azul" },
     { id: "aguardandoEnvio", nome: "Aguardando envio", cor: "amarelo" },
-    { id: "entregue", nome: "Entregue para AP", cor: "verde", concluido: true },
+    { id: "entregue", nome: `Entregue para ${NOME_AP}`, cor: "verde", concluido: true },
     { id: "pendencia", nome: "Pendência", cor: "vermelho" },
   ],
   apAt: [
-    { id: "aguardandoAp", nome: "Aguardando AP", cor: "amarelo" },
+    { id: "aguardandoAp", nome: `Aguardando ${NOME_AP}`, cor: "amarelo" },
     { id: "processamento", nome: "Em processamento", cor: "azul" },
     { id: "aguardandoConfirmacao", nome: "Aguardando confirmação", cor: "amarelo" },
     { id: "entregue", nome: "Entregue para AT", cor: "verde", concluido: true },
@@ -54,8 +57,18 @@ export const STATUS_04: Record<EtapaId04, StatusDef[]> = {
   ],
 };
 export const statusDef = (id: EtapaId04, s: string) => STATUS_04[id].find(x => x.id === s) ?? STATUS_04[id][0];
-/** Situações do despacho em diante: a transportadora e o rastreio ficam em destaque. */
-export const DESPACHADO = ["despachado", "transporte", "entregue"];
+
+/* ─── Etapa 3: checklist dos equipamentos ─── */
+
+export type ItemEquip = "pedido" | "separados" | "despachados" | "entregues";
+/** Os itens da etapa 3, na ordem; cada um leva a etapa para uma situação. */
+export const ITENS_EQUIP: { id: ItemEquip; texto: string; status: string }[] = [
+  { id: "pedido", texto: "Pedido dos equipamentos aberto", status: "preparacao" },
+  { id: "separados", texto: "Equipamentos separados", status: "aguardandoDespacho" },
+  { id: "despachados", texto: "Equipamentos despachados", status: "despachado" },
+  { id: "entregues", texto: "Equipamentos entregues", status: "entregue" },
+];
+export interface MarcaItem { em: string; por: string }
 
 /* ─── Estado ─── */
 
@@ -64,6 +77,10 @@ export interface ConsultaPedido {
   em: string; por: string; numero: string; status: string;
   /** Data da consulta (AAAA-MM-DD), informada na consulta manual. */
   data: string; observacao: string; fonte: "manual" | "sistema";
+  /** Valores dos campos antes da consulta (para o "Desfazer" devolver). */
+  antes?: Record<string, string>;
+  /** Valores que a consulta gravou (o "Desfazer" só devolve o que ainda está igual). */
+  depois?: Record<string, string>;
 }
 export interface Evidencia {
   id: string;
@@ -84,6 +101,8 @@ interface EtapaBase {
   observacoes: string;
   /** Desde quando está na situação atual (dias em aberto das pendências). */
   statusDesde: string | null;
+  /** A situação de antes da atual (o "Desfazer" da conclusão volta para ela). */
+  statusAnterior: string;
   /** Quem marcou a conclusão, e quando. */
   concluidoEm: string | null; por: string;
 }
@@ -92,6 +111,8 @@ export interface EtapaApAt extends EtapaBase { pedido: string; quantidade: strin
 export interface EtapaEquipamentos extends EtapaBase {
   pedido: string; equipamento: string; quantidade: string; despachoPrevisto: string; despachoEfetivo: string;
   transportadora: string; rastreio: string; statusPedido: string; consultas: ConsultaPedido[];
+  /** Checklist da etapa: quem marcou cada item, e quando (null = não marcado). */
+  checklist: Record<ItemEquip, MarcaItem | null>;
 }
 export interface Modulo04Estado {
   cartoesAp: EtapaCartoesAp;
@@ -101,17 +122,34 @@ export interface Modulo04Estado {
   historico: Historico[];
 }
 
-const base = (status: string): EtapaBase => ({ status, prevista: "", efetiva: "", observacoes: "", statusDesde: null, concluidoEm: null, por: "" });
+const base = (status: string): EtapaBase => ({ status, prevista: "", efetiva: "", observacoes: "", statusDesde: null, statusAnterior: "", concluidoEm: null, por: "" });
+const checklistVazio = (): Record<ItemEquip, MarcaItem | null> => ({ pedido: null, separados: null, despachados: null, entregues: null });
 export const modulo04Vazio = (): Modulo04Estado => ({
   cartoesAp: { ...base("naoiniciado"), quantidade: "", para: "", comunicacaoEm: null },
   apAt: { ...base("aguardandoAp"), pedido: "", quantidade: "", statusPedido: "", consultas: [] },
   equipamentos: {
     ...base("aguardandoSeparacao"), pedido: "", equipamento: "", quantidade: "", despachoPrevisto: "", despachoEfetivo: "",
-    transportadora: "", rastreio: "", statusPedido: "", consultas: [],
+    transportadora: "", rastreio: "", statusPedido: "", consultas: [], checklist: checklistVazio(),
   },
   evidencias: { cartoesAp: [], apAt: [], equipamentos: [] },
   historico: [],
 });
+
+/**
+ * Checklist da etapa 3 gravado antes de a etapa virar checklist: deduz os itens pela situação e
+ * pelo número do pedido que já estavam preenchidos.
+ */
+function checklistDeduzido(q: Partial<EtapaEquipamentos>): Record<ItemEquip, MarcaItem | null> {
+  const c = checklistVazio();
+  const marca: MarcaItem = { em: q.concluidoEm ?? q.statusDesde ?? new Date(0).toISOString(), por: q.por || "registro anterior" };
+  const s = q.status ?? "";
+  const nivel = s === "entregue" ? 4 : ["despachado", "transporte"].includes(s) ? 3 : s === "aguardandoDespacho" ? 2 : 0;
+  if (nivel >= 1 || q.pedido?.trim()) c.pedido = marca;
+  if (nivel >= 2) c.separados = marca;
+  if (nivel >= 3) c.despachados = marca;
+  if (nivel >= 4) c.entregues = marca;
+  return c;
+}
 
 /** Completa com o estado vazio o que faltar no que veio do banco (o formato cresce junto com o módulo). */
 export function normalizarModulo04(raw: unknown): Modulo04Estado {
@@ -120,7 +158,10 @@ export function normalizarModulo04(raw: unknown): Modulo04Estado {
   return {
     cartoesAp: { ...v.cartoesAp, ...r.cartoesAp },
     apAt: { ...v.apAt, ...r.apAt, consultas: [...(r.apAt?.consultas ?? [])] },
-    equipamentos: { ...v.equipamentos, ...r.equipamentos, consultas: [...(r.equipamentos?.consultas ?? [])] },
+    equipamentos: {
+      ...v.equipamentos, ...r.equipamentos, consultas: [...(r.equipamentos?.consultas ?? [])],
+      checklist: r.equipamentos?.checklist ? { ...checklistVazio(), ...r.equipamentos.checklist } : checklistDeduzido(r.equipamentos ?? {}),
+    },
     evidencias: { ...v.evidencias, ...r.evidencias },
     historico: Array.isArray(r.historico) ? r.historico : [],
   };
@@ -163,9 +204,8 @@ export function aguardandoAnterior(id: EtapaId04, e: Modulo04Estado): boolean {
   const ant = anterior(id);
   return !!ant && !concluida(ant, e) && e[id].status === STATUS_04[id][0].id;
 }
-/** Data prevista que conta para o atraso (nos equipamentos: a entrega; sem ela, o despacho). */
-export const previstaDe = (id: EtapaId04, e: Modulo04Estado) =>
-  id === "equipamentos" ? e.equipamentos.prevista || e.equipamentos.despachoPrevisto : e[id].prevista;
+/** Data prevista que conta para o atraso (nos equipamentos, a previsão de entrega). */
+export const previstaDe = (id: EtapaId04, e: Modulo04Estado) => e[id].prevista;
 /** Dias de atraso: hoje depois da data prevista e a etapa ainda não entregue (0 = em dia). */
 export function diasAtraso(id: EtapaId04, e: Modulo04Estado, hoje = hoje04()): number {
   const p = previstaDe(id, e);
@@ -193,25 +233,29 @@ export function corDaEtapa(id: EtapaId04, e: Modulo04Estado, hoje = hoje04()): C
 export function proximaAcao(id: EtapaId04, e: Modulo04Estado): string {
   const s = e[id].status;
   if (concluida(id, e)) return "Nada a fazer: etapa concluída";
-  if (s === "pendencia" || s === "atrasado") return id === "equipamentos" ? "Resolver a pendência na entrega com AT" : id === "apAt" ? "Resolver a pendência com AP" : "Resolver a pendência dos cartões";
-  if (id === "cartoesAp") return s === "aguardandoEnvio" ? "Enviar os cartões e a comunicação para AP" : s === "preparacao" ? "Concluir a preparação dos cartões" : "Preparar os cartões e a comunicação de entrega";
-  if (id === "apAt") return s === "aguardandoConfirmacao" ? "Confirmar a entrega no Sistema de Pedidos" : "Acompanhar o pedido de AP no Sistema de Pedidos";
-  if (DESPACHADO.includes(s)) return "Acompanhar a entrega pela transportadora";
-  return s === "aguardandoDespacho" ? "Acompanhar despacho dos equipamentos" : "Acompanhar a separação dos equipamentos";
+  if (s === "pendencia" || s === "atrasado") return id === "equipamentos" ? "Resolver a pendência na entrega com AT" : id === "apAt" ? `Resolver a pendência com a ${NOME_AP}` : "Resolver a pendência dos cartões";
+  if (id === "cartoesAp") return s === "aguardandoEnvio" ? `Enviar os cartões e a comunicação para a ${NOME_AP}` : s === "preparacao" ? "Concluir a preparação dos cartões" : "Preparar os cartões e a comunicação de entrega";
+  if (id === "apAt") return s === "aguardandoConfirmacao" ? "Confirmar a entrega no Sistema de Pedidos" : `Acompanhar o pedido da ${NOME_AP} no Sistema de Pedidos`;
+  // etapa 3: o primeiro item do checklist ainda não marcado
+  const falta = ITENS_EQUIP.find(i => !e.equipamentos.checklist[i.id])?.id;
+  return falta === "pedido" ? "Abrir o pedido dos equipamentos" : falta === "separados" ? "Acompanhar a separação dos equipamentos"
+    : falta === "despachados" ? "Acompanhar o despacho dos equipamentos" : "Acompanhar a entrega pela transportadora";
 }
 
-/** O que falta para marcar a etapa como concluída (as três são críticas: pedem evidência ou referência). */
+/** O que falta para marcar a etapa como concluída (as duas primeiras pedem evidência ou referência). */
 export function faltaParaConcluir(id: EtapaId04, e: Modulo04Estado): string[] {
   const out: string[] = [];
   const ev = e.evidencias[id];
   if (id === "cartoesAp") {
     if (!e.cartoesAp.quantidade.trim()) out.push("quantidade de cartões");
     if (!ev.length) out.push("uma evidência (anexo ou a comunicação de entrega)");
-  } else {
-    if (!e[id].pedido.trim() && !ev.length) out.push("número do pedido ou uma evidência");
+  } else if (id === "apAt") {
+    if (!e.apAt.pedido.trim() && !ev.length) out.push("número do pedido ou uma evidência");
   }
+  // etapa 3: a conclusão é o último item do checklist (cada item pede só o seu dado)
   return out;
 }
+
 
 /** Nome de cada campo no histórico. */
 export const CAMPOS_04: Record<string, string> = {
@@ -241,6 +285,7 @@ export function alterarEtapa<K extends EtapaId04>(
   const novoStatus = (patch as Partial<EtapaBase>).status;
   if (novoStatus && novoStatus !== atual.status) {
     extra.statusDesde = agora;
+    extra.statusAnterior = String(atual.status ?? "");
     const fim = !!statusDef(id, novoStatus).concluido;
     extra.concluidoEm = fim ? agora : null;
     extra.por = fim ? por : "";
@@ -251,6 +296,81 @@ export function alterarEtapa<K extends EtapaId04>(
 /** Registra no histórico um acontecimento que não é campo (evidência, comunicação, consulta). */
 export function registrar(e: Modulo04Estado, id: EtapaId04, campo: string, para: string, por: string, agora = new Date().toISOString()): Modulo04Estado {
   return { ...e, historico: [...e.historico, { em: agora, por, etapa: id, campo, de: "—", para }] };
+}
+
+/* ─── Desfazer (sempre acrescenta ao histórico; nada some dele) ─── */
+
+/** Desfaz a conclusão da etapa: volta à situação de antes e limpa a data efetiva. */
+export function desfazerConclusao(e: Modulo04Estado, id: EtapaId04, por: string, agora = new Date().toISOString()): Modulo04Estado {
+  if (!concluida(id, e)) return e;
+  const antes = STATUS_04[id].some(s => s.id === e[id].statusAnterior && !s.concluido) ? e[id].statusAnterior : STATUS_04[id][0].id;
+  const e2 = alterarEtapa(e, id, { status: antes, efetiva: "" } as never, por, agora);
+  return registrar(e2, id, "Conclusão desfeita", `volta para ${statusDef(id, antes).nome}`, por, agora);
+}
+
+/** Desfaz a comunicação de entrega (etapa 1): tira a data e a evidência do e-mail. */
+export function desfazerComunicacao(e: Modulo04Estado, por: string, agora = new Date().toISOString()): Modulo04Estado {
+  if (!e.cartoesAp.comunicacaoEm && !e.evidencias.cartoesAp.some(x => x.tipo === "email")) return e;
+  const e2: Modulo04Estado = {
+    ...e, cartoesAp: { ...e.cartoesAp, comunicacaoEm: null },
+    evidencias: { ...e.evidencias, cartoesAp: e.evidencias.cartoesAp.filter(x => x.tipo !== "email") },
+  };
+  return registrar(e2, "cartoesAp", "Comunicação de entrega desfeita", "o e-mail saiu das evidências", por, agora);
+}
+
+/**
+ * Desfaz uma consulta ao Sistema de Pedidos: tira a consulta e a referência dela das evidências e
+ * devolve os campos que ela mudou, só os que ainda estão com o valor que ela gravou.
+ */
+export function desfazerConsulta(e: Modulo04Estado, etapa: "apAt" | "equipamentos", em: string, por: string, agora = new Date().toISOString()): Modulo04Estado {
+  const c = e[etapa].consultas.find(x => x.em === em);
+  if (!c) return e;
+  const atual = e[etapa] as unknown as Record<string, string>;
+  const volta = Object.fromEntries(Object.entries(c.antes ?? {}).filter(([k]) => (atual[k] ?? "") === (c.depois?.[k] ?? "")));
+  let e2 = alterarEtapa(e, etapa, volta as never, por, agora);
+  e2 = {
+    ...e2, [etapa]: { ...e2[etapa], consultas: e2[etapa].consultas.filter(x => x.em !== em) },
+    evidencias: { ...e2.evidencias, [etapa]: e2.evidencias[etapa].filter(x => x.id !== `pedido-${em}`) },
+  };
+  return registrar(e2, etapa, "Consulta ao Sistema de Pedidos desfeita", `pedido ${c.numero}: ${c.status}`, por, agora);
+}
+
+/** Tira uma evidência da etapa (o arquivo, se houver, é apagado à parte: excluirArquivoEvidencia). */
+export function removerEvidencia(e: Modulo04Estado, etapa: EtapaId04, evidenciaId: string, por: string, agora = new Date().toISOString()): Modulo04Estado {
+  const x = e.evidencias[etapa].find(v => v.id === evidenciaId);
+  if (!x) return e;
+  const e2 = { ...e, evidencias: { ...e.evidencias, [etapa]: e.evidencias[etapa].filter(v => v.id !== evidenciaId) } };
+  return registrar(e2, etapa, "Evidência excluída", x.nome, por, agora);
+}
+
+/* ─── Etapa 3: marcar e desfazer os itens do checklist ─── */
+
+/** Situação da etapa 3 pelo checklist: a do item mais adiantado marcado. */
+export function statusDoChecklist(c: Record<ItemEquip, MarcaItem | null>): string {
+  return [...ITENS_EQUIP].reverse().find(i => c[i.id])?.status ?? STATUS_04.equipamentos[0].id;
+}
+
+/** Marca um item do checklist; a situação da etapa acompanha (e "entregues" conclui, com a data). */
+export function marcarItemEquip(
+  e: Modulo04Estado, item: ItemEquip, por: string, campos: Partial<Record<"pedido" | "transportadora" | "rastreio" | "efetiva", string>> = {}, agora = new Date().toISOString(),
+): Modulo04Estado {
+  if (e.equipamentos.checklist[item]) return e;
+  const checklist = { ...e.equipamentos.checklist, [item]: { em: agora, por } };
+  const patch = Object.fromEntries(Object.entries(campos).filter(([, v]) => v !== undefined)) as Record<string, string>;
+  const status = statusDoChecklist(checklist);
+  let e2 = alterarEtapa(e, "equipamentos", { ...patch, ...(status !== e.equipamentos.status ? { status } : {}) } as never, por, agora);
+  e2 = { ...e2, equipamentos: { ...e2.equipamentos, checklist } };
+  return registrar(e2, "equipamentos", `Checklist: ${ITENS_EQUIP.find(i => i.id === item)!.texto}`, "ok", por, agora);
+}
+
+/** Desfaz um item do checklist; a situação volta para a do item mais adiantado que continua marcado. */
+export function desfazerItemEquip(e: Modulo04Estado, item: ItemEquip, por: string, agora = new Date().toISOString()): Modulo04Estado {
+  if (!e.equipamentos.checklist[item]) return e;
+  const checklist = { ...e.equipamentos.checklist, [item]: null };
+  const status = statusDoChecklist(checklist);
+  let e2 = alterarEtapa(e, "equipamentos", { ...(status !== e.equipamentos.status ? { status } : {}), ...(item === "entregues" ? { efetiva: "" } : {}) } as never, por, agora);
+  e2 = { ...e2, equipamentos: { ...e2.equipamentos, checklist } };
+  return registrar(e2, "equipamentos", `Checklist: ${ITENS_EQUIP.find(i => i.id === item)!.texto}`, "desfeito", por, agora);
 }
 
 /* ─── Resumo, pendências ─── */
@@ -267,11 +387,9 @@ export function pendencias04(e: Modulo04Estado, hoje = hoje04()): Pendencia[] {
     if (atraso > 0) out.push({ etapa: id, motivo: `Prazo vencido em ${dataBr04(previstaDe(id, e))}`, dias: atraso, acao: "Cobrar o executante e combinar uma nova data", grave: true });
     if (s === "pendencia" || s === "atrasado") out.push({ etapa: id, motivo: statusDef(id, s).nome + (e[id].observacoes.trim() ? `: ${e[id].observacoes.trim()}` : ""), dias: desde(id), acao: proximaAcao(id, e), grave: true });
     if (s === "aguardandoConfirmacao") out.push({ etapa: id, motivo: "Entrega aguardando confirmação", dias: desde(id), acao: "Verificar no Sistema de Pedidos", grave: false });
-    if (id === "equipamentos" && e.equipamentos.despachoPrevisto && !DESPACHADO.includes(s) && diasEntre(e.equipamentos.despachoPrevisto, hoje) > 0 && !(atraso > 0)) {
-      out.push({ etapa: id, motivo: `Despacho previsto para ${dataBr04(e.equipamentos.despachoPrevisto)} ainda não aconteceu`, dias: diasEntre(e.equipamentos.despachoPrevisto, hoje), acao: "Consultar o despacho", grave: true });
-    }
+    // a etapa 3 é acompanhamento em checklist: o próprio item do pedido pede o número
     const andando = s !== STATUS_04[id][0].id || concluida(id, e);
-    if (andando && !e.evidencias[id].length && !(id !== "cartoesAp" && e[id].pedido.trim())) {
+    if (id !== "equipamentos" && andando && !e.evidencias[id].length && !(id !== "cartoesAp" && e[id].pedido.trim())) {
       out.push({ etapa: id, motivo: concluida(id, e) ? "Concluída sem evidência" : "Sem evidência nem número do pedido", dias: desde(id), acao: "Anexar a evidência ou informar o pedido", grave: false });
     }
   }
@@ -317,6 +435,17 @@ export async function enviarEvidencia(projectId: string, etapa: EtapaId04, arqui
   }).select("id").single();
   if (error) throw error;
   return { id: String(data?.id ?? caminho), tipo: "arquivo", nome: arquivo.name, caminho, em: new Date().toISOString(), por };
+}
+
+/**
+ * Apaga o arquivo da evidência do armazenamento e dos anexos do projeto. Só quem enviou ou um
+ * admin consegue (regra do banco); devolve false quando o arquivo não pôde ser apagado.
+ */
+export async function excluirArquivoEvidencia(caminho: string): Promise<boolean> {
+  const { data, error } = await db.from("project_attachments").delete().eq("file_path", caminho).select("id");
+  if (error || !data?.length) return false;
+  await supabase.storage.from("project-attachments").remove([caminho]);
+  return true;
 }
 
 /** Link temporário para abrir o anexo. */

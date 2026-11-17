@@ -53,12 +53,12 @@ export function NavProjeto({ area, nomeProjeto, onIr, onVoltar, direita }: {
     return (
       <button key={a.id} type="button" onClick={() => onIr(a.id)} aria-current={on ? "page" : undefined}
         title={on ? `Você está em ${a.nome}` : `Ir para ${a.nome}`}
-        className={cn("inline-flex items-center justify-center gap-1.5 rounded-lg border font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:shrink-0 sm:justify-start sm:gap-2",
-          compacta ? "h-9 shrink-0 px-2.5 text-[13px] sm:px-3" : "h-11 min-w-0 px-2 text-[13px] sm:px-4 sm:text-sm",
+        className={cn("inline-flex min-w-0 items-center justify-center rounded-lg border font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:shrink-0 sm:justify-start sm:gap-2",
+          // na barra presa, no celular, como abas de aplicativo: ícone em cima e o nome embaixo, as três do mesmo tamanho
+          compacta ? "h-11 flex-col gap-0.5 px-1 text-[11px] leading-none sm:h-9 sm:flex-row sm:px-3 sm:text-[13px]" : "h-11 gap-1.5 px-2 text-[13px] sm:px-4 sm:text-sm",
           on ? "border-primary bg-primary text-primary-foreground shadow-sm" : "border-border/70 bg-card text-foreground hover:border-primary/40 hover:bg-primary/[0.05]")}>
         <a.icone className="h-4 w-4 shrink-0" aria-hidden />
-        {/* na barra presa, no celular, só a área atual mostra o nome (as outras ficam no ícone, com o nome para leitor de tela) */}
-        {compacta && !on ? <span className="sr-only sm:not-sr-only">{nome}</span> : nome}
+        <span className="truncate">{nome}</span>
       </button>
     );
   });
@@ -74,14 +74,15 @@ export function NavProjeto({ area, nomeProjeto, onIr, onVoltar, direita }: {
       {presa && caixa && (
         <div className="fixed top-14 z-20 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-2" style={{ left: caixa.left, width: caixa.width }}>
           <div className="flex items-center gap-2 rounded-b-xl border border-t-0 border-border/70 bg-card/95 px-2.5 py-2 shadow-md backdrop-blur supports-[backdrop-filter]:bg-card/85">
+            {/* no celular só a seta (o nome fica para o leitor de tela); do tablet para cima, "← Projetos" */}
             <button type="button" onClick={onVoltar} title="Voltar à lista de projetos"
-              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-border/70 bg-background px-3 text-[13px] font-semibold transition-colors hover:border-primary/40 hover:bg-primary/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <ArrowLeft className="h-4 w-4" aria-hidden />Projetos
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border/70 bg-background text-[13px] font-semibold transition-colors hover:border-primary/40 hover:bg-primary/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:w-auto sm:px-3">
+              <ArrowLeft className="h-4 w-4" aria-hidden /><span className="sr-only sm:not-sr-only">Projetos</span>
             </button>
-            <span aria-hidden className="h-6 w-px shrink-0 bg-border lg:hidden" />
+            <span aria-hidden className="hidden h-6 w-px shrink-0 bg-border sm:block lg:hidden" />
             <span className="hidden min-w-0 max-w-[260px] truncate text-[13px] font-bold uppercase tracking-wide text-muted-foreground lg:block" title={nomeProjeto}>{nomeProjeto}</span>
             <span aria-hidden className="mx-1 hidden h-6 w-px shrink-0 bg-border lg:block" />
-            <nav aria-label="Áreas do projeto (barra fixa)" className="flex min-w-0 gap-1.5 overflow-x-auto">{abas(true)}</nav>
+            <nav aria-label="Áreas do projeto (barra fixa)" className="grid min-w-0 flex-1 grid-cols-3 gap-1.5 sm:flex sm:flex-none">{abas(true)}</nav>
           </div>
         </div>
       )}

@@ -2,10 +2,13 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  AlertTriangle, Check, ChevronDown, Clock3, Copy, ExternalLink, FileText, History, Info, Loader2, Mail, Paperclip, PackageCheck, Search, Truck,
-  UserRound, Users,
+  AlertTriangle, Check, CheckCircle2, ChevronDown, Circle, Clock3, Copy, ExternalLink, FileText, History, Info, Loader2, Mail, Paperclip, PackageCheck,
+  RotateCcw, Search, Trash2, Truck, UserRound, Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,10 +19,12 @@ import { cn } from "@/lib/utils";
 import { copiarEmail } from "@/lib/emailOutlook";
 import { fetchAssistenteProjetos, quando, type GerProject } from "@/lib/gerenciamento";
 import {
-  DESPACHADO, ETAPAS_04, EVIDENCIA_ACEITA, STATUS_04, aguardandoAnterior, alterarEtapa, concluida, corDaEtapa, dataBr04, diasAtraso,
-  enviarEvidencia, faltaParaConcluir, hoje04, linkEvidencia, pendencias04, previstaDe, proximaAcao, registrar, resumo04, statusDef, tituloEtapa,
-  type ConsultaPedido, type Cor, type EtapaId04, type Evidencia, type Modulo04Estado,
+  ETAPAS_04, EVIDENCIA_ACEITA, ITENS_EQUIP, NOME_AP, STATUS_04, aguardandoAnterior, alterarEtapa, concluida, corDaEtapa, dataBr04, desfazerComunicacao,
+  desfazerConclusao, desfazerConsulta, desfazerItemEquip, diasAtraso, enviarEvidencia, excluirArquivoEvidencia, faltaParaConcluir, hoje04,
+  linkEvidencia, marcarItemEquip, pendencias04, previstaDe, proximaAcao, registrar, removerEvidencia, resumo04, statusDef, tituloEtapa,
+  type ConsultaPedido, type Cor, type EtapaId04, type Evidencia, type ItemEquip, type Modulo04Estado,
 } from "@/lib/modulo04";
+import { Registro } from "./Etapa";
 import { SISTEMA_PEDIDOS } from "@/lib/sistemaPedidos";
 import {
   assuntoComunicacaoAp, emailHtmlComunicacaoAp, emailTextoComunicacaoAp, faltandoComunicacaoAp, mailtoComunicacaoAp,
@@ -64,11 +69,23 @@ function CampoTexto({ id, label, valor, onSalvar, placeholder, multilinha, class
   );
 }
 
-function CampoData({ id, label, valor, onSalvar }: { id: string; label: string; valor: string; onSalvar: (v: string) => void }) {
+/** Ano aceito nas datas do módulo (evita "01/01/0001" enquanto o ano é digitado). */
+const dataValida = (v: string) => !v || (/^\d{4}-\d{2}-\d{2}$/.test(v) && +v.slice(0, 4) >= 2000 && +v.slice(0, 4) <= 2100);
+
+/** Data que grava ao sair do campo (não a cada número digitado) e só com ano entre 2000 e 2100. */
+function CampoData({ id, label, valor, onSalvar, className }: { id: string; label: string; valor: string; onSalvar: (v: string) => void; className?: string }) {
+  const [v, setV] = useState(valor);
+  useEffect(() => setV(valor), [valor]);
+  const salvar = () => {
+    if (v === valor) return;
+    if (!dataValida(v)) { toast.error("Data inválida. Use um ano entre 2000 e 2100."); setV(valor); return; }
+    onSalvar(v);
+  };
   return (
-    <div>
+    <div className={className}>
       <Label className="text-xs" htmlFor={id}>{label}</Label>
-      <Input id={id} type="date" className="mt-1.5 h-9" value={valor} onChange={e => onSalvar(e.target.value)} />
+      <Input id={id} type="date" min="2000-01-01" max="2100-12-31" className="mt-1.5 h-9" value={v} onChange={e => setV(e.target.value)} onBlur={salvar}
+        onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
     </div>
   );
 }
@@ -82,14 +99,15 @@ function Pilula({ cor, children }: { cor: Cor; children: ReactNode }) {
 /** Executante e acompanhamento, sempre separados. */
 function Papeis({ executante, acompanhamento }: { executante: string; acompanhamento: string }) {
   return (
-    <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-muted-foreground">
-      <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" />Executa: <b className="font-semibold text-foreground">{executante}</b></span>
-      <span className="inline-flex items-center gap-1"><UserRound className="h-3.5 w-3.5" />Acompanha: <b className="font-semibold text-foreground">{acompanhamento}</b></span>
+    // cada papel numa linha que quebra como texto corrido (no celular o nome não vira um bloco desalinhado)
+    <span className="flex flex-col gap-0.5 text-[12px] text-muted-foreground sm:flex-row sm:flex-wrap sm:gap-x-3">
+      <span className="flex items-start gap-1"><Users className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden /><span>Executa: <b className="font-semibold text-foreground">{executante}</b></span></span>
+      <span className="flex items-start gap-1"><UserRound className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden /><span>Acompanha: <b className="font-semibold text-foreground">{acompanhamento}</b></span></span>
     </span>
   );
 }
 
-/* ─── Comunicação da entrega dos cartões para AP ─── */
+/* ─── Comunicação da entrega dos cartões para a Silvana ─── */
 
 function ComunicacaoDialog({ open, onOpenChange, project, estado, responsavel, gp, onPara, onCopiado }: {
   open: boolean; onOpenChange: (o: boolean) => void; project: GerProject; estado: Modulo04Estado; responsavel: string; gp: string;
@@ -110,11 +128,11 @@ function ComunicacaoDialog({ open, onOpenChange, project, estado, responsavel, g
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
         <DialogHeader className="space-y-1 border-b px-5 py-4 text-left">
-          <DialogTitle className="flex items-center gap-2"><Mail className="h-5 w-5 text-primary" />Comunicação da entrega dos cartões para AP</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Mail className="h-5 w-5 text-primary" />Comunicação da entrega dos cartões para {NOME_AP}</DialogTitle>
           <DialogDescription>Os dados vêm do projeto e da etapa. Confira a prévia, copie e cole no Outlook. A comunicação fica registrada como evidência da etapa.</DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-muted/40 p-5">
-          <CampoTexto id="m4-para" label="Para (e-mail de AP, opcional)" valor={estado.cartoesAp.para} onSalvar={onPara} placeholder="ap@itstransdata.com" className="max-w-md" />
+          <CampoTexto id="m4-para" label={`Para (e-mail da ${NOME_AP}, opcional)`} valor={estado.cartoesAp.para} onSalvar={onPara} placeholder="silvana@itstransdata.com" className="max-w-md" />
           <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
             <dl className="space-y-1 border-b px-4 py-3 text-[13px]">
               <div className="flex gap-2"><dt className="w-16 shrink-0 text-muted-foreground">Para</dt><dd className="font-medium">{estado.cartoesAp.para || "—"}</dd></div>
@@ -251,13 +269,101 @@ function PedidoDialog({ open, onOpenChange, etapa, estado, linkPedidos, userName
   );
 }
 
+/* ─── Etapa 3: checklist dos equipamentos ─── */
+
+/** Os campos que cada item do checklist leva ao ser marcado. */
+type CamposItem = Partial<Record<"pedido" | "transportadora" | "rastreio" | "efetiva", string>>;
+
+/** Etapa 3 em checklist (acompanhamento): pedido aberto, separados, despachados e entregues. */
+function ChecklistEquip({ estado, onMarcar, onDesfazer }: {
+  estado: Modulo04Estado; onMarcar: (item: ItemEquip, campos: CamposItem) => void; onDesfazer: (item: ItemEquip) => void;
+}) {
+  const q = estado.equipamentos;
+  const [pedido, setPedido] = useState(q.pedido), [transp, setTransp] = useState(q.transportadora), [rastreio, setRastreio] = useState(q.rastreio);
+  const [entrega, setEntrega] = useState(q.efetiva || hoje04());
+  useEffect(() => { setPedido(q.pedido); setTransp(q.transportadora); setRastreio(q.rastreio); setEntrega(q.efetiva || hoje04()); }, [q.pedido, q.transportadora, q.rastreio, q.efetiva]);
+  const feitos = ITENS_EQUIP.filter(i => q.checklist[i.id]).length;
+  const detalhe = (item: ItemEquip) =>
+    item === "pedido" && q.pedido ? `pedido ${q.pedido}`
+      : item === "despachados" ? [q.transportadora, q.rastreio].filter(Boolean).join(" · ")
+      : item === "entregues" && q.efetiva ? dataBr04(q.efetiva) : "";
+  const falta = (item: ItemEquip) =>
+    item === "pedido" && !pedido.trim() ? "Informe o número do pedido" : item === "entregues" && !dataValida(entrega) ? "Informe a data da entrega" : item === "entregues" && !entrega ? "Informe a data da entrega" : null;
+  const campos = (item: ItemEquip): CamposItem =>
+    item === "pedido" ? { pedido: pedido.trim() } : item === "despachados" ? { transportadora: transp.trim(), rastreio: rastreio.trim() } : item === "entregues" ? { efetiva: entrega } : {};
+  const input = "h-8 bg-background text-xs";
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-2">
+        <p className="text-xs font-semibold">Acompanhamento</p>
+        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums", feitos === ITENS_EQUIP.length ? PILULA.verde : PILULA.amarelo)}>{feitos} de {ITENS_EQUIP.length} ok</span>
+      </div>
+      <ul className="divide-y overflow-hidden rounded-lg border border-border/60 bg-card">
+        {ITENS_EQUIP.map(i => {
+          const marca = q.checklist[i.id];
+          const f = marca ? null : falta(i.id);
+          const det = marca ? detalhe(i.id) : "";
+          return (
+            <li key={i.id} className={cn("flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5 pl-3 pr-2.5 transition-colors", marca && "bg-emerald-500/[0.08] shadow-[inset_3px_0_0_0_rgb(16_185_129)]")}>
+              {marca ? <CheckCircle2 className="h-[18px] w-[18px] shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden /> : <Circle className="h-[18px] w-[18px] shrink-0 text-muted-foreground/50" aria-hidden />}
+              <span className={cn("min-w-0 flex-1 text-sm font-medium leading-snug", marca && "text-emerald-900 dark:text-emerald-100")}>
+                {i.texto}{det && <span className="font-normal text-muted-foreground"> · {det}</span>}
+              </span>
+              {!marca && i.id !== "separados" && (
+                // no celular os campos descem para a linha de baixo, alinhados ao texto
+                <span className="order-last flex basis-full flex-wrap items-center gap-1.5 pl-[30px] sm:order-none sm:basis-auto sm:pl-0">
+                  {i.id === "pedido" && <Input aria-label="Número do pedido" placeholder="Nº do pedido *" className={cn(input, "w-[140px] font-mono")} value={pedido} onChange={ev => setPedido(ev.target.value)} />}
+                  {i.id === "despachados" && <>
+                    <Input aria-label="Transportadora" placeholder="Transportadora" className={cn(input, "w-[130px]")} value={transp} onChange={ev => setTransp(ev.target.value)} />
+                    <Input aria-label="Código de rastreamento" placeholder="Rastreio" className={cn(input, "w-[150px] font-mono")} value={rastreio} onChange={ev => setRastreio(ev.target.value)} />
+                  </>}
+                  {i.id === "entregues" && <Input type="date" aria-label="Data da entrega" min="2000-01-01" max="2100-12-31" className={cn(input, "w-[150px]")} value={entrega} onChange={ev => setEntrega(ev.target.value)} />}
+                </span>
+              )}
+              {marca ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="text-[11.5px] text-muted-foreground">ok · {marca.por} em {quando(marca.em)}</span>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" onClick={() => onDesfazer(i.id)} aria-label={`${i.texto}: desfazer`}>
+                    <RotateCcw className="mr-1 h-3.5 w-3.5" />Desfazer
+                  </Button>
+                </span>
+              ) : (
+                <Button type="button" size="sm" disabled={!!f} title={f ?? "Marcar como ok"} aria-label={`${i.texto}: marcar como ok`} onClick={() => onMarcar(i.id, campos(i.id))}
+                  className="h-7 w-[60px] border border-border bg-background px-0 text-xs text-foreground hover:border-emerald-500 hover:bg-emerald-500/10">
+                  <Check className="mr-1 h-3.5 w-3.5" />OK
+                </Button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 /* ─── Uma etapa: linha resumida que abre os detalhes ─── */
 
-function EtapaCard({ id, n, estado, pessoas, aberta, onAlternar, onAlterar, onEvidencia, onAbrirComunicacao, onAbrirPedido, onConcluir, enviando }: {
-  id: EtapaId04; n: number; estado: Modulo04Estado; pessoas: Pessoas04; aberta: boolean; onAlternar: () => void;
-  onAlterar: (patch: Record<string, string>) => void; onEvidencia: (f: File) => void; onAbrirComunicacao: () => void; onAbrirPedido: () => void;
-  onConcluir: () => void; enviando: boolean;
+/** O que cada ação da etapa faz (o módulo liga tudo isso ao estado e ao histórico). */
+interface AcoesEtapa {
+  onAlternar: () => void;
+  onAlterar: (patch: Record<string, string>) => void;
+  onEvidencia: (f: File) => void;
+  onAbrirComunicacao: () => void;
+  onAbrirPedido: () => void;
+  onConcluir: () => void;
+  onDesfazerConclusao: () => void;
+  onDesfazerComunicacao: () => void;
+  onDesfazerConsulta: (em: string) => void;
+  onExcluirEvidencia: (x: Evidencia) => void;
+  onMarcarItem: (item: ItemEquip, campos: CamposItem) => void;
+  onDesfazerItem: (item: ItemEquip) => void;
+}
+
+function EtapaCard({ id, n, estado, pessoas, aberta, enviando, acoes }: {
+  id: EtapaId04; n: number; estado: Modulo04Estado; pessoas: Pessoas04; aberta: boolean; enviando: boolean; acoes: AcoesEtapa;
 }) {
+  const { onAlternar, onAlterar, onEvidencia, onAbrirComunicacao, onAbrirPedido, onConcluir } = acoes;
   const e = estado[id];
   const st = statusDef(id, e.status);
   const cor = corDaEtapa(id, estado);
@@ -265,97 +371,107 @@ function EtapaCard({ id, n, estado, pessoas, aberta, onAlternar, onAlterar, onEv
   const esperando = aguardandoAnterior(id, estado);
   const falta = faltaParaConcluir(id, estado);
   const fechada = concluida(id, estado);
+  const checklist = id === "equipamentos";
   const arquivo = useRef<HTMLInputElement>(null);
+  const [aExcluir, setAExcluir] = useState<Evidencia | null>(null);
   const hist = estado.historico.filter(h => h.etapa === id).slice().reverse();
   const consultas = id === "cartoesAp" ? [] : estado[id].consultas.slice().reverse();
   const evid = estado.evidencias[id];
   const v = e as unknown as Record<string, string>;
   const pid = (c: string) => `m4-${id}-${c}`;
+  const nomeConcluida = ((s: string) => s.charAt(0).toLowerCase() + s.slice(1))(STATUS_04[id].find(s => s.concluido)!.nome);
 
   return (
-    // scroll-mt maior que a faixa fixa do portal (56px): ao abrir a etapa, o título não fica embaixo dela
-    <li id={`ger-atv-${id}`} className="scroll-mt-20">
+    // scroll-mt maior que a faixa fixa do portal (56px) mais a barra presa do projeto: ao abrir a etapa, o título não fica embaixo delas
+    <li id={`ger-atv-${id}`} className="scroll-mt-32">
       <div className={cn("overflow-hidden rounded-xl border bg-card shadow-sm transition-colors", atraso > 0 ? "border-red-500/40" : "border-border/60")}>
         {/* linha resumida */}
+        {/* no celular: número, título e a seta na mesma linha; situação e "Previsto" juntos embaixo do título.
+            Do tablet para cima: tudo numa linha, com o "Previsto" em coluna */}
         <button type="button" onClick={onAlternar} aria-expanded={aberta}
-          className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3.5 text-left transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none">
+          className="flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none sm:items-center sm:gap-4">
           <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold", NUMERO[cor])}>
             {fechada ? <Check className="h-4 w-4" /> : n}
           </span>
-          <span className="min-w-0 flex-1 basis-64">
-            <span className="block text-[15px] font-semibold">{tituloEtapa(id)}</span>
-            <Papeis executante={pessoas.executante[id]} acompanhamento={pessoas.acompanhamento} />
-          </span>
-          <span className="flex flex-wrap items-center gap-2">
-            {esperando ? <Pilula cor="cinza">Aguardando etapa anterior</Pilula> : <Pilula cor={st.cor}>{st.nome}</Pilula>}
-            {atraso > 0 && <Pilula cor="vermelho">Atrasado · {atraso} {atraso === 1 ? "dia" : "dias"}</Pilula>}
-          </span>
-          <span className="w-[118px] shrink-0 text-[12px] text-muted-foreground">
-            <span className="block text-[10.5px] font-semibold uppercase tracking-wide">Previsto</span>
-            <span className={cn("font-medium", atraso > 0 ? "text-red-700 dark:text-red-300" : "text-foreground")}>{dataBr04(previstaDe(id, estado))}</span>
-          </span>
-          <ChevronDown className={cn("h-5 w-5 shrink-0 text-muted-foreground transition-transform", aberta && "rotate-180")} />
-          {!fechada && (
-            <span className="basis-full pl-[52px] text-[12.5px] text-orange-800 dark:text-orange-200">
-              <b className="font-semibold">Próxima ação:</b> {proximaAcao(id, estado)}
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <span className="min-w-0 flex-1 basis-full sm:basis-64">
+                <span className="block text-[15px] font-semibold leading-snug">{tituloEtapa(id)}</span>
+                <Papeis executante={pessoas.executante[id]} acompanhamento={pessoas.acompanhamento} />
+              </span>
+              <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <span className="flex flex-wrap items-center gap-2">
+                  {esperando ? <Pilula cor="cinza">Aguardando etapa anterior</Pilula> : <Pilula cor={st.cor}>{st.nome}</Pilula>}
+                  {atraso > 0 && <Pilula cor="vermelho">Atrasado · {atraso} {atraso === 1 ? "dia" : "dias"}</Pilula>}
+                </span>
+                <span className="text-[12px] text-muted-foreground sm:w-[118px]">
+                  <span className="mr-1 text-[10.5px] font-semibold uppercase tracking-wide sm:mr-0 sm:block">Previsto</span>
+                  <span className={cn("font-medium", atraso > 0 ? "text-red-700 dark:text-red-300" : "text-foreground")}>{dataBr04(previstaDe(id, estado))}</span>
+                </span>
+              </span>
             </span>
-          )}
+            {!fechada && (
+              <span className="mt-2 block text-[12.5px] text-orange-800 dark:text-orange-200">
+                <b className="font-semibold">Próxima ação:</b> {proximaAcao(id, estado)}
+              </span>
+            )}
+          </span>
+          <ChevronDown className={cn("mt-2 h-5 w-5 shrink-0 text-muted-foreground transition-transform sm:mt-0", aberta && "rotate-180")} />
         </button>
 
         {/* detalhes */}
         {aberta && (
           <div className="space-y-5 border-t bg-muted/20 px-4 py-4">
-            {id === "equipamentos" && DESPACHADO.includes(e.status) && (
-              <div className="grid gap-3 rounded-xl border border-sky-500/30 bg-sky-500/[0.07] p-3.5 sm:grid-cols-4">
-                {[["Transportadora", estado.equipamentos.transportadora || "—"], ["Código de rastreamento", estado.equipamentos.rastreio || "—"],
-                  ["Data do despacho", dataBr04(estado.equipamentos.despachoEfetivo)], ["Previsão de entrega", dataBr04(estado.equipamentos.prevista)]].map(([l, x]) => (
-                  <div key={l}><p className="text-[10.5px] font-semibold uppercase tracking-wide text-sky-800 dark:text-sky-200">{l}</p><p className="mt-0.5 font-mono text-[15px] font-semibold">{x}</p></div>
-                ))}
-              </div>
+            {checklist ? (
+              <>
+                <ChecklistEquip estado={estado} onMarcar={acoes.onMarcarItem} onDesfazer={acoes.onDesfazerItem} />
+                <div className="grid gap-3 sm:grid-cols-[200px_minmax(0,1fr)]">
+                  <CampoData id={pid("prev")} label="Previsão de entrega" valor={v.prevista} onSalvar={x => onAlterar({ prevista: x })} />
+                  <CampoTexto id={pid("obs")} label="Observações" valor={v.observacoes} onSalvar={x => onAlterar({ observacoes: x })} multilinha />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <Label className="text-xs">Situação</Label>
+                    <Select value={e.status} onValueChange={s => onAlterar({ status: s })}>
+                      <SelectTrigger className="mt-1.5 h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>{STATUS_04[id].filter(s => !s.concluido || s.id === e.status).map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  {id === "apAt" && <CampoTexto id={pid("pedido")} label="Número do pedido" valor={v.pedido} onSalvar={x => onAlterar({ pedido: x })} placeholder="Ex.: 48213" />}
+                  <CampoTexto id={pid("qtd")} label="Quantidade de cartões" valor={v.quantidade} onSalvar={x => onAlterar({ quantidade: x.replace(/\D/g, "") })} placeholder="Ex.: 300" />
+                  <CampoData id={pid("prev")} label="Data prevista" valor={v.prevista} onSalvar={x => onAlterar({ prevista: x })} />
+                  <CampoData id={pid("efet")} label={id === "cartoesAp" ? "Data efetiva da entrega" : "Data efetiva"} valor={v.efetiva} onSalvar={x => onAlterar({ efetiva: x })} />
+                  {id === "apAt" && <CampoTexto id={pid("stped")} label="Status do pedido" valor={v.statusPedido} onSalvar={x => onAlterar({ statusPedido: x })} placeholder="Como o Sistema de Pedidos mostra" />}
+                  <CampoTexto id={pid("obs")} label="Observações" valor={v.observacoes} onSalvar={x => onAlterar({ observacoes: x })} multilinha className="sm:col-span-2 lg:col-span-4" />
+                </div>
+
+                {/* ações */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {id === "cartoesAp"
+                    ? <Button variant="outline" className="h-9 bg-background" onClick={onAbrirComunicacao}><Mail className="mr-1.5 h-4 w-4" />Preparar comunicação de entrega</Button>
+                    : <Button variant="outline" className="h-9 bg-background" onClick={onAbrirPedido}><Search className="mr-1.5 h-4 w-4" />Verificar no Sistema de Pedidos</Button>}
+                  {!fechada && (
+                    <Button className="h-9 bg-emerald-600 text-white hover:bg-emerald-500" disabled={falta.length > 0} onClick={onConcluir}
+                      title={falta.length ? `Falta: ${falta.join(", ")}` : undefined}>
+                      <PackageCheck className="mr-1.5 h-4 w-4" />Marcar como {nomeConcluida}
+                    </Button>
+                  )}
+                  {!fechada && falta.length > 0 && <span className="text-[12px] text-amber-800 dark:text-amber-200">Para concluir falta: {falta.join(", ")}.</span>}
+                </div>
+                {/* o que já foi feito, cada um com o seu Desfazer */}
+                {(fechada || (id === "cartoesAp" && estado.cartoesAp.comunicacaoEm)) && (
+                  <div className="space-y-2">
+                    {id === "cartoesAp" && estado.cartoesAp.comunicacaoEm && (
+                      <Registro texto={`Comunicação de entrega preparada em ${quando(estado.cartoesAp.comunicacaoEm)}`} onDesfazer={acoes.onDesfazerComunicacao} />
+                    )}
+                    {fechada && <Registro texto={`${st.nome} · concluída em ${quando(e.concluidoEm!)} por ${e.por}`} onDesfazer={acoes.onDesfazerConclusao} />}
+                  </div>
+                )}
+              </>
             )}
-
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <Label className="text-xs">Situação</Label>
-                <Select value={e.status} onValueChange={s => onAlterar({ status: s })}>
-                  <SelectTrigger className="mt-1.5 h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>{STATUS_04[id].filter(s => !s.concluido || s.id === e.status).map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              {id !== "cartoesAp" && <CampoTexto id={pid("pedido")} label="Número do pedido" valor={v.pedido} onSalvar={x => onAlterar({ pedido: x })} placeholder="Ex.: 48213" />}
-              {id === "equipamentos" && <CampoTexto id={pid("equip")} label="Equipamento" valor={v.equipamento} onSalvar={x => onAlterar({ equipamento: x })} placeholder="Ex.: AtlasBox FULL" />}
-              <CampoTexto id={pid("qtd")} label={id === "equipamentos" ? "Quantidade" : "Quantidade de cartões"} valor={v.quantidade} onSalvar={x => onAlterar({ quantidade: x.replace(/\D/g, "") })} placeholder="Ex.: 300" />
-              {id === "equipamentos" ? <>
-                <CampoData id={pid("dprev")} label="Data prevista de despacho" valor={v.despachoPrevisto} onSalvar={x => onAlterar({ despachoPrevisto: x })} />
-                <CampoData id={pid("def")} label="Data efetiva de despacho" valor={v.despachoEfetivo} onSalvar={x => onAlterar({ despachoEfetivo: x })} />
-                <CampoTexto id={pid("transp")} label="Transportadora" valor={v.transportadora} onSalvar={x => onAlterar({ transportadora: x })} />
-                <CampoTexto id={pid("rastreio")} label="Código de rastreamento" valor={v.rastreio} onSalvar={x => onAlterar({ rastreio: x })} />
-                <CampoData id={pid("prev")} label="Data prevista de entrega" valor={v.prevista} onSalvar={x => onAlterar({ prevista: x })} />
-                <CampoData id={pid("efet")} label="Data efetiva da entrega" valor={v.efetiva} onSalvar={x => onAlterar({ efetiva: x })} />
-              </> : <>
-                <CampoData id={pid("prev")} label="Data prevista" valor={v.prevista} onSalvar={x => onAlterar({ prevista: x })} />
-                <CampoData id={pid("efet")} label={id === "cartoesAp" ? "Data efetiva da entrega" : "Data efetiva"} valor={v.efetiva} onSalvar={x => onAlterar({ efetiva: x })} />
-              </>}
-              {id !== "cartoesAp" && <CampoTexto id={pid("stped")} label="Status do pedido" valor={v.statusPedido} onSalvar={x => onAlterar({ statusPedido: x })} placeholder="Como o Sistema de Pedidos mostra" />}
-              <CampoTexto id={pid("obs")} label="Observações" valor={v.observacoes} onSalvar={x => onAlterar({ observacoes: x })} multilinha className="sm:col-span-2 lg:col-span-4" />
-            </div>
-
-            {/* ações */}
-            <div className="flex flex-wrap items-center gap-2">
-              {id === "cartoesAp"
-                ? <Button variant="outline" className="h-9 bg-background" onClick={onAbrirComunicacao}><Mail className="mr-1.5 h-4 w-4" />Preparar comunicação de entrega</Button>
-                : <Button variant="outline" className="h-9 bg-background" onClick={onAbrirPedido}>
-                    {id === "equipamentos" ? <><Truck className="mr-1.5 h-4 w-4" />Consultar despacho</> : <><Search className="mr-1.5 h-4 w-4" />Verificar no Sistema de Pedidos</>}
-                  </Button>}
-              {!fechada && (
-                <Button className="h-9 bg-emerald-600 text-white hover:bg-emerald-500" disabled={falta.length > 0} onClick={onConcluir}
-                  title={falta.length ? `Falta: ${falta.join(", ")}` : undefined}>
-                  <PackageCheck className="mr-1.5 h-4 w-4" />Marcar como {((n: string) => n.charAt(0).toLowerCase() + n.slice(1))(STATUS_04[id].find(s => s.concluido)!.nome)}
-                </Button>
-              )}
-              {!fechada && falta.length > 0 && <span className="text-[12px] text-amber-800 dark:text-amber-200">Para concluir falta: {falta.join(", ")}.</span>}
-              {fechada && <span className="text-[12.5px] text-emerald-700 dark:text-emerald-300"><Check className="mr-1 inline h-4 w-4" />Concluída em {quando(e.concluidoEm!)} por {e.por}</span>}
-            </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
               {/* evidências */}
@@ -368,14 +484,19 @@ function EtapaCard({ id, n, estado, pessoas, aberta, onAlternar, onAlterar, onEv
                   </Button>
                 </div>
                 {evid.length === 0 ? <p className="mt-2 text-[12px] text-muted-foreground">Nenhuma evidência. PDF, imagem, comprovante, e-mail ou documento.</p> : (
-                  <ul className="mt-2 space-y-1.5">{evid.map(x => <ItemEvidencia key={x.id} x={x} />)}</ul>
+                  <ul className="mt-2 space-y-1">{evid.map(x => <ItemEvidencia key={x.id} x={x} onExcluir={() => setAExcluir(x)} />)}</ul>
                 )}
                 {consultas.length > 0 && (
                   <div className="mt-3 border-t pt-2.5">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Consultas ao Sistema de Pedidos</p>
-                    <ul className="mt-1.5 space-y-1.5">{consultas.map((c, k) => (
-                      <li key={k} className="text-[12px]"><b>Pedido {c.numero}</b>: {c.status} <span className="text-muted-foreground">· consultado em {dataBr04(c.data)} · registrado por {c.por} em {quando(c.em)} · {c.fonte === "manual" ? "manual" : "automático"}</span>
-                        {c.observacao && <span className="block text-muted-foreground">{c.observacao}</span>}</li>
+                    <ul className="mt-1.5 space-y-1.5">{consultas.map(c => (
+                      <li key={c.em} className="flex items-start gap-2 text-[12px]">
+                        <span className="min-w-0 flex-1"><b>Pedido {c.numero}</b>: {c.status} <span className="text-muted-foreground">· consultado em {dataBr04(c.data)} · registrado por {c.por} em {quando(c.em)} · {c.fonte === "manual" ? "manual" : "automático"}</span>
+                          {c.observacao && <span className="block text-muted-foreground">{c.observacao}</span>}</span>
+                        <Button variant="ghost" size="sm" className="h-7 shrink-0 px-2 text-xs text-muted-foreground" onClick={() => acoes.onDesfazerConsulta(c.em)} aria-label={`Desfazer a consulta do pedido ${c.numero}`}>
+                          <RotateCcw className="mr-1 h-3.5 w-3.5" />Desfazer
+                        </Button>
+                      </li>
                     ))}</ul>
                   </div>
                 )}
@@ -399,11 +520,32 @@ function EtapaCard({ id, n, estado, pessoas, aberta, onAlternar, onAlterar, onEv
           </div>
         )}
       </div>
+
+      {/* confirmação nomeando o que sai (o histórico guarda a exclusão) */}
+      <AlertDialog open={!!aExcluir} onOpenChange={o => { if (!o) setAExcluir(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir a evidência "{aExcluir?.nome}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {aExcluir?.tipo === "arquivo" ? "O arquivo sai da etapa e também dos anexos do projeto."
+                : aExcluir?.tipo === "email" ? "A comunicação de entrega é desfeita e sai das evidências."
+                : "A consulta ao Sistema de Pedidos é desfeita: sai das evidências e da lista de consultas."}
+              {" "}O histórico registra a exclusão, com o seu nome e a hora.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (aExcluir) acoes.onExcluirEvidencia(aExcluir); setAExcluir(null); }}>
+              <Trash2 className="mr-1.5 h-4 w-4" />Excluir evidência
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </li>
   );
 }
 
-function ItemEvidencia({ x }: { x: Evidencia }) {
+function ItemEvidencia({ x, onExcluir }: { x: Evidencia; onExcluir: () => void }) {
   const abrir = async () => {
     if (!x.caminho) return;
     const url = await linkEvidencia(x.caminho);
@@ -414,6 +556,10 @@ function ItemEvidencia({ x }: { x: Evidencia }) {
       {x.tipo === "email" ? <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
       {x.caminho ? <button type="button" onClick={() => void abrir()} className="min-w-0 truncate font-medium text-primary hover:underline">{x.nome}</button> : <span className="min-w-0 truncate font-medium">{x.nome}</span>}
       <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{x.por} · {quando(x.em)}</span>
+      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={onExcluir}
+        title="Excluir evidência" aria-label={`Excluir a evidência ${x.nome}`}>
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
     </li>
   );
 }
@@ -436,7 +582,7 @@ export function Modulo04({ project, estado, onChange, userName, linkPedidos }: {
   const { data: assistente = null } = useQuery({ queryKey: ["assistente-projetos"], queryFn: fetchAssistenteProjetos, staleTime: 300_000 });
   const gp = project.manager?.full_name ?? "Gerente do Projeto";
   const pessoas: Pessoas04 = {
-    executante: { cartoesAp: assistente ? `${assistente} · Assistente de Projetos` : "Assistente de Projetos", apAt: "AP", equipamentos: "AT / área de despacho" },
+    executante: { cartoesAp: assistente ? `${assistente} · Assistente de Projetos` : "Assistente de Projetos", apAt: NOME_AP, equipamentos: "AT / área de despacho" },
     acompanhamento: `${gp} · GP`,
   };
   const [aberta, setAberta] = useState<EtapaId04 | null>(null);
@@ -465,7 +611,7 @@ export function Modulo04({ project, estado, onChange, userName, linkPedidos }: {
   const comunicacaoCopiada = () => onChange(e => {
     const agora = new Date().toISOString();
     const jaTem = e.evidencias.cartoesAp.some(x => x.tipo === "email");
-    const ev: Evidencia = { id: `email-${agora}`, tipo: "email", nome: "Comunicação de entrega para AP (e-mail)", em: agora, por: userName };
+    const ev: Evidencia = { id: `email-${agora}`, tipo: "email", nome: `Comunicação de entrega para ${NOME_AP} (e-mail)`, em: agora, por: userName };
     const e2 = { ...e, cartoesAp: { ...e.cartoesAp, comunicacaoEm: e.cartoesAp.comunicacaoEm ?? agora }, evidencias: jaTem ? e.evidencias : { ...e.evidencias, cartoesAp: [...e.evidencias.cartoesAp, ev] } };
     return registrar(e2, "cartoesAp", "Comunicação de entrega", "preparada e copiada para o Outlook", userName, agora);
   });
@@ -475,14 +621,50 @@ export function Modulo04({ project, estado, onChange, userName, linkPedidos }: {
       const patch: Record<string, string> = { pedido: rc.consulta.numero, statusPedido: rc.consulta.status };
       if (rc.status) patch.status = rc.status;
       if (rc.despacho) Object.assign(patch, Object.fromEntries(Object.entries(rc.despacho).filter(([, x]) => x)));
+      // o "Desfazer" da consulta devolve os campos que ela mudou (só os que ainda estiverem como ela deixou)
+      const atual = e[etapa] as unknown as Record<string, string>;
+      const mudou = Object.keys(patch).filter(k => (atual[k] ?? "") !== patch[k]);
+      const consulta: ConsultaPedido = {
+        ...rc.consulta, antes: Object.fromEntries(mudou.map(k => [k, atual[k] ?? ""])), depois: Object.fromEntries(mudou.map(k => [k, patch[k]])),
+      };
       let e2 = alterarEtapa(e, etapa, patch as never, userName);
-      e2 = { ...e2, [etapa]: { ...e2[etapa], consultas: [...e2[etapa].consultas, rc.consulta] } };
+      e2 = { ...e2, [etapa]: { ...e2[etapa], consultas: [...e2[etapa].consultas, consulta] } };
       const ref: Evidencia = { id: `pedido-${rc.consulta.em}`, tipo: "pedido", nome: `Sistema de Pedidos · pedido ${rc.consulta.numero}: ${rc.consulta.status}`, em: rc.consulta.em, por: userName };
       e2 = { ...e2, evidencias: { ...e2.evidencias, [etapa]: [...e2.evidencias[etapa], ref, ...(anexo ? [anexo] : [])] } };
       return registrar(e2, etapa, "Consulta ao Sistema de Pedidos", `pedido ${rc.consulta.numero}: ${rc.consulta.status} (consulta de ${dataBr04(rc.consulta.data)}, manual)`, userName);
     });
     toast.success("Consulta registrada no histórico.");
   };
+  // Desfazer: cada um acrescenta uma linha ao histórico (nada some dele)
+  const excluirEvidencia = async (id: EtapaId04, x: Evidencia) => {
+    if (x.tipo === "email") { onChange(e => desfazerComunicacao(e, userName)); toast.success("Comunicação de entrega desfeita."); return; }
+    if (x.tipo === "pedido" && id !== "cartoesAp") {
+      onChange(e => desfazerConsulta(e, id, x.id.replace(/^pedido-/, ""), userName));
+      toast.success("Consulta ao Sistema de Pedidos desfeita.");
+      return;
+    }
+    const apagou = x.caminho ? await excluirArquivoEvidencia(x.caminho).catch(() => false) : true;
+    onChange(e => removerEvidencia(e, id, x.id, userName));
+    if (apagou) toast.success("Evidência excluída. O histórico registra a exclusão.");
+    else toast.warning("A evidência saiu da etapa, mas o arquivo continua nos anexos do projeto.", { description: "Só quem enviou o arquivo ou um administrador pode apagá-lo." });
+  };
+  const acoesDe = (id: EtapaId04): AcoesEtapa => ({
+    onAlternar: () => setAberta(a => (a === id ? null : id)),
+    onAlterar: p => alterar(id, p),
+    onEvidencia: f => void anexar(id, f),
+    onAbrirComunicacao: () => setComunicacao(true),
+    onAbrirPedido: () => setPedido(id as "apAt" | "equipamentos"),
+    onConcluir: () => concluir(id),
+    onDesfazerConclusao: () => { onChange(e => desfazerConclusao(e, id, userName)); toast.success(`${tituloEtapa(id)}: conclusão desfeita.`); },
+    onDesfazerComunicacao: () => { onChange(e => desfazerComunicacao(e, userName)); toast.success("Comunicação de entrega desfeita."); },
+    onDesfazerConsulta: em => { if (id !== "cartoesAp") onChange(e => desfazerConsulta(e, id, em, userName)); toast.success("Consulta ao Sistema de Pedidos desfeita."); },
+    onExcluirEvidencia: x => void excluirEvidencia(id, x),
+    onMarcarItem: (item, campos) => {
+      onChange(e => marcarItemEquip(e, item, userName, campos));
+      if (item === "entregues") toast.success("Equipamentos entregues: etapa concluída e registrada no histórico.");
+    },
+    onDesfazerItem: item => onChange(e => desfazerItemEquip(e, item, userName)),
+  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -536,9 +718,7 @@ export function Modulo04({ project, estado, onChange, userName, linkPedidos }: {
       {/* etapas */}
       <ol className="space-y-3">
         {ETAPAS_04.map((id, i) => (
-          <EtapaCard key={id} id={id} n={i + 1} estado={estado} pessoas={pessoas} aberta={aberta === id} onAlternar={() => setAberta(a => (a === id ? null : id))}
-            onAlterar={p => alterar(id, p)} onEvidencia={f => void anexar(id, f)} enviando={enviando === id}
-            onAbrirComunicacao={() => setComunicacao(true)} onAbrirPedido={() => setPedido(id as "apAt" | "equipamentos")} onConcluir={() => concluir(id)} />
+          <EtapaCard key={id} id={id} n={i + 1} estado={estado} pessoas={pessoas} aberta={aberta === id} enviando={enviando === id} acoes={acoesDe(id)} />
         ))}
       </ol>
       <p className="text-[12px] text-muted-foreground">
