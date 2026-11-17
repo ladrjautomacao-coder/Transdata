@@ -1,23 +1,27 @@
 import { AlertTriangle, ArrowRight, CheckCircle2, Construction, Layers, Presentation, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { NumeroModulo, contaProjeto } from "./ProgressoProjeto";
+import type { SituacaoAtividade } from "@/lib/gerenciamento";
+import { LegendaTrilha, NumeroModulo, TrilhaCompacta, contaProjeto } from "./ProgressoProjeto";
 import { contaModulo, proximaDe, type ModuloProgresso } from "./progresso";
 
 /** Alturas das barras do painel em construção (só a silhueta). */
 const BARRAS = [38, 62, 48, 80, 56, 70, 44];
 
 /**
- * Início do projeto (ao escolher o projeto): dois quadrantes. "Módulos de gerenciamento" traz os
- * módulos com o andamento de cada um (tocar abre o módulo); "Gestão à Vista" está em construção.
+ * Início do projeto (ao escolher o projeto): dois quadrantes. "Módulos de gerenciamento" traz cada
+ * módulo com a trilha de bolinhas, atividade por atividade (tocar no nome abre o módulo; na bolinha,
+ * a atividade); "Gestão à Vista" está em construção.
  */
-export function InicioProjeto({ modulos, atencao, onAbrirModulos, onAbrirModulo }: {
+export function InicioProjeto({ modulos, atencao, destaque, onAbrirModulos, onAbrirModulo }: {
   modulos: ModuloProgresso[];
   /** Quantos pontos pedem atenção no projeto (avisos e atividades aguardando retorno). */
   atencao: number;
+  /** Situação escolhida nos números do cabeçalho: acende essas bolinhas nas trilhas. */
+  destaque: SituacaoAtividade | null;
   /** Abre o progresso do projeto, com todos os módulos. */
   onAbrirModulos: () => void;
-  onAbrirModulo: (numero: string) => void;
+  /** Abre o módulo; com a atividade, rola até ela. */
+  onAbrirModulo: (numero: string, atividadeId?: string) => void;
 }) {
   const { feitas, total, pct } = contaProjeto(modulos);
   const proximo = modulos.map(m => ({ m, x: proximaDe(m) })).find(p => p.x);
@@ -44,24 +48,23 @@ export function InicioProjeto({ modulos, atencao, onAbrirModulos, onAbrirModulo 
           {modulos.map(m => {
             const c = contaModulo(m);
             return (
-              <li key={m.numero} className="border-b border-border/60 last:border-b-0">
+              <li key={m.numero} className="border-b border-border/60 px-5 pb-3.5 pt-3 last:border-b-0 sm:px-6">
                 <button type="button" onClick={() => onAbrirModulo(m.numero)} title={`Abrir o módulo ${m.numero}`}
-                  className="group flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none sm:px-6">
+                  className="group flex w-full items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <NumeroModulo numero={m.numero} tamanho="sm" />
                   <span className="min-w-0 flex-1 text-sm font-semibold leading-snug group-hover:text-primary">{m.nome}</span>
-                  <span aria-hidden className="hidden h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-primary/15 sm:block">
-                    <span className={cn("block h-full rounded-full", c.completo ? "bg-emerald-500" : "bg-gradient-to-r from-marca-laranja via-marca-rosa to-purple-600")}
-                      style={{ width: `${c.total ? (c.feitas / c.total) * 100 : 0}%` }} />
-                  </span>
                   {c.completo
-                    ? <span className="inline-flex w-[86px] shrink-0 items-center justify-end gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />Concluído</span>
-                    : <span className="w-[86px] shrink-0 text-right text-[13px] tabular-nums text-muted-foreground"><b className="font-display text-base text-foreground">{c.feitas}</b>/{c.total}</span>}
+                    ? <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />Concluído</span>
+                    : <span className="shrink-0 text-[13px] tabular-nums text-muted-foreground"><b className="font-display text-base text-foreground">{c.feitas}</b>/{c.total}</span>}
                   <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden />
                 </button>
+                {/* as bolinhas alinhadas com o nome do módulo */}
+                <div className="mt-2.5 pl-10"><TrilhaCompacta m={m} destaque={destaque} onAbrir={onAbrirModulo} /></div>
               </li>
             );
           })}
         </ul>
+        <div className="border-t border-border/60 px-5 py-2.5 sm:px-6"><LegendaTrilha /></div>
 
         <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-2 border-t bg-muted/30 px-5 py-3.5 sm:px-6">
           {proximo ? (

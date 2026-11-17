@@ -106,7 +106,7 @@ function DestaqueModulo({ numero, nome, resumo, proxima, feitas, total, children
     <section aria-labelledby="ger-mod-titulo" className="flex flex-wrap items-center gap-5 rounded-xl border border-border/70 bg-card p-5 shadow-sm sm:p-6">
       <NumeroModulo numero={numero} tamanho="lg" />
       <div className="min-w-0 flex-1 basis-64">
-        <h2 id="ger-mod-titulo" className="text-2xl font-bold leading-tight">{nome}</h2>
+        <h2 id="ger-mod-titulo" className="scroll-mt-28 text-2xl font-bold leading-tight">{nome}</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{resumo}</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {proxima ? (
@@ -219,7 +219,6 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
   const abrirModulos = () => { irPara(null); setFoco({ alvo: "ger-topo" }); };
   const irInicio = () => {
     mudarParams(n => { n.delete("modulo"); n.delete("area"); });
-    setEscolhido(null);
     setFoco({ alvo: "ger-topo" });
   };
   // sem esqueleto: a tela e o que o GP preencheu continuam onde estão
@@ -320,10 +319,13 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
     })),
   ];
   const destaque = destaqueValido(modulos, escolhido);
-  /** Número do cabeçalho tocado: destaca (ou tira o destaque) no progresso dos módulos, abrindo-o se preciso. */
+  /**
+   * Número do cabeçalho tocado: destaca (ou tira o destaque) nas trilhas, ali mesmo no início do
+   * projeto ou no progresso; com um módulo aberto, volta ao progresso.
+   */
   const destacar = (s: SituacaoAtividade) => {
-    setEscolhido(atual => (atual === s && modulo === null && emModulos ? null : s));
-    if (modulo !== null || !emModulos) irPara(null);
+    setEscolhido(atual => (atual === s && modulo === null ? null : s));
+    if (modulo !== null) irPara(null);
   };
 
   return (
@@ -338,7 +340,7 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
         solucoes={solucoes}
         imagem={imagemCidade}
         modulos={modulos}
-        destaque={modulo === null && emModulos ? destaque : null}
+        destaque={modulo === null ? destaque : null}
         onDestacar={destacar}
         onBack={onBack}
       />
@@ -363,8 +365,8 @@ export function ProjectWorkspace({ id, onBack }: { id: string; onBack: () => voi
 
       <div className="min-w-0">
         {!emModulos ? (
-          <InicioProjeto modulos={modulos} atencao={avisosDoProjeto(avisos, modulos).length}
-            onAbrirModulos={abrirModulos} onAbrirModulo={m => irPara(m as ModuloNum)} />
+          <InicioProjeto modulos={modulos} atencao={avisosDoProjeto(avisos, modulos).length} destaque={destaque}
+            onAbrirModulos={abrirModulos} onAbrirModulo={(m, atividade) => irPara(m as ModuloNum, atividade)} />
         ) : modulo === null ? (
           <ProgressoProjeto modulos={modulos} onAbrir={(m, atividade) => irPara(m as ModuloNum, atividade)}
             destaque={destaque} onLimparDestaque={() => setEscolhido(null)} avisos={avisos} nomeGp={project.manager?.full_name ?? null} />

@@ -273,7 +273,8 @@ function EtapaCard({ id, n, estado, pessoas, aberta, onAlternar, onAlterar, onEv
   const pid = (c: string) => `m4-${id}-${c}`;
 
   return (
-    <li id={`ger-atv-${id}`} className="scroll-mt-6">
+    // scroll-mt maior que a faixa fixa do portal (56px): ao abrir a etapa, o título não fica embaixo dela
+    <li id={`ger-atv-${id}`} className="scroll-mt-20">
       <div className={cn("overflow-hidden rounded-xl border bg-card shadow-sm transition-colors", atraso > 0 ? "border-red-500/40" : "border-border/60")}>
         {/* linha resumida */}
         <button type="button" onClick={onAlternar} aria-expanded={aberta}

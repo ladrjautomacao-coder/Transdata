@@ -255,6 +255,67 @@ function CartaoTrilha({ m, destaque, onAbrir }: {
   );
 }
 
+/** A próxima atividade na trilha compacta e na legenda: o laranja do logo com um halo menor. */
+const PROXIMA_SM = "bg-gradient-to-br from-marca-laranja to-marca-rosa text-white shadow-[0_0_0_3px_hsl(var(--marca-laranja)/0.2)]";
+
+/**
+ * Trilha compacta de um módulo (no início do projeto): uma bolinha por atividade, nas cores da
+ * situação, na ordem do módulo. O nome aparece ao parar o mouse; tocar abre a atividade. Com
+ * `destaque`, as da situação escolhida acendem e as outras apagam (como na trilha completa).
+ */
+export function TrilhaCompacta({ m, destaque, onAbrir }: {
+  m: ModuloProgresso; destaque: SituacaoAtividade | null; onAbrir: (numero: string, atividadeId?: string) => void;
+}) {
+  const proxima = proximaDe(m);
+  const rotulo = (s: SituacaoAtividade) => (s === "bloqueado" && m.rotuloBloqueado ? m.rotuloBloqueado : SIT[s].rotulo);
+  const ehProxima = (id?: string) => !destaque && !!id && id === proxima?.a.id;
+  return (
+    <ol className="flex items-center" aria-label={`Atividades do módulo ${m.numero}`}>
+      {m.atividades.map(({ a, sit }, i) => {
+        const acesa = destaque === sit;
+        const apagada = !!destaque && !acesa;
+        const seguinte = m.atividades[i + 1];
+        // linha até a próxima bolinha: roxa depois de uma feita; chegando na próxima atividade, vira laranja
+        const linha = sit === "feito" ? (ehProxima(seguinte?.a.id) ? "bg-gradient-to-r from-primary to-marca-laranja" : "bg-primary") : "bg-border";
+        return (
+          <li key={a.id} className="flex min-w-[30px] max-w-[56px] flex-1 items-center last:min-w-0 last:max-w-none last:flex-none">
+            <button type="button" onClick={() => onAbrir(m.numero, a.id)} title={`${i + 1}. ${a.titulo}: ${rotulo(sit).toLowerCase()}`}
+              aria-label={`Módulo ${m.numero}, ${i + 1}. ${a.titulo}: ${rotulo(sit)}`}
+              className={cn("relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-display text-[11px] font-bold transition-[transform,opacity] duration-300 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
+                ehProxima(a.id) ? PROXIMA_SM : SIT[sit].bolinha,
+                acesa && cn("z-10 scale-110 ring-4", SIT[sit].anel), apagada && "opacity-25 grayscale")}>
+              {sit === "feito" ? <Check className="h-3.5 w-3.5" strokeWidth={2.6} /> : sit === "bloqueado" ? <Lock className="h-3 w-3" /> : sit === "naoaplica" ? <Minus className="h-3 w-3" /> : i + 1}
+            </button>
+            {seguinte && <span aria-hidden className={cn("mx-0.5 h-0.5 flex-1", linha, destaque && "opacity-30")} />}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** O que cada cor de bolinha quer dizer, para a trilha compacta. */
+export function LegendaTrilha() {
+  const itens: { cls: string; icone?: LucideIcon; rotulo: string }[] = [
+    { cls: SIT.feito.bolinha, icone: Check, rotulo: "Feita" },
+    { cls: PROXIMA_SM, rotulo: "Próxima" },
+    { cls: SIT.afazer.bolinha, rotulo: "A fazer" },
+    { cls: SIT.aguardando.bolinha, rotulo: "Aguardando retorno" },
+    { cls: SIT.bloqueado.bolinha, icone: Lock, rotulo: "Esperando outra etapa" },
+    { cls: SIT.naoaplica.bolinha, icone: Minus, rotulo: "Não se aplica" },
+  ];
+  return (
+    <ul className="flex flex-wrap gap-x-3.5 gap-y-1.5 text-[11.5px] text-muted-foreground" aria-label="Legenda das bolinhas">
+      {itens.map(({ cls, icone: Icone, rotulo }) => (
+        <li key={rotulo} className="inline-flex items-center gap-1.5">
+          <span aria-hidden className={cn("flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full", cls)}>{Icone && <Icone className="h-2.5 w-2.5" strokeWidth={2.6} />}</span>
+          {rotulo}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** Quem faz a atividade: a sigla num círculo da marca e o nome (o do GP, quando é com ele; a área, quando é outra). */
 function QuemFaz({ r, nomeGp, executante }: { r: Responsavel; nomeGp: string | null; executante?: string }) {
   const sigla = r === "gp" ? "GP" : r === "assistente" ? "AP" : r === "area" ? (executante ?? "").replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase() || "Á" : "A";

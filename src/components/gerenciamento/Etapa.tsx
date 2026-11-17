@@ -23,7 +23,8 @@ export function Etapa({ n, a, sit, pill, last, mover, children }: {
   const s = SITUACAO[sit];
   const muted = sit === "bloqueado" || sit === "naoaplica";
   return (
-    <li id={`ger-atv-${a.id}`} className="relative scroll-mt-6 pl-11 sm:pl-12">
+    // scroll-mt maior que a faixa fixa do portal (56px): ao abrir a atividade, o título não fica embaixo dela
+    <li id={`ger-atv-${a.id}`} className="relative scroll-mt-20 pl-11 sm:pl-12">
       <span aria-hidden className={`absolute left-0 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold ring-4 ring-background ${s.dot}`}>
         {sit === "feito" ? <Check className="h-4 w-4" /> : sit === "bloqueado" ? <Lock className="h-4 w-4" /> : n}
       </span>
