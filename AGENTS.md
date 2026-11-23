@@ -1,1 +1,7 @@
 This portal is 100% Transdata: every domain (localhost, Lovable preview/published, Vercel and any custom domain) uses the Transdata presentation. The former HopeXT brand was discontinued — never reintroduce its name, logos, colors, login screen or public signup anywhere in the project.
+
+The Supabase project "Portal oficial - Transdata" (`emzqlctomlsjwmgthbkv`) is shared: this portal owns the `public` schema, the Transmobile app (repo `Transmobile`) lives in the `transmobile` schema and the RoadMap de Evolução (repo `roadmap-de-evolucao`) in the `roadmap` schema. The login (`auth.users`) is one list for all three. Rules:
+- Migrations from this repo touch only `public` (and Transdata's own storage buckets); never alter, drop or grant on the `transmobile` or `roadmap` schemas, their buckets (`transmobile-anexos`) or their edge functions (`transmobile-*`).
+- `public.handle_new_user` creates a Portal profile for every new account; Transmobile accounts (`raw_app_meta_data.sistema = 'transmobile'`) are skipped by the `transmobile_fora_do_portal` triggers on `public.profiles` and `public.user_roles`. Keep both behaviors if that function changes.
+- `pgrst.db_schemas` on the `authenticator` role must keep `public, graphql_public, roadmap, transmobile`.
+- Super admins listing all auth users also see Transmobile-only accounts (no Portal profile); don't delete or ban accounts that have no Portal profile from the Portal.
