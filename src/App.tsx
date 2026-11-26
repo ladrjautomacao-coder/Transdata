@@ -14,10 +14,8 @@ import { PermissionRoute } from "@/components/PermissionRoute";
 import { SuperAdminRoute } from "@/components/SuperAdminRoute";
 import { GerenteProjetosRoute } from "@/components/GerenteProjetosRoute";
 import { AppLayout } from "@/components/AppLayout";
-import Login from "./pages/Login";
-import ForgotPassword from "./pages/ForgotPassword";
-import Signup from "./pages/Signup";
-import ResetPassword from "./pages/ResetPassword";
+import { IrParaAcesso } from "@/components/IrParaAcesso";
+import { BASE_APP } from "@/lib/portalAcesso";
 import Dashboard from "./pages/Dashboard";
 import Projects from "./pages/Projects";
 import NewProject from "./pages/NewProject";
@@ -64,10 +62,11 @@ function AppRoutes() {
   return (
     <SettingsProvider>
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/cadastro" element={<Signup />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
+        {/* login, cadastro e senha ficam na tela de acesso do portal (Gerenciador Transdata) */}
+        <Route path="/login" element={<IrParaAcesso />} />
+        <Route path="/cadastro" element={<IrParaAcesso acesso="cadastro" />} />
+        <Route path="/forgot-password" element={<IrParaAcesso acesso="senha" />} />
+        <Route path="/reset-password" element={<IrParaAcesso acesso="senha" />} />
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/projetos" element={<Projects />} />
@@ -117,7 +116,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <PwaUpdatePrompt />
-      <BrowserRouter>
+      <BrowserRouter basename={BASE_APP.replace(/\/$/, "")}>
         {/* última proteção: nunca mais página em branco */}
         <AppErrorBoundary fullPage>
           <AuthProvider>

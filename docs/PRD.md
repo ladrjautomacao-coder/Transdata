@@ -40,8 +40,8 @@ Plataforma interna da Transdata para gestão ponta-a-ponta de projetos de implan
 ## 3. Módulos Funcionais
 
 ### 3.1 Autenticação
-- Login por e-mail/senha (Supabase Auth).
-- Recuperação de senha (`/forgot-password`, `/reset-password`).
+- Login por e-mail/senha (Supabase Auth), feito só na tela de acesso do Gerenciador Transdata (login único com Transmobile e Roadmap; o CS Flow abre em `/transdata/` no endereço do portal).
+- Recuperação de senha e cadastro também na tela de acesso do portal; `/login`, `/cadastro`, `/forgot-password` e `/reset-password` daqui só encaminham para lá.
 - **Sem cadastro público** — usuários criados via Gestão de Usuários.
 - Vínculo `auth.users.email ↔ team_members.email` define identidade de gerente.
 - Roles em tabela separada `user_roles` (enum `app_role`), checadas via função `SECURITY DEFINER` `has_role()`.

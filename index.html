@@ -2,6 +2,13 @@
 <html lang="pt-BR" translate="no">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Links de e-mail para criar nova senha (ou link vencido) são da tela de acesso do portal
+      // (Gerenciador Transdata, na raiz deste endereço). Sai antes de o login ler o link.
+      (function () {
+        if (/type=recovery|error_code=/.test(location.hash + location.search)) location.replace("/" + location.search + location.hash);
+      })();
+    </script>
     <!-- Portal já em português: a tradução automática do navegador altera a página e quebra as telas -->
     <meta name="google" content="notranslate" />
     <!-- ícone da aba: só o "T" da Transdata em laranja, com o traço reforçado para tamanhos pequenos -->

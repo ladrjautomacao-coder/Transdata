@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
-import { Hourglass, LogOut } from "lucide-react";
+import { irParaPortal } from "@/lib/portalAcesso";
+import { Hourglass, LayoutGrid, LogOut } from "lucide-react";
 
 /** Conta criada pelo autocadastro que ainda não foi liberada por um administrador. */
 export function PendingAccess() {
@@ -23,6 +24,9 @@ export function PendingAccess() {
           <p className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
             Assim que o acesso for liberado, é só entrar novamente. Se for urgente, fale com o administrador do portal.
           </p>
+          <Button className="w-full" onClick={irParaPortal}>
+            <LayoutGrid className="mr-2 h-4 w-4" />Voltar ao portal
+          </Button>
           <Button variant="outline" className="w-full" onClick={() => { void signOut(); }}>
             <LogOut className="mr-2 h-4 w-4" />Sair
           </Button>

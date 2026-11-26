@@ -1,21 +1,28 @@
+import { useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { Navigate, useLocation } from "react-router-dom";
 import { PendingAccess } from "@/components/PendingAccess";
+import { SemAcessoSistema } from "@/components/SemAcessoSistema";
+import { irParaLogin } from "@/lib/portalAcesso";
+
+function Carregando() {
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+    </div>
+  );
+}
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading, accessPending } = useAuth();
-  const location = useLocation();
+  const { session, loading, accessPending, profile } = useAuth();
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
-  }
+  // sem sessão: tela de acesso do portal, que traz de volta para o endereço pedido (ex.: link de e-mail)
+  useEffect(() => {
+    if (!loading && !session) irParaLogin();
+  }, [loading, session]);
 
-  // guarda o endereço pedido (ex.: link de um e-mail) para voltar a ele depois do login
-  if (!session) return <Navigate to="/login" replace state={{ from: location }} />;
+  if (loading || !session) return <Carregando />;
   if (accessPending) return <PendingAccess />;
+  // conta do login único sem perfil no CS Flow (ex.: só do Transmobile)
+  if (!profile) return <SemAcessoSistema />;
   return <>{children}</>;
 }

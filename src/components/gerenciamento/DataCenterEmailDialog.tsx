@@ -17,6 +17,7 @@ import {
 } from "@/lib/dataCenterEmail";
 import { copiarEmail } from "@/lib/emailOutlook";
 import { enviarLogo, type LogoCliente } from "@/lib/logoCliente";
+import { urlDoApp } from "@/lib/portalAcesso";
 
 /**
  * O navegador não consegue pôr o e-mail formatado dentro do Outlook: o link só leva destinatário
@@ -280,7 +281,7 @@ export function DataCenterEmailDialog({ open, onOpenChange, project, form, onFor
                   </p>
                   <div className="flex flex-wrap gap-2 pl-5">
                     <Button variant="outline" size="sm" className="h-8" asChild>
-                      <a href={`/projetos/${project.id}`} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-3.5 w-3.5" />Abrir o cadastro do projeto</a>
+                      <a href={urlDoApp(`/projetos/${project.id}`)} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-3.5 w-3.5" />Abrir o cadastro do projeto</a>
                     </Button>
                     <Button variant="outline" size="sm" className="h-8" onClick={atualizar} disabled={atualizando}>
                       <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${atualizando ? "animate-spin" : ""}`} />{atualizando ? "Atualizando…" : "Atualizar"}

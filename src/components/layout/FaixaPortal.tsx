@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronDown, LogOut, Moon, Search, Settings, Sun, UserRound } from "lucide-react";
+import { ChevronDown, LayoutGrid, LogOut, Moon, Search, Settings, Sun, UserRound } from "lucide-react";
+import { irParaPortal } from "@/lib/portalAcesso";
 import { LogotipoCsFlow, MarcaT } from "@/components/marca/MarcaCsFlow";
 import { useSidebar } from "@/components/ui/sidebar";
 import {
@@ -66,6 +67,7 @@ function MenuUsuario() {
           {escuro ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}{escuro ? "Modo claro" : "Modo escuro"}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={irParaPortal}><LayoutGrid className="mr-2 h-4 w-4" />Ir para o portal</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void signOut()}><LogOut className="mr-2 h-4 w-4" />Sair</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

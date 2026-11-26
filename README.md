@@ -4,7 +4,7 @@ Portal interno da Transdata para gestão de projetos de implantação: cadastro,
 Kanban, controle de SLA, anexos, histórico de alterações, equipe e relatórios. Ver `docs/PRD.md`
 para o detalhamento funcional completo.
 
-**App em produção**: https://projetostransdata.vercel.app
+**App em produção**: https://gerenciador-transdata.vercel.app/transdata/ (dentro do portal da Transdata, com o login único; o endereço antigo https://projetostransdata.vercel.app redireciona para lá)
 
 ## Stack
 

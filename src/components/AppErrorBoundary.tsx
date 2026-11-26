@@ -82,7 +82,7 @@ export class AppErrorBoundary extends Component<Props, { error: Error | null }> 
             <Button variant="outline" size="sm" onClick={() => this.setState({ error: null })}>
               <RotateCcw className="mr-1.5 h-4 w-4" />Tentar novamente
             </Button>
-            <Button variant="outline" size="sm" onClick={() => { window.location.href = "/"; }}>
+            <Button variant="outline" size="sm" onClick={() => { window.location.href = import.meta.env.BASE_URL; }}>
               <Home className="mr-1.5 h-4 w-4" />Ir para o início
             </Button>
             <Button size="sm" onClick={() => window.location.reload()}>

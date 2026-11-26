@@ -1,13 +1,17 @@
 {
   "rewrites": [
     {
+      "source": "/transdata/(.*)",
+      "destination": "/transdata/index.html"
+    },
+    {
       "source": "/(.*)",
-      "destination": "/index.html"
+      "destination": "/endereco-antigo.html"
     }
   ],
   "headers": [
     {
-      "source": "/service-worker.js",
+      "source": "/transdata/service-worker.js",
       "headers": [
         {
           "key": "Cache-Control",
@@ -15,12 +19,12 @@
         },
         {
           "key": "Service-Worker-Allowed",
-          "value": "/"
+          "value": "/transdata/"
         }
       ]
     },
     {
-      "source": "/sw.js",
+      "source": "/(service-worker|sw)\\.js",
       "headers": [
         {
           "key": "Cache-Control",
@@ -29,7 +33,7 @@
       ]
     },
     {
-      "source": "/manifest.webmanifest",
+      "source": "/transdata/manifest.webmanifest",
       "headers": [
         {
           "key": "Cache-Control",
@@ -42,7 +46,7 @@
       ]
     },
     {
-      "source": "/index.html",
+      "source": "/transdata/index.html",
       "headers": [
         {
           "key": "Cache-Control",
@@ -51,7 +55,16 @@
       ]
     },
     {
-      "source": "/assets/(.*)",
+      "source": "/endereco-antigo.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/transdata/assets/(.*)",
       "headers": [
         {
           "key": "Cache-Control",

@@ -6,41 +6,10 @@ import { installDomGuard } from "./lib/domGuard";
 // antes do primeiro render: tradutor/extensão do navegador não pode derrubar as telas
 installDomGuard();
 
-// Instalações antigas do PWA (worker /sw.js e caches próprios) podiam restaurar uma tela
-// obsoleta. O app atual usa /service-worker.js (Workbox, caches "workbox-*") com aviso de
-// atualização; aqui removemos só o que é legado e mantemos o worker novo.
-const LEGACY_WORKER_RELOAD_KEY = "transdata:legacy-worker-reloaded";
-const CURRENT_WORKER = "/service-worker.js";
-
-const workerUrl = (r: ServiceWorkerRegistration) => (r.active ?? r.waiting ?? r.installing)?.scriptURL ?? "";
-
-async function removeLegacyOfflineState() {
-  if (!("serviceWorker" in navigator)) return;
-
-  const controller = navigator.serviceWorker.controller;
-  const wasControlled = Boolean(controller && !controller.scriptURL.endsWith(CURRENT_WORKER));
-  const registrations = await navigator.serviceWorker.getRegistrations();
-  await Promise.allSettled(registrations.filter((r) => workerUrl(r) !== "" && !workerUrl(r).endsWith(CURRENT_WORKER)).map((r) => r.unregister()));
-
-  if ("caches" in window) {
-    const cacheNames = await caches.keys();
-    await Promise.allSettled(cacheNames.filter((name) => !name.startsWith("workbox-")).map((name) => caches.delete(name)));
-  }
-
-  if (wasControlled && sessionStorage.getItem(LEGACY_WORKER_RELOAD_KEY) !== "true") {
-    sessionStorage.setItem(LEGACY_WORKER_RELOAD_KEY, "true");
-    window.location.reload();
-    return;
-  }
-
-  if (!wasControlled) {
-    sessionStorage.removeItem(LEGACY_WORKER_RELOAD_KEY);
-  }
-}
-
-void removeLegacyOfflineState().catch(() => {
-  // Cache cleanup must never prevent the application from starting.
-});
+// O CS Flow abre em /transdata/ no endereço do portal, que divide com o Gerenciador, o Transmobile
+// e o Roadmap. Por isso nada aqui mexe em service workers ou caches de fora de /transdata/: o
+// worker do app (service-worker.js) só vale para /transdata/, e as instalações antigas ficaram no
+// endereço anterior, onde um worker próprio as desliga (ver vite.config.ts).
 
 const rootElement = document.getElementById("root");
 

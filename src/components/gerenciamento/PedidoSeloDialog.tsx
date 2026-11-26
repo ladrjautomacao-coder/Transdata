@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { GerProject } from "@/lib/gerenciamento";
 import { copiarEmail } from "@/lib/emailOutlook";
+import { urlDoApp } from "@/lib/portalAcesso";
 import { faltandoPedido, htmlPedido, textoPedido, type LinhaPedido, type PedidoSelo } from "@/lib/pedidoSelo";
 import { Grupo } from "./DataCenterEmailDialog";
 
@@ -107,7 +108,7 @@ export function PedidoSeloDialog({ open, onOpenChange, project, pedido, onCopiad
                 </div>
                 <div className="flex flex-wrap gap-2 pl-5">
                   <Button variant="outline" size="sm" className="h-8" asChild>
-                    <a href={`/projetos/${project.id}`} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-3.5 w-3.5" />Abrir o cadastro do projeto</a>
+                    <a href={urlDoApp(`/projetos/${project.id}`)} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-3.5 w-3.5" />Abrir o cadastro do projeto</a>
                   </Button>
                   <Button variant="outline" size="sm" className="h-8" onClick={atualizar} disabled={atualizando}>
                     <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${atualizando ? "animate-spin" : ""}`} />{atualizando ? "Atualizando…" : "Atualizar"}

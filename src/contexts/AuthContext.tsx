@@ -3,6 +3,7 @@ import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { getMyAccessStatus } from "@/lib/accessRpc";
+import { avisarSaida, irParaPortal } from "@/lib/portalAcesso";
 
 interface AuthContextType {
   session: Session | null;
@@ -103,8 +104,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // A sessão é a mesma do portal e dos outros sistemas: sair daqui sai de todos e volta à tela de acesso.
   const signOut = async () => {
+    avisarSaida();
     await supabase.auth.signOut();
+    irParaPortal();
   };
 
   return (
